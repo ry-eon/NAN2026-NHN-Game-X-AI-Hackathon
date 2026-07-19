@@ -7,13 +7,32 @@
 import Phaser from 'phaser'
 import {
   CHARACTERS,
+  CHARACTER_POOL,
   ENEMY_DEFS,
   STAGES,
   Simulation,
   TICKS_PER_SECOND,
+  UNIT_DEFS,
+  battleRoster,
+  characterById,
+  currentStage,
   enemyWorldPos,
+  newCampaign,
+  onDefeat,
+  onStageCleared,
+  recruit,
+  skipRecruit,
 } from '@core'
-import type { DeployRejectReason, PlayerAction, TimedAction, TileType, UnitDef } from '@core'
+import type {
+  CampaignState,
+  CharacterDef,
+  DeployRejectReason,
+  PlayerAction,
+  TimedAction,
+  TileType,
+  UnitDef,
+} from '@core'
+import { clearCampaign, loadCampaign, saveCampaign } from './meta/save'
 
 const GRID_X = 20
 const GRID_Y = 64
@@ -37,7 +56,7 @@ const ROLE_COLORS: Record<string, number> = {
   healer: 0x5ad0a0,
   slower: 0xd0c05a,
 }
-const CHAR_BY_ID = new Map(CHARACTERS.map((c) => [c.id, c]))
+const CHAR_BY_ID = new Map([...CHARACTERS, ...CHARACTER_POOL].map((c) => [c.id, c]))
 const colorFor = (defId: string): number =>
   ROLE_COLORS[CHAR_BY_ID.get(defId)?.role ?? defId] ?? 0xffffff
 const ENEMY_STYLE: Record<string, { color: number; radius: number }> = {
@@ -93,14 +112,39 @@ export class BattleScene extends Phaser.Scene {
   private stageIndex = 0
   /** 스테이지 크기에 맞춘 타일 픽셀 (create에서 계산) */
   private tile = 60
+  // ---- 캠페인 메타 (scene.restart() 후에도 유지) ----
+  /** campaign: 연전 진행 / free: 자유 연습 (스테이지 선택) */
+  private mode: 'campaign' | 'free' = 'campaign'
+  private campaign: CampaignState | null = null
+  /** 이번 전투의 배틀 def 목록 (캠페인: 레벨 적용 로스터 / 자유: 수제 6인) */
+  private battleDefs: CharacterDef[] = CHARACTERS
+  /** 이번 전투에서 배치했던 캐릭터 id (참전 경험치 판정) */
+  private deployedCharIds = new Set<string>()
+  /** 영입 패널 표시 중 (전투 정지) */
+  private recruitOpen = false
+  /** 유닛 클릭 메뉴 (기술/철수) 대상 */
+  private unitMenuFor: number | null = null
+  private menuSkillBtn!: Phaser.GameObjects.Text
+  private menuWithdrawBtn!: Phaser.GameObjects.Text
 
   constructor() {
     super('battle')
   }
 
   create(): void {
-    const stage = STAGES[this.stageIndex] ?? STAGES[0]!
-    this.sim = new Simulation(stage, CHARACTERS, ENEMY_DEFS)
+    let stage
+    let startWallHp: number | undefined
+    if (this.mode === 'campaign') {
+      this.campaign ??= loadCampaign() ?? newCampaign(Date.now() % 100_000)
+      if (this.campaign.status !== 'active') this.campaign = newCampaign(Date.now() % 100_000)
+      stage = currentStage(this.campaign)
+      this.battleDefs = battleRoster(this.campaign)
+      startWallHp = Math.round(this.campaign.wallRatio * stage.wallHp)
+    } else {
+      stage = STAGES[this.stageIndex] ?? STAGES[0]!
+      this.battleDefs = CHARACTERS
+    }
+    this.sim = new Simulation(stage, this.battleDefs, ENEMY_DEFS, undefined, startWallHp)
     this.tile = Math.min(
       60,
       Math.floor(GRID_MAX_W / this.sim.ctx.width),
@@ -119,12 +163,21 @@ export class BattleScene extends Phaser.Scene {
     this.enemyFlash.clear()
     this.unitFlash.clear()
     this.wallFlashUntil = 0
+    this.deployedCharIds.clear()
+    this.recruitOpen = false
+    this.unitMenuFor = null
 
     this.drawStaticGrid()
     this.createHud()
     this.createCards()
+    this.createUnitMenu()
     this.gfx = this.add.graphics().setDepth(10)
     this.bindInput()
+
+    // 재로드 시 영입 선택이 남아 있으면 전투 전에 먼저 처리
+    if (this.mode === 'campaign' && this.campaign?.pendingCandidateIds) {
+      this.openRecruitPanel()
+    }
   }
 
   // ---------------------------------------------------------------- 입력
@@ -134,6 +187,11 @@ export class BattleScene extends Phaser.Scene {
       this.hoverCell = this.cellAt(p.x, p.y)
     })
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (this.recruitOpen) return
+      if (this.unitMenuFor !== null) {
+        this.closeUnitMenu()
+        return
+      }
       const cell = this.cellAt(p.x, p.y)
       if (!cell) return
       if (this.targetingSkill) {
@@ -145,22 +203,23 @@ export class BattleScene extends Phaser.Scene {
         this.queue({ type: 'deploy', unitDefId: this.selectedDefId, x: cell.x, y: cell.y })
         this.selectedDefId = null
       } else {
-        // 클릭한 셀의 아군 유닛 철수. "그 셀에 유닛이 있는가"는 상태 조회일 뿐 룰 판단이 아니다.
+        // 아군 유닛 클릭 → 기술/철수 메뉴 (상태 조회일 뿐 룰 판단이 아니다)
         const unit = this.sim.state.units.find((u) => u.x === cell.x && u.y === cell.y)
-        if (unit) this.queue({ type: 'withdraw', unitId: unit.id })
+        if (unit) this.openUnitMenu(unit.id)
       }
     })
     const kb = this.input.keyboard
     if (kb) {
-      const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'] as const
+      const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT'] as const
       keys.forEach((key, i) => {
-        kb.on(`keydown-${key}`, () => this.selectCard(CHARACTERS[i]?.id ?? null))
+        kb.on(`keydown-${key}`, () => this.selectCard(this.battleDefs[i]?.id ?? null))
       })
       kb.on('keydown-R', () => this.queue({ type: 'repairWall' }))
       kb.on('keydown-Q', () => this.toggleSkillTargeting())
       kb.on('keydown-ESC', () => {
-        this.selectCard(null)
+        this.selectedDefId = null
         this.targetingSkill = false
+        this.closeUnitMenu()
       })
     }
   }
@@ -171,6 +230,11 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private selectCard(defId: string | null): void {
+    // 캐릭터 유일성: 이미 전장에 있는 가신은 다시 배치할 수 없다 (메타 규칙)
+    if (defId && this.sim.state.units.some((u) => u.defId === defId)) {
+      this.toast('이미 전장에 있는 가신입니다')
+      return
+    }
     this.selectedDefId = this.selectedDefId === defId ? null : defId
     if (defId) this.targetingSkill = false
   }
@@ -191,6 +255,10 @@ export class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 시뮬 구동
 
   update(_time: number, delta: number): void {
+    if (this.recruitOpen) {
+      this.render()
+      return
+    }
     if (this.sim.state.status === 'playing') {
       this.accMs = Math.min(this.accMs + delta, STEP_MS * 6) // 프레임 드랍 시 폭주 방지
       while (this.accMs >= STEP_MS) {
@@ -228,6 +296,7 @@ export class BattleScene extends Phaser.Scene {
           break
         case 'deployed': {
           this.deployRing(e.x, e.y, colorFor(e.unitDefId))
+          this.deployedCharIds.add(e.unitDefId)
           const ch = CHAR_BY_ID.get(e.unitDefId)
           if (ch) this.toast(`${ch.name}: "${ch.lines.deploy}"`)
           break
@@ -403,43 +472,39 @@ export class BattleScene extends Phaser.Scene {
       this.add.text(x, y, '', { fontFamily: 'monospace', fontSize: `${size}px`, color }).setDepth(20)
 
     const stage = this.sim.ctx.stage
+    const title =
+      this.mode === 'campaign' && this.campaign
+        ? `제${this.campaign.stageIndex + 1}침공/5 — ${stage.name}`
+        : `${stage.name} (${stage.id})`
     this.add
-      .text(GRID_X, 10, `${stage.name} (${stage.id})`, {
+      .text(GRID_X, 10, title, {
         fontFamily: 'monospace',
         fontSize: '16px',
         color: '#e8e8f0',
       })
       .setDepth(20)
 
-    // 스테이지 선택 버튼 (우상단) — 생성 스테이지가 늘어도 넘치지 않게 콤팩트 배치
-    STAGES.forEach((s, i) => {
-      const current = i === this.stageIndex
-      const col = i % 8
-      const rowY = 12 + Math.floor(i / 8) * 26
-      const label = s.id.startsWith('gen-') ? `G${i + 1}` : `${i + 1}`
-      const btn = this.add
-        .text(672 + col * 36, rowY, label, {
-          fontFamily: 'monospace',
-          fontSize: '13px',
-          color: current ? '#ffd870' : '#8888aa',
-          backgroundColor: current ? '#3a3a58' : '#26263c',
-          padding: { x: 8, y: 4 },
-        })
-        .setDepth(20)
-      if (!current) {
-        btn.setInteractive({ useHandCursor: true })
-        btn.on(
-          'pointerdown',
-          (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
-            ev.stopPropagation()
-            this.stageIndex = i
-            this.scene.restart()
-          },
-        )
-      }
-    })
+    // 모드 전환 버튼
+    const modeBtn = this.add
+      .text(560, 10, this.mode === 'campaign' ? '자유 연습' : '캠페인으로', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#8888aa',
+        backgroundColor: '#26263c',
+        padding: { x: 6, y: 3 },
+      })
+      .setDepth(20)
+      .setInteractive({ useHandCursor: true })
+    modeBtn.on(
+      'pointerdown',
+      (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
+        ev.stopPropagation()
+        this.mode = this.mode === 'campaign' ? 'free' : 'campaign'
+        this.scene.restart()
+      },
+    )
 
-    // 우측 HUD는 스테이지 버튼(최대 2줄, y12·38) 아래부터 시작
+    // 우측 HUD (캠페인/자유 공통)
     this.hud = {
       time: text(GRID_X + 320, 12),
       wall: text(GRID_X, 36),
@@ -448,6 +513,40 @@ export class BattleScene extends Phaser.Scene {
       status: text(660, 126),
     }
 
+    // 스테이지 선택 버튼 (자유 연습 전용) — 캠페인은 정해진 침공 순서를 따른다
+    if (this.mode !== 'campaign') {
+      STAGES.forEach((s, i) => {
+        const current = i === this.stageIndex
+        const col = i % 8
+        const rowY = 12 + Math.floor(i / 8) * 26
+        const label = s.id.startsWith('gen-') ? `G${i + 1}` : `${i + 1}`
+        const btn = this.add
+          .text(672 + col * 36, rowY, label, {
+            fontFamily: 'monospace',
+            fontSize: '13px',
+            color: current ? '#ffd870' : '#8888aa',
+            backgroundColor: current ? '#3a3a58' : '#26263c',
+            padding: { x: 8, y: 4 },
+          })
+          .setDepth(20)
+        if (!current) {
+          btn.setInteractive({ useHandCursor: true })
+          btn.on(
+            'pointerdown',
+            (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
+              ev.stopPropagation()
+              this.stageIndex = i
+              this.scene.restart()
+            },
+          )
+        }
+      })
+    }
+
+    this.createActionButtons()
+  }
+
+  private createActionButtons(): void {
     // 성벽 액션 버튼 (수리 / 낙석)
     const makeBtn = (x: number, onClick: () => void) => {
       const btn = this.add
@@ -476,15 +575,15 @@ export class BattleScene extends Phaser.Scene {
       .text(
         660,
         400,
-        '조작\n 1~6 또는 카드 클릭: 유닛 선택\n 타일 클릭: 배치 (core가 검증)\n 배치된 유닛 클릭: 철수(50% 환급)\n R: 성벽 수리 · Q: 낙석 조준\n ESC: 선택/조준 해제',
+        '조작\n 숫자키/카드 클릭: 가신 선택\n 타일 클릭: 배치 (core가 검증)\n 배치된 가신 클릭: 기술/철수 메뉴\n R: 성벽 수리 · Q: 낙석 조준\n ESC: 선택/메뉴 해제',
         { fontFamily: 'monospace', fontSize: '12px', color: '#8888aa', lineSpacing: 4 },
       )
       .setDepth(20)
   }
 
   private createCards(): void {
-    // 6종 로스터가 한 줄에 들어가는 콤팩트 카드 (96px × 6)
-    CHARACTERS.forEach((def, i) => {
+    // 로스터(최대 8)가 한 줄에 들어가는 콤팩트 카드
+    this.battleDefs.forEach((def, i) => {
       const x = GRID_X + i * 102
       const y = 494
       const bg = this.add
@@ -504,8 +603,12 @@ export class BattleScene extends Phaser.Scene {
         .rectangle(x + 6, y + 13, 16, 16, colorFor(def.id))
         .setOrigin(0, 0)
         .setDepth(21)
+      const lv =
+        this.mode === 'campaign'
+          ? this.campaign?.roster.find((r) => r.charId === def.id)?.level
+          : undefined
       const label = this.add
-        .text(x + 27, y + 5, `${i + 1} ${def.name}`, {
+        .text(x + 27, y + 5, `${i + 1} ${def.name}${lv ? ` L${lv}` : ''}`, {
           fontFamily: 'monospace',
           fontSize: '11px',
           color: '#e8e8f0',
@@ -522,6 +625,11 @@ export class BattleScene extends Phaser.Scene {
     const { state, ctx } = this.sim
     const g = this.gfx
     g.clear()
+
+    // 메뉴 대상 유닛이 사라졌으면(사망/철수) 메뉴도 닫는다
+    if (this.unitMenuFor !== null && !state.units.some((u) => u.id === this.unitMenuFor)) {
+      this.closeUnitMenu()
+    }
 
     // 배치 미리보기: 선택한 유닛의 배치 가능 타일 하이라이트 (정의 데이터 표시일 뿐 판정은 core 몫)
     if (this.selectedDefId) {
@@ -640,17 +748,20 @@ export class BattleScene extends Phaser.Scene {
     for (const card of this.cards) {
       const cdLeft = (state.redeployReadyAt[card.def.id] ?? 0) - state.tick
       const affordable = state.cost >= card.def.cost
+      const fielded = state.units.some((u) => u.defId === card.def.id) // 캐릭터 유일성
       const selected = this.selectedDefId === card.def.id
       card.bg.setStrokeStyle(2, selected ? 0xffd870 : 0x44445f)
       card.bg.setFillStyle(selected ? 0x3a3a58 : 0x26263c)
-      const alpha = cdLeft > 0 || !affordable ? 0.45 : 1
+      const alpha = fielded || cdLeft > 0 || !affordable ? 0.45 : 1
       card.bg.setAlpha(alpha)
       card.label.setAlpha(alpha)
       card.sub.setAlpha(alpha)
       card.sub.setText(
-        cdLeft > 0
-          ? `대기 ${(cdLeft / TICKS_PER_SECOND).toFixed(1)}s`
-          : `코스트 ${card.def.cost}`,
+        fielded
+          ? '출전 중'
+          : cdLeft > 0
+            ? `대기 ${(cdLeft / TICKS_PER_SECOND).toFixed(1)}s`
+            : `코스트 ${card.def.cost}`,
       )
     }
   }
@@ -672,6 +783,40 @@ export class BattleScene extends Phaser.Scene {
   private showOverlay(): void {
     this.overlayShown = true
     const won = this.sim.state.status === 'won'
+
+    if (this.mode === 'campaign' && this.campaign) {
+      if (won) {
+        const stage = this.sim.ctx.stage
+        this.campaign = onStageCleared(
+          this.campaign,
+          this.sim.state.wallHp / stage.wallHp,
+          [...this.deployedCharIds],
+        )
+        saveCampaign(this.campaign)
+        if (this.campaign.status === 'won') {
+          this.fullscreenNotice('침공 종식', '성을 지켜냈다. 성주의 기록은 여기서 끝난다 — 클릭하여 새 캠페인', () => {
+            clearCampaign()
+            this.campaign = null
+            this.scene.restart()
+          })
+        } else if (this.campaign.pendingCandidateIds) {
+          this.openRecruitPanel()
+        } else {
+          this.fullscreenNotice('침공 격퇴', '클릭하면 다음 침공', () => this.scene.restart())
+        }
+      } else {
+        this.campaign = onDefeat(this.campaign)
+        saveCampaign(this.campaign)
+        this.fullscreenNotice('성이 함락됐다', '클릭하면 처음부터 — 새 캠페인', () => {
+          clearCampaign()
+          this.campaign = null
+          this.scene.restart()
+        })
+      }
+      return
+    }
+
+    // 자유 연습 모드: 기존 동작 (클릭 재시작)
     this.add.rectangle(480, 270, 960, 540, 0x000000, 0.55).setDepth(40)
     this.add
       .text(480, 240, won ? '승리!' : '패배', {
@@ -681,7 +826,6 @@ export class BattleScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(41)
-    // 생존한 첫 가신의 승리 대사
     const survivor = this.sim.state.units[0]
     const ch = survivor ? CHAR_BY_ID.get(survivor.defId) : undefined
     if (won && ch) {
@@ -699,5 +843,137 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(41)
     this.input.once('pointerdown', () => this.scene.restart())
+  }
+
+  /** 전면 안내 오버레이 (캠페인 전환 화면) */
+  private fullscreenNotice(title: string, subtitle: string, onClick: () => void): void {
+    this.add.rectangle(480, 270, 960, 540, 0x000000, 0.65).setDepth(40)
+    this.add
+      .text(480, 230, title, { fontFamily: 'monospace', fontSize: '42px', color: '#e8e8f0' })
+      .setOrigin(0.5)
+      .setDepth(41)
+    this.add
+      .text(480, 290, subtitle, { fontFamily: 'monospace', fontSize: '15px', color: '#c8c8dc' })
+      .setOrigin(0.5)
+      .setDepth(41)
+    this.input.once('pointerdown', onClick)
+  }
+
+  // ------------------------------------------------------------ 영입 패널
+
+  private openRecruitPanel(): void {
+    if (!this.campaign?.pendingCandidateIds) return
+    this.recruitOpen = true
+    const ids = this.campaign.pendingCandidateIds
+    const roleName = (role: string) => UNIT_DEFS.find((d) => d.id === role)?.name ?? role
+
+    this.add.rectangle(480, 270, 960, 540, 0x000000, 0.75).setDepth(50)
+    this.add
+      .text(480, 90, '침공 격퇴 — 가신을 영입하십시오', {
+        fontFamily: 'monospace',
+        fontSize: '24px',
+        color: '#ffd870',
+      })
+      .setOrigin(0.5)
+      .setDepth(51)
+
+    ids.forEach((id, i) => {
+      const c = characterById(id)
+      const x = 480 + (i - (ids.length - 1) / 2) * 280
+      const bg = this.add
+        .rectangle(x, 280, 260, 240, 0x26263c)
+        .setStrokeStyle(2, colorFor(c.id))
+        .setDepth(51)
+        .setInteractive({ useHandCursor: true })
+      bg.on('pointerdown', () => {
+        this.campaign = recruit(this.campaign!, c.id)
+        saveCampaign(this.campaign)
+        this.scene.restart()
+      })
+      const line = (dy: number, txt: string, size = 12, color = '#c8c8dc') =>
+        this.add
+          .text(x, 280 + dy, txt, {
+            fontFamily: 'monospace',
+            fontSize: `${size}px`,
+            color,
+            align: 'center',
+            wordWrap: { width: 236 },
+          })
+          .setOrigin(0.5, 0)
+          .setDepth(52)
+      line(-105, `${c.epithet} ${c.name}`, 16, '#e8e8f0')
+      line(-78, `역할: ${roleName(c.role)}`, 12, '#8888aa')
+      const sk = c.skillSet!
+      line(-56, `${sk.passive.name} · ${sk.auto.name} · ${sk.active.name}`, 12, '#ffd870')
+      line(-28, c.lore, 11)
+    })
+
+    const skipBtn = this.add
+      .text(480, 452, '이번에는 영입하지 않는다', {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        color: '#8888aa',
+        backgroundColor: '#26263c',
+        padding: { x: 10, y: 6 },
+      })
+      .setOrigin(0.5)
+      .setDepth(51)
+      .setInteractive({ useHandCursor: true })
+    skipBtn.on('pointerdown', () => {
+      this.campaign = skipRecruit(this.campaign!)
+      saveCampaign(this.campaign)
+      this.scene.restart()
+    })
+  }
+
+  // ------------------------------------------------------------ 유닛 메뉴 (기술/철수)
+
+  private createUnitMenu(): void {
+    const makeMenuBtn = (label: string, onClick: () => void) => {
+      const btn = this.add
+        .text(0, 0, label, {
+          fontFamily: 'monospace',
+          fontSize: '12px',
+          color: '#e8e8f0',
+          backgroundColor: '#3a3a58',
+          padding: { x: 8, y: 4 },
+        })
+        .setDepth(45)
+        .setVisible(false)
+        .setInteractive({ useHandCursor: true })
+      btn.on(
+        'pointerdown',
+        (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
+          ev.stopPropagation()
+          onClick()
+        },
+      )
+      return btn
+    }
+    this.menuSkillBtn = makeMenuBtn('기술 발동', () => {
+      if (this.unitMenuFor !== null) this.queue({ type: 'useSkill', unitId: this.unitMenuFor })
+      this.closeUnitMenu()
+    })
+    this.menuWithdrawBtn = makeMenuBtn('철수 (50%)', () => {
+      if (this.unitMenuFor !== null) this.queue({ type: 'withdraw', unitId: this.unitMenuFor })
+      this.closeUnitMenu()
+    })
+  }
+
+  private openUnitMenu(unitId: number): void {
+    const unit = this.sim.state.units.find((u) => u.id === unitId)
+    if (!unit) return
+    this.unitMenuFor = unitId
+    const { px, py } = this.cellPx(unit.x, unit.y)
+    const def = this.sim.ctx.unitDefs[unit.defId]!
+    const hasActive = def.skills?.some((sk) => sk.slot === 'active') ?? false
+    this.menuSkillBtn.setVisible(hasActive).setPosition(px + this.tile / 2 + 4, py - 26)
+    this.menuWithdrawBtn.setVisible(true).setPosition(px + this.tile / 2 + 4, py + 2)
+  }
+
+  private closeUnitMenu(): void {
+    this.unitMenuFor = null
+    this.menuSkillBtn.setVisible(false)
+    this.menuWithdrawBtn.setVisible(false)
   }
 }
