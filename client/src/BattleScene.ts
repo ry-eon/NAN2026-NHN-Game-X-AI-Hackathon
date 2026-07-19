@@ -7,7 +7,7 @@
 import Phaser from 'phaser'
 import {
   ENEMY_DEFS,
-  STAGE_001,
+  STAGES,
   Simulation,
   TICKS_PER_SECOND,
   UNIT_DEFS,
@@ -15,9 +15,11 @@ import {
 } from '@core'
 import type { DeployRejectReason, PlayerAction, TimedAction, TileType, UnitDef } from '@core'
 
-const TILE = 60
 const GRID_X = 20
 const GRID_Y = 64
+/** 그리드가 차지할 수 있는 최대 픽셀 영역 (우측 HUD·하단 카드와 겹치지 않게) */
+const GRID_MAX_W = 620
+const GRID_MAX_H = 415
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
 const TILE_COLORS: Record<TileType, number> = {
@@ -63,13 +65,23 @@ export class BattleScene extends Phaser.Scene {
   private hud!: Record<'time' | 'wall' | 'wave' | 'cost' | 'status', Phaser.GameObjects.Text>
   private cards: UnitCard[] = []
   private overlayShown = false
+  /** scene.restart() 후에도 유지 — 선택한 스테이지 */
+  private stageIndex = 0
+  /** 스테이지 크기에 맞춘 타일 픽셀 (create에서 계산) */
+  private tile = 60
 
   constructor() {
     super('battle')
   }
 
   create(): void {
-    this.sim = new Simulation(STAGE_001, UNIT_DEFS, ENEMY_DEFS)
+    const stage = STAGES[this.stageIndex] ?? STAGES[0]!
+    this.sim = new Simulation(stage, UNIT_DEFS, ENEMY_DEFS)
+    this.tile = Math.min(
+      60,
+      Math.floor(GRID_MAX_W / this.sim.ctx.width),
+      Math.floor(GRID_MAX_H / this.sim.ctx.height),
+    )
     this.queued = []
     this.actionLog = []
     this.accMs = 0
@@ -123,8 +135,8 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private cellAt(px: number, py: number): { x: number; y: number } | null {
-    const x = Math.floor((px - GRID_X) / TILE)
-    const y = Math.floor((py - GRID_Y) / TILE)
+    const x = Math.floor((px - GRID_X) / this.tile)
+    const y = Math.floor((py - GRID_Y) / this.tile)
     if (x < 0 || y < 0 || x >= this.sim.ctx.width || y >= this.sim.ctx.height) return null
     return { x, y }
   }
@@ -163,14 +175,14 @@ export class BattleScene extends Phaser.Scene {
         const t = tiles[y]?.[x]
         if (!t) continue
         g.fillStyle(TILE_COLORS[t], 1)
-        g.fillRect(GRID_X + x * TILE, GRID_Y + y * TILE, TILE - 2, TILE - 2)
+        g.fillRect(GRID_X + x * this.tile, GRID_Y + y * this.tile, this.tile - 2, this.tile - 2)
       }
     }
     // 진입 방향 안내 (스폰 → 성벽)
     for (const path of this.sim.ctx.stage.paths) {
       const s = path[0]!
       this.add
-        .text(GRID_X + s.x * TILE + TILE / 2 - 1, GRID_Y + s.y * TILE + TILE / 2 - 1, '◀ 침공', {
+        .text(GRID_X + s.x * this.tile + this.tile / 2 - 1, GRID_Y + s.y * this.tile + this.tile / 2 - 1, '◀ 침공', {
           fontFamily: 'monospace',
           fontSize: '12px',
           color: '#ffb0b0',
@@ -184,13 +196,39 @@ export class BattleScene extends Phaser.Scene {
     const text = (x: number, y: number, size = 14, color = '#c8c8dc') =>
       this.add.text(x, y, '', { fontFamily: 'monospace', fontSize: `${size}px`, color }).setDepth(20)
 
+    const stage = this.sim.ctx.stage
     this.add
-      .text(GRID_X, 10, `${STAGE_001.name} (${STAGE_001.id})`, {
+      .text(GRID_X, 10, `${stage.name} (${stage.id})`, {
         fontFamily: 'monospace',
         fontSize: '16px',
         color: '#e8e8f0',
       })
       .setDepth(20)
+
+    // 스테이지 선택 버튼 (우상단)
+    STAGES.forEach((s, i) => {
+      const current = i === this.stageIndex
+      const btn = this.add
+        .text(700 + i * 90, 12, s.id.replace('stage-', 'ST '), {
+          fontFamily: 'monospace',
+          fontSize: '13px',
+          color: current ? '#ffd870' : '#8888aa',
+          backgroundColor: current ? '#3a3a58' : '#26263c',
+          padding: { x: 8, y: 4 },
+        })
+        .setDepth(20)
+      if (!current) {
+        btn.setInteractive({ useHandCursor: true })
+        btn.on(
+          'pointerdown',
+          (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
+            ev.stopPropagation()
+            this.stageIndex = i
+            this.scene.restart()
+          },
+        )
+      }
+    })
 
     this.hud = {
       time: text(GRID_X + 320, 12),
@@ -259,24 +297,24 @@ export class BattleScene extends Phaser.Scene {
           for (let x = 0; x < ctx.width; x++) {
             const t = ctx.tiles[y]?.[x]
             const ok = def.placement === 'wallTop' ? t === 'wallTop' : t === 'ground' || t === 'road'
-            if (ok) g.fillRect(GRID_X + x * TILE, GRID_Y + y * TILE, TILE - 2, TILE - 2)
+            if (ok) g.fillRect(GRID_X + x * this.tile, GRID_Y + y * this.tile, this.tile - 2, this.tile - 2)
           }
         }
       }
     }
     if (this.hoverCell) {
       g.lineStyle(2, 0xffffff, 0.5)
-      g.strokeRect(GRID_X + this.hoverCell.x * TILE, GRID_Y + this.hoverCell.y * TILE, TILE - 2, TILE - 2)
+      g.strokeRect(GRID_X + this.hoverCell.x * this.tile, GRID_Y + this.hoverCell.y * this.tile, this.tile - 2, this.tile - 2)
     }
 
     // 유닛: 사각형 + HP바 + 저지 점
     for (const u of state.units) {
       const def = ctx.unitDefs[u.defId]!
-      const px = GRID_X + u.x * TILE
-      const py = GRID_Y + u.y * TILE
+      const px = GRID_X + u.x * this.tile
+      const py = GRID_Y + u.y * this.tile
       g.fillStyle(UNIT_COLORS[u.defId] ?? 0xffffff, 1)
-      g.fillRect(px + 8, py + 8, TILE - 18, TILE - 18)
-      this.bar(px + 8, py + TILE - 8, TILE - 18, u.hp / def.hp)
+      g.fillRect(px + 8, py + 8, this.tile - 18, this.tile - 18)
+      this.bar(px + 8, py + this.tile - 8, this.tile - 18, u.hp / def.hp)
       g.fillStyle(0xffffff, 0.9)
       for (let b = 0; b < u.blockedEnemyIds.length; b++) g.fillCircle(px + 14 + b * 10, py + 14, 3)
     }
@@ -285,8 +323,8 @@ export class BattleScene extends Phaser.Scene {
     for (const e of state.enemies) {
       const style = ENEMY_STYLE[e.defId] ?? { color: 0xffffff, radius: 12 }
       const pos = enemyWorldPos(ctx, e)
-      const px = GRID_X + pos.x * TILE + TILE / 2 + ((e.id % 3) - 1) * 8
-      const py = GRID_Y + pos.y * TILE + TILE / 2 + (((e.id * 7) % 3) - 1) * 6
+      const px = GRID_X + pos.x * this.tile + this.tile / 2 + ((e.id % 3) - 1) * 8
+      const py = GRID_Y + pos.y * this.tile + this.tile / 2 + (((e.id * 7) % 3) - 1) * 6
       g.fillStyle(style.color, 1)
       g.fillCircle(px, py, style.radius)
       const maxHp = ctx.enemyDefs[e.defId]!.hp
