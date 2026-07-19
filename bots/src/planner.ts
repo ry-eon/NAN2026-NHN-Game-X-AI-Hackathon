@@ -11,6 +11,7 @@
 import { TICKS_PER_SECOND, enemyWorldPos } from '@core'
 import type { CellPos, GameState, PlayerAction, SimContext, UnitDef } from '@core'
 import type { BotPolicy } from './runner'
+import { activeSkillActions } from './skills'
 
 /** DPS 여유 판정 계수: 팀 DPS × 이 시간(초) ≥ 유입 HP 풀이어야 충분하다고 본다 */
 const DPS_HORIZON_SEC = 12
@@ -44,6 +45,7 @@ export function createPlannerPolicy(): BotPolicy {
     const actions: PlayerAction[] = []
     const skill = maybeWallSkill(ctx, state)
     if (skill) actions.push(skill)
+    actions.push(...activeSkillActions(ctx, state))
     const main = decide(ctx, state, choke, milestones)
     if (main) actions.push(main)
     return actions

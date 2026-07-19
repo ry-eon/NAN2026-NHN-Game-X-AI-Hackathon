@@ -8,6 +8,7 @@
 import { enemyWorldPos } from '@core'
 import type { CellPos, GameState, PlayerAction, SimContext, UnitDef } from '@core'
 import type { BotPolicy } from './runner'
+import { activeSkillActions } from './skills'
 
 export function createGreedyPolicy(): BotPolicy {
   return (ctx, state) => {
@@ -15,6 +16,7 @@ export function createGreedyPolicy(): BotPolicy {
     const actions: PlayerAction[] = []
     const deploy = pickDeploy(ctx, state)
     if (deploy) actions.push(deploy)
+    actions.push(...activeSkillActions(ctx, state))
 
     // 낙석: 준비되면 성벽에 가장 가까운 적에게 즉시 사용 (Greedy는 아끼지 않는다)
     if (state.wallSkillReadyAt <= state.tick && state.enemies.length > 0) {
