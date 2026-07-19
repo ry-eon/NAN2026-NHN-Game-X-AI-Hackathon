@@ -87,6 +87,20 @@ export interface UnitDef {
   aura?: { radius: number; speedFactor: number }
 }
 
+/**
+ * 캐릭터 = 정체성을 가진 유닛 (2026-07-20 확정: 직군 → 캐릭터 중심 개편).
+ * 기계적으로는 UnitDef와 동일하게 시뮬레이션된다 — sim은 정체성 필드를 모른다.
+ * role은 역할 원형(구 직군) id로, 소프트 파이프라인 밸런스 검증의 기준점.
+ */
+export interface CharacterDef extends UnitDef {
+  role: string
+  epithet: string
+  /** 한 문장 서사 (생존 세계관) */
+  lore: string
+  /** 대사: 배치/스킬/승리 (docs/02 캐릭터 구성 요소) */
+  lines: { deploy: string; skill: string; victory: string }
+}
+
 export interface EnemyDef {
   id: string
   name: string
