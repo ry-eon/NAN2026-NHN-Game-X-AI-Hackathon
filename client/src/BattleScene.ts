@@ -432,18 +432,19 @@ export class BattleScene extends Phaser.Scene {
       }
     })
 
+    // 우측 HUD는 스테이지 버튼(최대 2줄, y12·38) 아래부터 시작
     this.hud = {
       time: text(GRID_X + 320, 12),
       wall: text(GRID_X, 36),
-      wave: text(660, 40),
-      cost: text(660, 64, 18, '#ffd870'),
-      status: text(660, 96),
+      wave: text(660, 70),
+      cost: text(660, 94, 18, '#ffd870'),
+      status: text(660, 126),
     }
 
     // 성벽 액션 버튼 (수리 / 낙석)
     const makeBtn = (x: number, onClick: () => void) => {
       const btn = this.add
-        .text(x, 126, '', {
+        .text(x, 156, '', {
           fontFamily: 'monospace',
           fontSize: '13px',
           color: '#e8e8f0',
