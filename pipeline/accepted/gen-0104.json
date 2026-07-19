@@ -1,0 +1,192 @@
+{
+  "id": "gen-0104",
+  "name": "자동 생성 #104",
+  "tilesRows": [
+    "XXXXXXXXXXXXX",
+    "XGGGGGGGGGGGG",
+    "XGGGGGGGGGGGG",
+    "WGGGGGGGRRRRR",
+    "WGGGGGGGRGGGG",
+    "WGGGGRRRRGGGG",
+    "XGGGGRGGGGGGG",
+    "WRRRRRGGGGGGG",
+    "XXXXXXXXXXXXX"
+  ],
+  "paths": [
+    [
+      {
+        "x": 12,
+        "y": 3
+      },
+      {
+        "x": 11,
+        "y": 3
+      },
+      {
+        "x": 10,
+        "y": 3
+      },
+      {
+        "x": 9,
+        "y": 3
+      },
+      {
+        "x": 8,
+        "y": 3
+      },
+      {
+        "x": 8,
+        "y": 4
+      },
+      {
+        "x": 8,
+        "y": 5
+      },
+      {
+        "x": 7,
+        "y": 5
+      },
+      {
+        "x": 6,
+        "y": 5
+      },
+      {
+        "x": 5,
+        "y": 5
+      },
+      {
+        "x": 5,
+        "y": 6
+      },
+      {
+        "x": 5,
+        "y": 7
+      },
+      {
+        "x": 4,
+        "y": 7
+      },
+      {
+        "x": 3,
+        "y": 7
+      },
+      {
+        "x": 2,
+        "y": 7
+      },
+      {
+        "x": 1,
+        "y": 7
+      }
+    ]
+  ],
+  "wallHp": 550,
+  "initialCost": 8,
+  "costRegenPerSec": 0.9,
+  "costMax": 30,
+  "spawns": [
+    {
+      "tick": 150,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 1
+    },
+    {
+      "tick": 210,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 1
+    },
+    {
+      "tick": 300,
+      "enemyDefId": "runner",
+      "pathIndex": 0,
+      "wave": 1
+    },
+    {
+      "tick": 390,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 1
+    },
+    {
+      "tick": 630,
+      "enemyDefId": "runner",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 630,
+      "enemyDefId": "runner",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 750,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 750,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 840,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 870,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 1170,
+      "enemyDefId": "tank",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1350,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1350,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1350,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1470,
+      "enemyDefId": "runner",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1530,
+      "enemyDefId": "runner",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1650,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 3
+    }
+  ],
+  "seed": 104
+}

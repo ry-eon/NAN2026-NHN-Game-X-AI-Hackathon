@@ -1,0 +1,4944 @@
+{
+  "runAt": "2026-07-19T15:34:07.436Z",
+  "baseSeed": 100,
+  "count": 6,
+  "criteria": {
+    "runsPerBot": 5,
+    "trivialRandomClearRate": 0.5,
+    "easyGreedyWallRatio": 0.7,
+    "minUnitDiversity": 2
+  },
+  "accepted": 1,
+  "rejected": {
+    "TRIVIAL": 4,
+    "UNSOLVABLE": 1
+  },
+  "candidates": [
+    {
+      "stage": {
+        "id": "gen-0100",
+        "name": "자동 생성 #100",
+        "tilesRows": [
+          "XXXXXXXXXXX",
+          "WGGGGGGGGGG",
+          "WGGGGGRRRRR",
+          "WRRRRRRGGGG",
+          "WRRRRRGGGGG",
+          "XGGGGRRRRRR",
+          "XGGGGGGGGGG",
+          "XXXXXXXXXXX"
+        ],
+        "paths": [
+          [
+            {
+              "x": 10,
+              "y": 2
+            },
+            {
+              "x": 9,
+              "y": 2
+            },
+            {
+              "x": 8,
+              "y": 2
+            },
+            {
+              "x": 7,
+              "y": 2
+            },
+            {
+              "x": 6,
+              "y": 2
+            },
+            {
+              "x": 6,
+              "y": 3
+            },
+            {
+              "x": 5,
+              "y": 3
+            },
+            {
+              "x": 4,
+              "y": 3
+            },
+            {
+              "x": 3,
+              "y": 3
+            },
+            {
+              "x": 2,
+              "y": 3
+            },
+            {
+              "x": 1,
+              "y": 3
+            }
+          ],
+          [
+            {
+              "x": 10,
+              "y": 5
+            },
+            {
+              "x": 9,
+              "y": 5
+            },
+            {
+              "x": 8,
+              "y": 5
+            },
+            {
+              "x": 7,
+              "y": 5
+            },
+            {
+              "x": 6,
+              "y": 5
+            },
+            {
+              "x": 5,
+              "y": 5
+            },
+            {
+              "x": 5,
+              "y": 4
+            },
+            {
+              "x": 4,
+              "y": 4
+            },
+            {
+              "x": 3,
+              "y": 4
+            },
+            {
+              "x": 2,
+              "y": 4
+            },
+            {
+              "x": 1,
+              "y": 4
+            }
+          ]
+        ],
+        "wallHp": 400,
+        "initialCost": 13,
+        "costRegenPerSec": 0.9,
+        "costMax": 30,
+        "spawns": [
+          {
+            "tick": 210,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 1
+          },
+          {
+            "tick": 270,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 1
+          },
+          {
+            "tick": 330,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 1
+          },
+          {
+            "tick": 630,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 660,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 750,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 780,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 1140,
+            "enemyDefId": "tank",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1200,
+            "enemyDefId": "tank",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1320,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1320,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1530,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1560,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 3
+          }
+        ],
+        "seed": 100
+      },
+      "verdict": {
+        "accepted": false,
+        "reason": "TRIVIAL",
+        "detail": "Random 클리어율 1.00 ≥ 0.5"
+      },
+      "aggregates": [
+        {
+          "name": "planner",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 73.76666666666667,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2213,
+              "seconds": 73.76666666666667,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 335,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 2,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 802,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 2,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 1102,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 1402,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 1768,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 1
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2213,
+                "status": "won",
+                "rngState": 100,
+                "cost": 15.389999999999619,
+                "wallHp": 400,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 3,
+                    "hp": 450,
+                    "cooldown": 4,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 5,
+                    "defId": "blocker",
+                    "x": 2,
+                    "y": 3,
+                    "hp": 1260,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 10,
+                    "defId": "blocker",
+                    "x": 2,
+                    "y": 4,
+                    "hp": 1080,
+                    "cooldown": 17,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 11,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 4,
+                    "hp": 450,
+                    "cooldown": 26,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 16,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 2,
+                    "hp": 450,
+                    "cooldown": 30,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 20,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 1,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 14,
+                "redeployReadyAt": {},
+                "nextEntityId": 21,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 13,
+                    "enemyDefId": "tank",
+                    "by": 16
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2213,
+              "seconds": 73.76666666666667,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2213,
+              "seconds": 73.76666666666667,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2213,
+              "seconds": 73.76666666666667,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2213,
+              "seconds": 73.76666666666667,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "greedy",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 70.9,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2127,
+              "seconds": 70.9,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 2,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 235,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 535,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 835,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 1135,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 1
+                  }
+                },
+                {
+                  "tick": 1502,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 2,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 1868,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 3,
+                    "y": 3
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2127,
+                "status": "won",
+                "rngState": 100,
+                "cost": 7.809999999999933,
+                "wallHp": 400,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "bruiser",
+                    "x": 2,
+                    "y": 3,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 3,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 3,
+                    "hp": 450,
+                    "cooldown": 30,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 6,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 4,
+                    "hp": 450,
+                    "cooldown": 22,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 11,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 2,
+                    "hp": 450,
+                    "cooldown": 26,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 12,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 1,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 18,
+                    "defId": "bruiser",
+                    "x": 2,
+                    "y": 4,
+                    "hp": 700,
+                    "cooldown": 1,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 21,
+                    "defId": "bruiser",
+                    "x": 3,
+                    "y": 3,
+                    "hp": 770,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 14,
+                "redeployReadyAt": {},
+                "nextEntityId": 22,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 14,
+                    "enemyDefId": "tank",
+                    "by": 3
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2127,
+              "seconds": 70.9,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2127,
+              "seconds": 70.9,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2127,
+              "seconds": 70.9,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2127,
+              "seconds": 70.9,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "random",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 0.7,
+          "avgClearSeconds": 74.11333333333333,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2269,
+              "seconds": 75.63333333333334,
+              "wallHp": 160,
+              "wallHpRatio": 0.4,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 2,
+              "actionLog": [
+                {
+                  "tick": 211,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 4,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 361,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 691,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 961,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 1261,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 1
+                  }
+                },
+                {
+                  "tick": 1651,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 4,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 2071,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 4,
+                    "y": 5
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2269,
+                "status": "won",
+                "rngState": 100,
+                "cost": 9.069999999999792,
+                "wallHp": 160,
+                "units": [
+                  {
+                    "id": 5,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 2,
+                    "hp": 450,
+                    "cooldown": 4,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 8,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 4,
+                    "hp": 450,
+                    "cooldown": 30,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 11,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 3,
+                    "hp": 450,
+                    "cooldown": 8,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 14,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 1,
+                    "hp": 450,
+                    "cooldown": 13,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 20,
+                    "defId": "bruiser",
+                    "x": 4,
+                    "y": 2,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 21,
+                    "defId": "bruiser",
+                    "x": 4,
+                    "y": 5,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 14,
+                "redeployReadyAt": {
+                  "blocker": 2844
+                },
+                "nextEntityId": 22,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 13,
+                    "enemyDefId": "tank",
+                    "by": 8
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2213,
+              "seconds": 73.76666666666667,
+              "wallHp": 280,
+              "wallHpRatio": 0.7,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 1,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2213,
+              "seconds": 73.76666666666667,
+              "wallHp": 280,
+              "wallHpRatio": 0.7,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 1,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2209,
+              "seconds": 73.63333333333334,
+              "wallHp": 400,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2213,
+              "seconds": 73.76666666666667,
+              "wallHp": 280,
+              "wallHpRatio": 0.7,
+              "deploys": 7,
+              "enemiesKilled": 14,
+              "wallHits": 1,
+              "actionLog": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "stage": {
+        "id": "gen-0101",
+        "name": "자동 생성 #101",
+        "tilesRows": [
+          "XXXXXXXXXXX",
+          "WGGGGGGGGGG",
+          "WRRRRRRRRRR",
+          "XGGGGGGGGGG",
+          "XGGGGGGGGGG",
+          "XGGGGGGGGGG",
+          "WRRRRRRRGGG",
+          "XGGGGGGRRRR",
+          "XXXXXXXXXXX"
+        ],
+        "paths": [
+          [
+            {
+              "x": 10,
+              "y": 2
+            },
+            {
+              "x": 9,
+              "y": 2
+            },
+            {
+              "x": 8,
+              "y": 2
+            },
+            {
+              "x": 7,
+              "y": 2
+            },
+            {
+              "x": 6,
+              "y": 2
+            },
+            {
+              "x": 5,
+              "y": 2
+            },
+            {
+              "x": 4,
+              "y": 2
+            },
+            {
+              "x": 3,
+              "y": 2
+            },
+            {
+              "x": 2,
+              "y": 2
+            },
+            {
+              "x": 1,
+              "y": 2
+            }
+          ],
+          [
+            {
+              "x": 10,
+              "y": 7
+            },
+            {
+              "x": 9,
+              "y": 7
+            },
+            {
+              "x": 8,
+              "y": 7
+            },
+            {
+              "x": 7,
+              "y": 7
+            },
+            {
+              "x": 7,
+              "y": 6
+            },
+            {
+              "x": 6,
+              "y": 6
+            },
+            {
+              "x": 5,
+              "y": 6
+            },
+            {
+              "x": 4,
+              "y": 6
+            },
+            {
+              "x": 3,
+              "y": 6
+            },
+            {
+              "x": 2,
+              "y": 6
+            },
+            {
+              "x": 1,
+              "y": 6
+            }
+          ]
+        ],
+        "wallHp": 400,
+        "initialCost": 11,
+        "costRegenPerSec": 0.7,
+        "costMax": 30,
+        "spawns": [
+          {
+            "tick": 150,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 240,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 1
+          },
+          {
+            "tick": 300,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 1
+          },
+          {
+            "tick": 390,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 1
+          },
+          {
+            "tick": 480,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 720,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 720,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 810,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 810,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 1170,
+            "enemyDefId": "tank",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1230,
+            "enemyDefId": "tank",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1320,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1320,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1530,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1620,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1710,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          }
+        ],
+        "seed": 101
+      },
+      "verdict": {
+        "accepted": false,
+        "reason": "UNSOLVABLE",
+        "detail": "Planner 클리어율 0.00 < 1"
+      },
+      "aggregates": [
+        {
+          "name": "planner",
+          "runs": 5,
+          "clears": 0,
+          "clearRate": 0,
+          "avgWallHpRatio": 0,
+          "avgClearSeconds": null,
+          "results": [
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 1
+                  }
+                },
+                {
+                  "tick": 387,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 2,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 773,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 782,
+                "status": "lost",
+                "rngState": 101,
+                "cost": 0.24666666666673437,
+                "wallHp": 0,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 1,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 5,
+                    "defId": "bruiser",
+                    "x": 2,
+                    "y": 2,
+                    "hp": 855,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 10,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 21,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [
+                  {
+                    "id": 3,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 10,
+                    "hp": 60,
+                    "cooldown": 30,
+                    "blockedBy": null,
+                    "atWall": true,
+                    "wave": 1
+                  },
+                  {
+                    "id": 4,
+                    "defId": "grunt",
+                    "pathIndex": 1,
+                    "pathPos": 8.855000000000032,
+                    "hp": 480,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 1
+                  },
+                  {
+                    "id": 6,
+                    "defId": "grunt",
+                    "pathIndex": 1,
+                    "pathPos": 7.205000000000055,
+                    "hp": 480,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 1
+                  },
+                  {
+                    "id": 8,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 2.3099999999999983,
+                    "hp": 190,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 2
+                  },
+                  {
+                    "id": 9,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 2.3099999999999983,
+                    "hp": 190,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 2
+                  }
+                ],
+                "spawnCursor": 7,
+                "redeployReadyAt": {},
+                "nextEntityId": 11,
+                "events": [
+                  {
+                    "type": "wallHit",
+                    "enemyId": 3,
+                    "damage": 40,
+                    "wallHp": 0
+                  },
+                  {
+                    "type": "lost"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "greedy",
+          "runs": 5,
+          "clears": 0,
+          "clearRate": 0,
+          "avgWallHpRatio": 0,
+          "avgClearSeconds": null,
+          "results": [
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 2,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 387,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 773,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 782,
+                "status": "lost",
+                "rngState": 101,
+                "cost": 0.24666666666672904,
+                "wallHp": 0,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "bruiser",
+                    "x": 2,
+                    "y": 2,
+                    "hp": 855,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 5,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 2,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 10,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 21,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [
+                  {
+                    "id": 3,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 10,
+                    "hp": 60,
+                    "cooldown": 30,
+                    "blockedBy": null,
+                    "atWall": true,
+                    "wave": 1
+                  },
+                  {
+                    "id": 4,
+                    "defId": "grunt",
+                    "pathIndex": 1,
+                    "pathPos": 8.855000000000032,
+                    "hp": 480,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 1
+                  },
+                  {
+                    "id": 6,
+                    "defId": "grunt",
+                    "pathIndex": 1,
+                    "pathPos": 7.205000000000055,
+                    "hp": 480,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 1
+                  },
+                  {
+                    "id": 8,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 2.3099999999999983,
+                    "hp": 190,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 2
+                  },
+                  {
+                    "id": 9,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 2.3099999999999983,
+                    "hp": 190,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 2
+                  }
+                ],
+                "spawnCursor": 7,
+                "redeployReadyAt": {},
+                "nextEntityId": 11,
+                "events": [
+                  {
+                    "type": "wallHit",
+                    "enemyId": 3,
+                    "damage": 40,
+                    "wallHp": 0
+                  },
+                  {
+                    "type": "lost"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "random",
+          "runs": 5,
+          "clears": 0,
+          "clearRate": 0,
+          "avgWallHpRatio": 0,
+          "avgClearSeconds": null,
+          "results": [
+            {
+              "status": "lost",
+              "ticks": 935,
+              "seconds": 31.166666666666668,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 4,
+              "wallHits": 9,
+              "actionLog": [
+                {
+                  "tick": 31,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 1
+                  }
+                },
+                {
+                  "tick": 301,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 691,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 935,
+                "status": "lost",
+                "rngState": 101,
+                "cost": 5.8166666666667455,
+                "wallHp": 0,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 1,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 5,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 2,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 8,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 26,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [
+                  {
+                    "id": 6,
+                    "defId": "grunt",
+                    "pathIndex": 1,
+                    "pathPos": 10,
+                    "hp": 260,
+                    "cooldown": 45,
+                    "blockedBy": null,
+                    "atWall": true,
+                    "wave": 1
+                  },
+                  {
+                    "id": 9,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 7.920000000000039,
+                    "hp": 190,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 2
+                  },
+                  {
+                    "id": 10,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 7.920000000000039,
+                    "hp": 190,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 2
+                  },
+                  {
+                    "id": 11,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 4.620000000000003,
+                    "hp": 190,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 2
+                  },
+                  {
+                    "id": 12,
+                    "defId": "runner",
+                    "pathIndex": 1,
+                    "pathPos": 4.620000000000003,
+                    "hp": 190,
+                    "cooldown": 0,
+                    "blockedBy": null,
+                    "atWall": false,
+                    "wave": 2
+                  }
+                ],
+                "spawnCursor": 9,
+                "redeployReadyAt": {},
+                "nextEntityId": 13,
+                "events": [
+                  {
+                    "type": "wallHit",
+                    "enemyId": 6,
+                    "damage": 60,
+                    "wallHp": 0
+                  },
+                  {
+                    "type": "lost"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "lost",
+              "ticks": 1112,
+              "seconds": 37.06666666666667,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 7,
+              "wallHits": 11,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 1112,
+              "seconds": 37.06666666666667,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 7,
+              "wallHits": 11,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 782,
+              "seconds": 26.066666666666666,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 2,
+              "enemiesKilled": 2,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 1112,
+              "seconds": 37.06666666666667,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 7,
+              "wallHits": 11,
+              "actionLog": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "stage": {
+        "id": "gen-0102",
+        "name": "자동 생성 #102",
+        "tilesRows": [
+          "XXXXXXXXXXXXX",
+          "XGGGGGGGGGGGG",
+          "XGGGGGGGGGGGG",
+          "WGGGGGGGGGGGG",
+          "XGGGGGGGGGGGG",
+          "WGGGGGGGGGGGG",
+          "WGGGRRRRRRRRR",
+          "WRRRRGGGGGGGG",
+          "XXXXXXXXXXXXX"
+        ],
+        "paths": [
+          [
+            {
+              "x": 12,
+              "y": 6
+            },
+            {
+              "x": 11,
+              "y": 6
+            },
+            {
+              "x": 10,
+              "y": 6
+            },
+            {
+              "x": 9,
+              "y": 6
+            },
+            {
+              "x": 8,
+              "y": 6
+            },
+            {
+              "x": 7,
+              "y": 6
+            },
+            {
+              "x": 6,
+              "y": 6
+            },
+            {
+              "x": 5,
+              "y": 6
+            },
+            {
+              "x": 4,
+              "y": 6
+            },
+            {
+              "x": 4,
+              "y": 7
+            },
+            {
+              "x": 3,
+              "y": 7
+            },
+            {
+              "x": 2,
+              "y": 7
+            },
+            {
+              "x": 1,
+              "y": 7
+            }
+          ]
+        ],
+        "wallHp": 500,
+        "initialCost": 9,
+        "costRegenPerSec": 0.8,
+        "costMax": 30,
+        "spawns": [
+          {
+            "tick": 210,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 330,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 450,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 510,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 570,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 870,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 870,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 960,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 990,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 1260,
+            "enemyDefId": "tank",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1560,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1620,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1680,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1830,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 3
+          }
+        ],
+        "seed": 102
+      },
+      "verdict": {
+        "accepted": false,
+        "reason": "TRIVIAL",
+        "detail": "Random 클리어율 0.80 ≥ 0.5"
+      },
+      "aggregates": [
+        {
+          "name": "planner",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 82.63333333333334,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2479,
+              "seconds": 82.63333333333334,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                },
+                {
+                  "tick": 526,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 2,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1051,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 3,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1389,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1726,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2479,
+                "status": "won",
+                "rngState": 102,
+                "cost": 20.106666666667117,
+                "wallHp": 500,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 30,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 6,
+                    "defId": "blocker",
+                    "x": 2,
+                    "y": 7,
+                    "hp": 1230,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 12,
+                    "defId": "blocker",
+                    "x": 3,
+                    "y": 7,
+                    "hp": 270,
+                    "cooldown": 45,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 14,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 7,
+                    "hp": 450,
+                    "cooldown": 19,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 21,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 17,
+                "redeployReadyAt": {},
+                "nextEntityId": 23,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 13,
+                    "enemyDefId": "tank",
+                    "by": 1
+                  },
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 19,
+                    "enemyDefId": "grunt",
+                    "by": 12
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2479,
+              "seconds": 82.63333333333334,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2479,
+              "seconds": 82.63333333333334,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2479,
+              "seconds": 82.63333333333334,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2479,
+              "seconds": 82.63333333333334,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "greedy",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 79.4,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2382,
+              "seconds": 79.4,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 339,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                },
+                {
+                  "tick": 677,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 1089,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 2,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1501,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 3,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1914,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 4,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 2326,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 4,
+                    "y": 6
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2382,
+                "status": "won",
+                "rngState": 102,
+                "cost": 1.5200000000001386,
+                "wallHp": 500,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 7,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 4,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 8,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 13,
+                    "defId": "bruiser",
+                    "x": 2,
+                    "y": 7,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 18,
+                    "defId": "bruiser",
+                    "x": 3,
+                    "y": 7,
+                    "hp": 765,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 23,
+                    "defId": "bruiser",
+                    "x": 4,
+                    "y": 7,
+                    "hp": 395,
+                    "cooldown": 39,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 24,
+                    "defId": "bruiser",
+                    "x": 4,
+                    "y": 6,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 17,
+                "redeployReadyAt": {},
+                "nextEntityId": 25,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 14,
+                    "enemyDefId": "tank",
+                    "by": 23
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2382,
+              "seconds": 79.4,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2382,
+              "seconds": 79.4,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2382,
+              "seconds": 79.4,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2382,
+              "seconds": 79.4,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "random",
+          "runs": 5,
+          "clears": 4,
+          "clearRate": 0.8,
+          "avgWallHpRatio": 0.712,
+          "avgClearSeconds": 80.50833333333334,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2404,
+              "seconds": 80.13333333333334,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 31,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                },
+                {
+                  "tick": 361,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 751,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 1,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1111,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 1441,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1891,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 6,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 2281,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 6,
+                    "y": 1
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2404,
+                "status": "won",
+                "rngState": 102,
+                "cost": 4.10666666666688,
+                "wallHp": 500,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 30,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 4,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 3,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 8,
+                    "defId": "bruiser",
+                    "x": 1,
+                    "y": 7,
+                    "hp": 785,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 13,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 18,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 18,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 7,
+                    "hp": 450,
+                    "cooldown": 15,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 23,
+                    "defId": "bruiser",
+                    "x": 6,
+                    "y": 5,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 24,
+                    "defId": "bruiser",
+                    "x": 6,
+                    "y": 1,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 17,
+                "redeployReadyAt": {},
+                "nextEntityId": 25,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 14,
+                    "enemyDefId": "tank",
+                    "by": 1
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "lost",
+              "ticks": 1197,
+              "seconds": 39.9,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 4,
+              "enemiesKilled": 4,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2419,
+              "seconds": 80.63333333333334,
+              "wallHp": 440,
+              "wallHpRatio": 0.88,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 1,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2419,
+              "seconds": 80.63333333333334,
+              "wallHp": 440,
+              "wallHpRatio": 0.88,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 1,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2419,
+              "seconds": 80.63333333333334,
+              "wallHp": 400,
+              "wallHpRatio": 0.8,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 2,
+              "actionLog": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "stage": {
+        "id": "gen-0103",
+        "name": "자동 생성 #103",
+        "tilesRows": [
+          "XXXXXXXXXXX",
+          "XGGGGGGGGGG",
+          "XGGGGRRRRRR",
+          "WRRRRRGGGGG",
+          "XGGGGGGGGGG",
+          "WRRRRGGGGGG",
+          "WGGGRRRRGGG",
+          "XGGGGGGRRRR",
+          "XXXXXXXXXXX"
+        ],
+        "paths": [
+          [
+            {
+              "x": 10,
+              "y": 2
+            },
+            {
+              "x": 9,
+              "y": 2
+            },
+            {
+              "x": 8,
+              "y": 2
+            },
+            {
+              "x": 7,
+              "y": 2
+            },
+            {
+              "x": 6,
+              "y": 2
+            },
+            {
+              "x": 5,
+              "y": 2
+            },
+            {
+              "x": 5,
+              "y": 3
+            },
+            {
+              "x": 4,
+              "y": 3
+            },
+            {
+              "x": 3,
+              "y": 3
+            },
+            {
+              "x": 2,
+              "y": 3
+            },
+            {
+              "x": 1,
+              "y": 3
+            }
+          ],
+          [
+            {
+              "x": 10,
+              "y": 7
+            },
+            {
+              "x": 9,
+              "y": 7
+            },
+            {
+              "x": 8,
+              "y": 7
+            },
+            {
+              "x": 7,
+              "y": 7
+            },
+            {
+              "x": 7,
+              "y": 6
+            },
+            {
+              "x": 6,
+              "y": 6
+            },
+            {
+              "x": 5,
+              "y": 6
+            },
+            {
+              "x": 4,
+              "y": 6
+            },
+            {
+              "x": 4,
+              "y": 5
+            },
+            {
+              "x": 3,
+              "y": 5
+            },
+            {
+              "x": 2,
+              "y": 5
+            },
+            {
+              "x": 1,
+              "y": 5
+            }
+          ]
+        ],
+        "wallHp": 500,
+        "initialCost": 14,
+        "costRegenPerSec": 0.9,
+        "costMax": 30,
+        "spawns": [
+          {
+            "tick": 180,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 240,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 360,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 420,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 1
+          },
+          {
+            "tick": 630,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 660,
+            "enemyDefId": "grunt",
+            "pathIndex": 1,
+            "wave": 2
+          },
+          {
+            "tick": 750,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 750,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 1140,
+            "enemyDefId": "tank",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1200,
+            "enemyDefId": "tank",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1320,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1320,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1320,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1500,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1560,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 3
+          },
+          {
+            "tick": 1620,
+            "enemyDefId": "runner",
+            "pathIndex": 1,
+            "wave": 3
+          }
+        ],
+        "seed": 103
+      },
+      "verdict": {
+        "accepted": false,
+        "reason": "TRIVIAL",
+        "detail": "Random 클리어율 0.60 ≥ 0.5"
+      },
+      "aggregates": [
+        {
+          "name": "planner",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 83.8,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2514,
+              "seconds": 83.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 302,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 2,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 668,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 2,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 1024,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 1435,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 3,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 1735,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2514,
+                "status": "won",
+                "rngState": 103,
+                "cost": 23.419999999999842,
+                "wallHp": 500,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 3,
+                    "hp": 450,
+                    "cooldown": 30,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 4,
+                    "defId": "blocker",
+                    "x": 2,
+                    "y": 5,
+                    "hp": 1180,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 9,
+                    "defId": "bruiser",
+                    "x": 2,
+                    "y": 3,
+                    "hp": 760,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 12,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 18,
+                    "defId": "blocker",
+                    "x": 3,
+                    "y": 3,
+                    "hp": 190,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 23,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 17,
+                "redeployReadyAt": {},
+                "nextEntityId": 24,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 13,
+                    "enemyDefId": "tank",
+                    "by": 1
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2514,
+              "seconds": 83.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2514,
+              "seconds": 83.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2514,
+              "seconds": 83.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2514,
+              "seconds": 83.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "greedy",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 72.23333333333333,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2167,
+              "seconds": 72.23333333333333,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 2,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 301,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 601,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 901,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                },
+                {
+                  "tick": 1268,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 2,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 1635,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 3,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 2002,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 3,
+                    "y": 5
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2167,
+                "status": "won",
+                "rngState": 103,
+                "cost": 5.009999999999868,
+                "wallHp": 500,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "blocker",
+                    "x": 2,
+                    "y": 3,
+                    "hp": 1210,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 4,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 3,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 7,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 3,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 12,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 3,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 15,
+                    "defId": "bruiser",
+                    "x": 2,
+                    "y": 5,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 23,
+                    "defId": "bruiser",
+                    "x": 3,
+                    "y": 3,
+                    "hp": 615,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 24,
+                    "defId": "bruiser",
+                    "x": 3,
+                    "y": 5,
+                    "hp": 770,
+                    "cooldown": 39,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 17,
+                "redeployReadyAt": {},
+                "nextEntityId": 25,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 14,
+                    "enemyDefId": "tank",
+                    "by": 24
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2167,
+              "seconds": 72.23333333333333,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2167,
+              "seconds": 72.23333333333333,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2167,
+              "seconds": 72.23333333333333,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2167,
+              "seconds": 72.23333333333333,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "random",
+          "runs": 5,
+          "clears": 3,
+          "clearRate": 0.6,
+          "avgWallHpRatio": 0.4720000000000001,
+          "avgClearSeconds": 73.86666666666667,
+          "results": [
+            {
+              "status": "lost",
+              "ticks": 2300,
+              "seconds": 76.66666666666667,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 7,
+              "enemiesKilled": 16,
+              "wallHits": 7,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 10,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 301,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                },
+                {
+                  "tick": 691,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 931,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 1381,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 3,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 1891,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 8,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 2221,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 9,
+                    "y": 2
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2300,
+                "status": "lost",
+                "rngState": 103,
+                "cost": 5.9999999999995675,
+                "wallHp": 0,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "blocker",
+                    "x": 10,
+                    "y": 4,
+                    "hp": 1400,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 4,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 29,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 9,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 3,
+                    "hp": 450,
+                    "cooldown": 4,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 12,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 3,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 18,
+                    "defId": "blocker",
+                    "x": 3,
+                    "y": 4,
+                    "hp": 1400,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 23,
+                    "defId": "bruiser",
+                    "x": 8,
+                    "y": 2,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 24,
+                    "defId": "bruiser",
+                    "x": 9,
+                    "y": 2,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [
+                  {
+                    "id": 14,
+                    "defId": "tank",
+                    "pathIndex": 1,
+                    "pathPos": 11,
+                    "hp": 270,
+                    "cooldown": 60,
+                    "blockedBy": null,
+                    "atWall": true,
+                    "wave": 3
+                  }
+                ],
+                "spawnCursor": 17,
+                "redeployReadyAt": {},
+                "nextEntityId": 25,
+                "events": [
+                  {
+                    "type": "wallHit",
+                    "enemyId": 14,
+                    "damage": 120,
+                    "wallHp": 0
+                  },
+                  {
+                    "type": "lost"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2232,
+              "seconds": 74.4,
+              "wallHp": 340,
+              "wallHpRatio": 0.68,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 3,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2232,
+              "seconds": 74.4,
+              "wallHp": 340,
+              "wallHpRatio": 0.68,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 3,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2184,
+              "seconds": 72.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 7,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 995,
+              "seconds": 33.166666666666664,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 2,
+              "wallHits": 9,
+              "actionLog": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "stage": {
+        "id": "gen-0104",
+        "name": "자동 생성 #104",
+        "tilesRows": [
+          "XXXXXXXXXXXXX",
+          "XGGGGGGGGGGGG",
+          "XGGGGGGGGGGGG",
+          "WGGGGGGGRRRRR",
+          "WGGGGGGGRGGGG",
+          "WGGGGRRRRGGGG",
+          "XGGGGRGGGGGGG",
+          "WRRRRRGGGGGGG",
+          "XXXXXXXXXXXXX"
+        ],
+        "paths": [
+          [
+            {
+              "x": 12,
+              "y": 3
+            },
+            {
+              "x": 11,
+              "y": 3
+            },
+            {
+              "x": 10,
+              "y": 3
+            },
+            {
+              "x": 9,
+              "y": 3
+            },
+            {
+              "x": 8,
+              "y": 3
+            },
+            {
+              "x": 8,
+              "y": 4
+            },
+            {
+              "x": 8,
+              "y": 5
+            },
+            {
+              "x": 7,
+              "y": 5
+            },
+            {
+              "x": 6,
+              "y": 5
+            },
+            {
+              "x": 5,
+              "y": 5
+            },
+            {
+              "x": 5,
+              "y": 6
+            },
+            {
+              "x": 5,
+              "y": 7
+            },
+            {
+              "x": 4,
+              "y": 7
+            },
+            {
+              "x": 3,
+              "y": 7
+            },
+            {
+              "x": 2,
+              "y": 7
+            },
+            {
+              "x": 1,
+              "y": 7
+            }
+          ]
+        ],
+        "wallHp": 600,
+        "initialCost": 9,
+        "costRegenPerSec": 0.9,
+        "costMax": 30,
+        "spawns": [
+          {
+            "tick": 150,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 210,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 300,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 390,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 630,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 630,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 750,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 750,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 1260,
+            "enemyDefId": "tank",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1440,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1560,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1620,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 3
+          }
+        ],
+        "seed": 104
+      },
+      "verdict": {
+        "accepted": false,
+        "reason": "TRIVIAL",
+        "detail": "Random 클리어율 1.00 ≥ 0.5"
+      },
+      "aggregates": [
+        {
+          "name": "planner",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 99.06666666666666,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2972,
+              "seconds": 99.06666666666666,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 468,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 2,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 835,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 3,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1141,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 1435,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 1959,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 4,
+                    "y": 7
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2972,
+                "status": "won",
+                "rngState": 104,
+                "cost": 30,
+                "wallHp": 600,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 7,
+                    "hp": 450,
+                    "cooldown": 6,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 6,
+                    "defId": "blocker",
+                    "x": 2,
+                    "y": 7,
+                    "hp": 1400,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 11,
+                    "defId": "bruiser",
+                    "x": 3,
+                    "y": 7,
+                    "hp": 230,
+                    "cooldown": 39,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 12,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 14,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 4,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 15,
+                "redeployReadyAt": {
+                  "blocker": 3610
+                },
+                "nextEntityId": 22,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 13,
+                    "enemyDefId": "tank",
+                    "by": 11
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2972,
+              "seconds": 99.06666666666666,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2972,
+              "seconds": 99.06666666666666,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2972,
+              "seconds": 99.06666666666666,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2972,
+              "seconds": 99.06666666666666,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "greedy",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 84.8,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2544,
+              "seconds": 84.8,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 301,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 601,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 968,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 2,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1335,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 3,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1702,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 4,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 2068,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 5,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 2435,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 5,
+                    "y": 6
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2544,
+                "status": "won",
+                "rngState": 104,
+                "cost": 3.3199999999997796,
+                "wallHp": 600,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 7,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 5,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 7,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 4,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 12,
+                    "defId": "bruiser",
+                    "x": 2,
+                    "y": 7,
+                    "hp": 830,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 14,
+                    "defId": "bruiser",
+                    "x": 3,
+                    "y": 7,
+                    "hp": 675,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 21,
+                    "defId": "bruiser",
+                    "x": 4,
+                    "y": 7,
+                    "hp": 810,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 22,
+                    "defId": "bruiser",
+                    "x": 5,
+                    "y": 7,
+                    "hp": 640,
+                    "cooldown": 39,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 23,
+                    "defId": "bruiser",
+                    "x": 5,
+                    "y": 6,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 15,
+                "redeployReadyAt": {},
+                "nextEntityId": 24,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 13,
+                    "enemyDefId": "tank",
+                    "by": 22
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2544,
+              "seconds": 84.8,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2544,
+              "seconds": 84.8,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2544,
+              "seconds": 84.8,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2544,
+              "seconds": 84.8,
+              "wallHp": 600,
+              "wallHpRatio": 1,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "random",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 0.5599999999999999,
+          "avgClearSeconds": 91.26666666666668,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2750,
+              "seconds": 91.66666666666667,
+              "wallHp": 100,
+              "wallHpRatio": 0.16666666666666666,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 10,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 451,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 10,
+                    "y": 6
+                  }
+                },
+                {
+                  "tick": 691,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 3
+                  }
+                },
+                {
+                  "tick": 991,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 7
+                  }
+                },
+                {
+                  "tick": 1291,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 1681,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 5,
+                    "y": 4
+                  }
+                },
+                {
+                  "tick": 2161,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 3,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 2701,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 9,
+                    "y": 1
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2750,
+                "status": "won",
+                "rngState": 104,
+                "cost": 5.499999999999583,
+                "wallHp": 100,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 2,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 6,
+                    "defId": "bruiser",
+                    "x": 10,
+                    "y": 6,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 9,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 3,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 12,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 7,
+                    "hp": 450,
+                    "cooldown": 30,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 14,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 4,
+                    "hp": 450,
+                    "cooldown": 19,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 21,
+                    "defId": "bruiser",
+                    "x": 5,
+                    "y": 4,
+                    "hp": 900,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 22,
+                    "defId": "blocker",
+                    "x": 3,
+                    "y": 2,
+                    "hp": 1400,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 23,
+                    "defId": "blocker",
+                    "x": 9,
+                    "y": 1,
+                    "hp": 1400,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 15,
+                "redeployReadyAt": {},
+                "nextEntityId": 24,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 13,
+                    "enemyDefId": "tank",
+                    "by": 12
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2750,
+              "seconds": 91.66666666666667,
+              "wallHp": 200,
+              "wallHpRatio": 0.3333333333333333,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 8,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2750,
+              "seconds": 91.66666666666667,
+              "wallHp": 420,
+              "wallHpRatio": 0.7,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 3,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2750,
+              "seconds": 91.66666666666667,
+              "wallHp": 420,
+              "wallHpRatio": 0.7,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 3,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2690,
+              "seconds": 89.66666666666667,
+              "wallHp": 540,
+              "wallHpRatio": 0.9,
+              "deploys": 8,
+              "enemiesKilled": 15,
+              "wallHits": 1,
+              "actionLog": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "stage": {
+        "id": "gen-0105",
+        "name": "자동 생성 #105",
+        "tilesRows": [
+          "XXXXXXXXXXX",
+          "XGGGGGGGGGG",
+          "WGGGGGGGGGG",
+          "XGGGGGGGGGG",
+          "XGGGGGGGGGG",
+          "WRRRRRRRRRR",
+          "WGGGGGGGGGG",
+          "XXXXXXXXXXX"
+        ],
+        "paths": [
+          [
+            {
+              "x": 10,
+              "y": 5
+            },
+            {
+              "x": 9,
+              "y": 5
+            },
+            {
+              "x": 8,
+              "y": 5
+            },
+            {
+              "x": 7,
+              "y": 5
+            },
+            {
+              "x": 6,
+              "y": 5
+            },
+            {
+              "x": 5,
+              "y": 5
+            },
+            {
+              "x": 4,
+              "y": 5
+            },
+            {
+              "x": 3,
+              "y": 5
+            },
+            {
+              "x": 2,
+              "y": 5
+            },
+            {
+              "x": 1,
+              "y": 5
+            }
+          ]
+        ],
+        "wallHp": 500,
+        "initialCost": 11,
+        "costRegenPerSec": 0.8,
+        "costMax": 30,
+        "spawns": [
+          {
+            "tick": 210,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 330,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 450,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 510,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 600,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 1
+          },
+          {
+            "tick": 840,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 840,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 960,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 990,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 2
+          },
+          {
+            "tick": 1350,
+            "enemyDefId": "tank",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1530,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1530,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1530,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1530,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1650,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1740,
+            "enemyDefId": "grunt",
+            "pathIndex": 0,
+            "wave": 3
+          },
+          {
+            "tick": 1770,
+            "enemyDefId": "runner",
+            "pathIndex": 0,
+            "wave": 3
+          }
+        ],
+        "seed": 105
+      },
+      "verdict": {
+        "accepted": true,
+        "tier": "EASY"
+      },
+      "aggregates": [
+        {
+          "name": "planner",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 80.8,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2424,
+              "seconds": 80.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 451,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 2,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 789,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                },
+                {
+                  "tick": 1126,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 1651,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 3,
+                    "y": 5
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2424,
+                "status": "won",
+                "rngState": 105,
+                "cost": 20.640000000000466,
+                "wallHp": 500,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 30,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 5,
+                    "defId": "blocker",
+                    "x": 2,
+                    "y": 5,
+                    "hp": 1150,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 8,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 30,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 13,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 2,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 20,
+                    "defId": "blocker",
+                    "x": 3,
+                    "y": 5,
+                    "hp": 360,
+                    "cooldown": 45,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 17,
+                "redeployReadyAt": {},
+                "nextEntityId": 23,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 17,
+                    "enemyDefId": "grunt",
+                    "by": 20
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2424,
+              "seconds": 80.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2424,
+              "seconds": 80.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2424,
+              "seconds": 80.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2424,
+              "seconds": 80.8,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 5,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "greedy",
+          "runs": 5,
+          "clears": 5,
+          "clearRate": 1,
+          "avgWallHpRatio": 1,
+          "avgClearSeconds": 73,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2190,
+              "seconds": 73,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": [
+                {
+                  "tick": 1,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 2,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 339,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 677,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                },
+                {
+                  "tick": 1014,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 1426,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 3,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 1839,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 4,
+                    "y": 5
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2190,
+                "status": "won",
+                "rngState": 105,
+                "cost": 9.400000000000055,
+                "wallHp": 500,
+                "units": [
+                  {
+                    "id": 1,
+                    "defId": "bruiser",
+                    "x": 2,
+                    "y": 5,
+                    "hp": 670,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 4,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 8,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 13,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 2,
+                    "hp": 450,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 15,
+                    "defId": "bruiser",
+                    "x": 3,
+                    "y": 5,
+                    "hp": 675,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 23,
+                    "defId": "bruiser",
+                    "x": 4,
+                    "y": 5,
+                    "hp": 485,
+                    "cooldown": 39,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 17,
+                "redeployReadyAt": {},
+                "nextEntityId": 24,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 14,
+                    "enemyDefId": "tank",
+                    "by": 23
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "won",
+              "ticks": 2190,
+              "seconds": 73,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2190,
+              "seconds": 73,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2190,
+              "seconds": 73,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            },
+            {
+              "status": "won",
+              "ticks": 2190,
+              "seconds": 73,
+              "wallHp": 500,
+              "wallHpRatio": 1,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 0,
+              "actionLog": []
+            }
+          ]
+        },
+        {
+          "name": "random",
+          "runs": 5,
+          "clears": 1,
+          "clearRate": 0.2,
+          "avgWallHpRatio": 0.184,
+          "avgClearSeconds": 76.03333333333333,
+          "results": [
+            {
+              "status": "won",
+              "ticks": 2281,
+              "seconds": 76.03333333333333,
+              "wallHp": 460,
+              "wallHpRatio": 0.92,
+              "deploys": 6,
+              "enemiesKilled": 17,
+              "wallHits": 1,
+              "actionLog": [
+                {
+                  "tick": 61,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 5,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 481,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 2
+                  }
+                },
+                {
+                  "tick": 751,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "bruiser",
+                    "x": 1,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 1111,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 6
+                  }
+                },
+                {
+                  "tick": 1471,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "archer",
+                    "x": 0,
+                    "y": 5
+                  }
+                },
+                {
+                  "tick": 2011,
+                  "action": {
+                    "type": "deploy",
+                    "unitDefId": "blocker",
+                    "x": 9,
+                    "y": 5
+                  }
+                }
+              ],
+              "finalState": {
+                "tick": 2281,
+                "status": "won",
+                "rngState": 105,
+                "cost": 8.82666666666698,
+                "wallHp": 460,
+                "units": [
+                  {
+                    "id": 5,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 2,
+                    "hp": 450,
+                    "cooldown": 13,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 8,
+                    "defId": "bruiser",
+                    "x": 1,
+                    "y": 5,
+                    "hp": 745,
+                    "cooldown": 39,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 13,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 6,
+                    "hp": 450,
+                    "cooldown": 1,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 15,
+                    "defId": "archer",
+                    "x": 0,
+                    "y": 5,
+                    "hp": 450,
+                    "cooldown": 23,
+                    "blockedEnemyIds": []
+                  },
+                  {
+                    "id": 23,
+                    "defId": "blocker",
+                    "x": 9,
+                    "y": 5,
+                    "hp": 1400,
+                    "cooldown": 0,
+                    "blockedEnemyIds": []
+                  }
+                ],
+                "enemies": [],
+                "spawnCursor": 17,
+                "redeployReadyAt": {
+                  "bruiser": 2754
+                },
+                "nextEntityId": 24,
+                "events": [
+                  {
+                    "type": "enemyKilled",
+                    "enemyId": 14,
+                    "enemyDefId": "tank",
+                    "by": 8
+                  },
+                  {
+                    "type": "won"
+                  }
+                ]
+              }
+            },
+            {
+              "status": "lost",
+              "ticks": 835,
+              "seconds": 27.833333333333332,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 3,
+              "enemiesKilled": 0,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 2065,
+              "seconds": 68.83333333333333,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 6,
+              "enemiesKilled": 12,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 2045,
+              "seconds": 68.16666666666667,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 6,
+              "enemiesKilled": 11,
+              "wallHits": 10,
+              "actionLog": []
+            },
+            {
+              "status": "lost",
+              "ticks": 2250,
+              "seconds": 75,
+              "wallHp": 0,
+              "wallHpRatio": 0,
+              "deploys": 6,
+              "enemiesKilled": 16,
+              "wallHits": 10,
+              "actionLog": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
