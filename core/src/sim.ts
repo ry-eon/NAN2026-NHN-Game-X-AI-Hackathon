@@ -222,7 +222,8 @@ function distanceToWall(ctx: SimContext, e: ActiveEnemy): number {
   return ctx.stage.paths[e.pathIndex]!.length - 1 - e.pathPos
 }
 
-function enemyWorldPos(ctx: SimContext, e: ActiveEnemy): CellPos {
+/** 경로 진행도를 셀 좌표로 보간. 렌더러·봇이 적의 화면/공간 위치를 얻는 유일한 통로. */
+export function enemyWorldPos(ctx: SimContext, e: ActiveEnemy): CellPos {
   const path = ctx.stage.paths[e.pathIndex]!
   const i = Math.floor(e.pathPos)
   const a = path[Math.min(i, path.length - 1)]!
