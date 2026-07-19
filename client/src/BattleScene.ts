@@ -205,11 +205,14 @@ export class BattleScene extends Phaser.Scene {
       })
       .setDepth(20)
 
-    // 스테이지 선택 버튼 (우상단)
+    // 스테이지 선택 버튼 (우상단) — 생성 스테이지가 늘어도 넘치지 않게 콤팩트 배치
     STAGES.forEach((s, i) => {
       const current = i === this.stageIndex
+      const col = i % 8
+      const rowY = 12 + Math.floor(i / 8) * 26
+      const label = s.id.startsWith('gen-') ? `G${i + 1}` : `${i + 1}`
       const btn = this.add
-        .text(700 + i * 90, 12, s.id.replace('stage-', 'ST '), {
+        .text(672 + col * 36, rowY, label, {
           fontFamily: 'monospace',
           fontSize: '13px',
           color: current ? '#ffd870' : '#8888aa',
