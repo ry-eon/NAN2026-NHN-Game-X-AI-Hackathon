@@ -14,7 +14,14 @@ import type {
   StageDef,
   TileType,
   UnitDef,
+  WallActionDefs,
 } from './types'
+
+/** 성벽 액션 기본 규칙 [초안]. createContext에서 교체 가능 (데이터 주도) */
+export const DEFAULT_WALL_ACTIONS: WallActionDefs = {
+  repair: { cost: 12, heal: 180, cooldownTicks: 8 * TICKS_PER_SECOND },
+  skill: { damage: 320, radius: 1.8, cooldownTicks: 40 * TICKS_PER_SECOND },
+}
 
 /** 스테이지·정의 테이블을 검증해 만든 불변 컨텍스트. state와 달리 틱마다 변하지 않는다. */
 export interface SimContext {
@@ -24,12 +31,14 @@ export interface SimContext {
   height: number
   unitDefs: Record<string, UnitDef>
   enemyDefs: Record<string, EnemyDef>
+  wallActions: WallActionDefs
 }
 
 export function createContext(
   stage: StageDef,
   unitDefs: UnitDef[],
   enemyDefs: EnemyDef[],
+  wallActions: WallActionDefs = DEFAULT_WALL_ACTIONS,
 ): SimContext {
   const tiles = parseTiles(stage.tilesRows)
   const height = tiles.length
@@ -59,7 +68,7 @@ export function createContext(
       throw new Error(`spawns는 tick 오름차순이어야 함 (index ${si})`)
   }
 
-  return { stage, tiles, width, height, unitDefs: unitMap, enemyDefs: enemyMap }
+  return { stage, tiles, width, height, unitDefs: unitMap, enemyDefs: enemyMap, wallActions }
 }
 
 export function parseTiles(rows: string[]): TileType[][] {
@@ -87,6 +96,8 @@ export function createInitialState(ctx: SimContext, seed?: number): GameState {
     enemies: [],
     spawnCursor: 0,
     redeployReadyAt: {},
+    repairReadyAt: 0,
+    wallSkillReadyAt: 0,
     nextEntityId: 1,
     events: [],
   }
@@ -113,7 +124,9 @@ export function step(ctx: SimContext, state: GameState, actions: PlayerAction[] 
 function applyActions(ctx: SimContext, state: GameState, actions: PlayerAction[]): void {
   for (const action of actions) {
     if (action.type === 'deploy') applyDeploy(ctx, state, action)
-    else applyWithdraw(ctx, state, action.unitId)
+    else if (action.type === 'withdraw') applyWithdraw(ctx, state, action.unitId)
+    else if (action.type === 'repairWall') applyRepair(ctx, state)
+    else applyWallSkill(ctx, state, action.x, action.y)
   }
 }
 
@@ -162,6 +175,44 @@ function applyWithdraw(ctx: SimContext, state: GameState, unitId: number): void 
   state.cost = Math.min(ctx.stage.costMax, state.cost + refund)
   state.redeployReadyAt[def.id] = state.tick + def.redeployTicks
   state.events.push({ type: 'withdrawn', unitId, unitDefId: def.id, refund })
+}
+
+function applyRepair(ctx: SimContext, state: GameState): void {
+  const def = ctx.wallActions.repair
+  const reject = (reason: 'insufficientCost' | 'onCooldown' | 'wallFull'): void => {
+    state.events.push({ type: 'wallActionRejected', action: 'repair', reason })
+  }
+  if (state.repairReadyAt > state.tick) return reject('onCooldown')
+  if (state.cost < def.cost) return reject('insufficientCost')
+  if (state.wallHp >= ctx.stage.wallHp) return reject('wallFull')
+
+  state.cost -= def.cost
+  const before = state.wallHp
+  state.wallHp = Math.min(ctx.stage.wallHp, state.wallHp + def.heal)
+  state.repairReadyAt = state.tick + def.cooldownTicks
+  state.events.push({ type: 'wallRepaired', amount: state.wallHp - before, wallHp: state.wallHp })
+}
+
+function applyWallSkill(ctx: SimContext, state: GameState, x: number, y: number): void {
+  const def = ctx.wallActions.skill
+  const reject = (reason: 'onCooldown' | 'invalidTarget'): void => {
+    state.events.push({ type: 'wallActionRejected', action: 'skill', reason })
+  }
+  if (state.wallSkillReadyAt > state.tick) return reject('onCooldown')
+  if (x < 0 || y < 0 || x >= ctx.width || y >= ctx.height) return reject('invalidTarget')
+
+  let hits = 0
+  for (const e of state.enemies) {
+    if (e.hp <= 0) continue
+    const p = enemyWorldPos(ctx, e)
+    if (Math.hypot(p.x - x, p.y - y) > def.radius) continue
+    e.hp -= def.damage // 낙석: 방어력 무시 고정 피해
+    hits++
+    if (e.hp <= 0) killEnemy(state, e, 0) // by 0 = 성벽 액션
+  }
+  state.enemies = state.enemies.filter((e) => e.hp > 0)
+  state.wallSkillReadyAt = state.tick + def.cooldownTicks
+  state.events.push({ type: 'wallSkillFired', x, y, hits })
 }
 
 // ---------------------------------------------------------------- 스폰/이동/저지

@@ -149,6 +149,10 @@ export interface GameState {
   spawnCursor: number
   /** unitDefId → 재배치 가능 틱 */
   redeployReadyAt: Record<string, number>
+  /** 성벽 수리 재사용 가능 틱 */
+  repairReadyAt: number
+  /** 성벽 스킬 재사용 가능 틱 */
+  wallSkillReadyAt: number
   nextEntityId: number
   /** 이번 틱에 발생한 이벤트 (틱 시작 시 초기화). 렌더링·리포트용 */
   events: SimEvent[]
@@ -156,9 +160,19 @@ export interface GameState {
 
 // ---------------------------------------------------------------- 입력/이벤트
 
+/** 성벽 액션 규칙 (딱 2종 — docs/02-game-design.md). 수치는 [초안] */
+export interface WallActionDefs {
+  /** 수리: 코스트를 소모해 성벽 HP 회복 — 배치 vs 수리 자원 딜레마 */
+  repair: { cost: number; heal: number; cooldownTicks: number }
+  /** 성벽 스킬(낙석): 쿨다운제 광역기. 방어력 무시 고정 피해 */
+  skill: { damage: number; radius: number; cooldownTicks: number }
+}
+
 export type PlayerAction =
   | { type: 'deploy'; unitDefId: string; x: number; y: number }
   | { type: 'withdraw'; unitId: number }
+  | { type: 'repairWall' }
+  | { type: 'wallSkill'; x: number; y: number }
 
 /** 리플레이 = {tick, action} 시퀀스. 봇과 플레이어가 같은 형식을 쓴다. */
 export interface TimedAction {
@@ -174,9 +188,14 @@ export type DeployRejectReason =
   | 'unknownUnit'
   | 'gameOver'
 
+export type WallActionRejectReason = 'insufficientCost' | 'onCooldown' | 'wallFull' | 'invalidTarget'
+
 export type SimEvent =
   | { type: 'deployed'; unitId: number; unitDefId: string; x: number; y: number }
   | { type: 'deployRejected'; unitDefId: string; x: number; y: number; reason: DeployRejectReason }
+  | { type: 'wallRepaired'; amount: number; wallHp: number }
+  | { type: 'wallSkillFired'; x: number; y: number; hits: number }
+  | { type: 'wallActionRejected'; action: 'repair' | 'skill'; reason: WallActionRejectReason }
   | { type: 'withdrawn'; unitId: number; unitDefId: string; refund: number }
   | { type: 'enemySpawned'; enemyId: number; enemyDefId: string; wave: number }
   | { type: 'enemyKilled'; enemyId: number; enemyDefId: string; by: number }

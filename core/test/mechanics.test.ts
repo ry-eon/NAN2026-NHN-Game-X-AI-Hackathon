@@ -80,6 +80,58 @@ describe('W2 신규 메커니즘', () => {
     expect(sim.state.wallHp).toBeLessThan(stage.wallHp)
   })
 
+  it('성벽 수리: 코스트를 소모해 회복하고, 상한·쿨다운·잔액을 검증한다', () => {
+    const sim = new Simulation(
+      lineStage({ spawns: [{ tick: 99999, enemyDefId: 'grunt', pathIndex: 0, wave: 1 }] }),
+      UNIT_DEFS,
+      ENEMY_DEFS,
+    )
+    sim.state.wallHp = 200
+    const costBefore = sim.state.cost
+    sim.step([{ type: 'repairWall' }])
+    expect(sim.state.wallHp).toBe(380) // +180
+    expect(sim.state.cost).toBeCloseTo(costBefore - 12, 5)
+
+    sim.step([{ type: 'repairWall' }]) // 쿨다운 중
+    expect(sim.state.events.some((e) => e.type === 'wallActionRejected')).toBe(true)
+    expect(sim.state.wallHp).toBe(380)
+
+    sim.state.repairReadyAt = 0
+    sim.step([{ type: 'repairWall' }])
+    expect(sim.state.wallHp).toBe(500) // 상한 캡
+
+    sim.state.repairReadyAt = 0
+    sim.step([{ type: 'repairWall' }]) // 성벽 온전 → 반려 (코스트 낭비 방지)
+    expect(
+      sim.state.events.some((e) => e.type === 'wallActionRejected' && e.reason === 'wallFull'),
+    ).toBe(true)
+  })
+
+  it('낙석: 반경 내 적들에게 방어력 무시 피해, 쿨다운제', () => {
+    const stage = lineStage({
+      spawns: [
+        { tick: 30, enemyDefId: 'grunt', pathIndex: 0, wave: 1 },
+        { tick: 30, enemyDefId: 'grunt', pathIndex: 0, wave: 1 },
+        { tick: 30, enemyDefId: 'runner', pathIndex: 0, wave: 1 },
+      ],
+    })
+    const sim = new Simulation(stage, UNIT_DEFS, ENEMY_DEFS)
+    run(sim, 4) // 셋이 뭉쳐 전진 중 (runner가 앞서지만 초반이라 근접)
+    const cell = { x: Math.round(6 - sim.state.enemies[0]!.pathPos), y: 1 }
+    sim.step([{ type: 'wallSkill', x: cell.x, y: cell.y }])
+    const fired = sim.state.events.find((e) => e.type === 'wallSkillFired')
+    expect(fired?.type).toBe('wallSkillFired')
+    if (fired?.type === 'wallSkillFired') expect(fired.hits).toBeGreaterThanOrEqual(2)
+    // grunt 480 - 320 = 160 생존, 낙석은 방어력(20) 무시 확인
+    const grunt = sim.state.enemies.find((e) => e.defId === 'grunt')
+    expect(grunt?.hp).toBe(160)
+
+    sim.step([{ type: 'wallSkill', x: cell.x, y: cell.y }]) // 쿨다운
+    expect(
+      sim.state.events.some((e) => e.type === 'wallActionRejected' && e.reason === 'onCooldown'),
+    ).toBe(true)
+  })
+
   it('근접 자기 칸 공격: 원거리가 닿지 않는 포격 공성차를 근접으로 처치할 수 있다', () => {
     // 성벽 위 칸(0,2)이 포격 지점(x≈3.5, y1)에서 3.64타일 — 아처 사거리(3.5) 밖
     const stage: StageDef = {
