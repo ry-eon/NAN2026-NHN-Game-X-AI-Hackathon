@@ -193,6 +193,10 @@ export type WallActionRejectReason = 'insufficientCost' | 'onCooldown' | 'wallFu
 export type SimEvent =
   | { type: 'deployed'; unitId: number; unitDefId: string; x: number; y: number }
   | { type: 'deployRejected'; unitDefId: string; x: number; y: number; reason: DeployRejectReason }
+  // 전투 연출용 이벤트 — 룰에는 영향 없고 렌더러·리포트가 소비한다
+  | { type: 'unitAttacked'; unitId: number; unitDefId: string; targetIds: number[] }
+  | { type: 'enemyAttacked'; enemyId: number; targetUnitId: number }
+  | { type: 'unitHealed'; healerId: number; targetId: number; amount: number }
   | { type: 'wallRepaired'; amount: number; wallHp: number }
   | { type: 'wallSkillFired'; x: number; y: number; hits: number }
   | { type: 'wallActionRejected'; action: 'repair' | 'skill'; reason: WallActionRejectReason }

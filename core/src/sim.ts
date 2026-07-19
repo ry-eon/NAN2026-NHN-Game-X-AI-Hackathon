@@ -332,8 +332,15 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
         }
       }
       if (patient) {
+        const before = patient.hp
         patient.hp = Math.min(ctx.unitDefs[patient.defId]!.hp, patient.hp + def.atk)
         unit.cooldown = def.atkIntervalTicks
+        state.events.push({
+          type: 'unitHealed',
+          healerId: unit.id,
+          targetId: patient.id,
+          amount: patient.hp - before,
+        })
       }
       continue
     }
@@ -388,6 +395,12 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
       victim.hp -= damage(def.atk, ctx.enemyDefs[victim.defId]!.def)
       if (victim.hp <= 0) killEnemy(state, victim, unit.id)
     }
+    state.events.push({
+      type: 'unitAttacked',
+      unitId: unit.id,
+      unitDefId: def.id,
+      targetIds: victims.map((v) => v.id),
+    })
     unit.cooldown = def.atkIntervalTicks
   }
   state.enemies = state.enemies.filter((e) => e.hp > 0)
@@ -404,6 +417,7 @@ function enemiesAttack(ctx: SimContext, state: GameState): void {
       if (!unit) continue
       unit.hp -= damage(def.atk, ctx.unitDefs[unit.defId]!.def)
       enemy.cooldown = def.atkIntervalTicks
+      state.events.push({ type: 'enemyAttacked', enemyId: enemy.id, targetUnitId: unit.id })
       if (unit.hp <= 0) {
         state.events.push({ type: 'unitDied', unitId: unit.id, unitDefId: unit.defId })
         releaseBlocked(state, unit)
