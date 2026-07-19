@@ -50,6 +50,12 @@ const REJECT_LABELS: Record<DeployRejectReason, string> = {
   unknownUnit: '알 수 없는 유닛',
   gameOver: '게임 종료됨',
 }
+const WALL_REJECT_LABELS: Record<string, string> = {
+  insufficientCost: '코스트 부족',
+  onCooldown: '아직 준비되지 않음',
+  wallFull: '성벽이 온전함',
+  invalidTarget: '잘못된 목표 지점',
+}
 
 interface UnitCard {
   def: UnitDef
@@ -69,6 +75,10 @@ export class BattleScene extends Phaser.Scene {
   private hud!: Record<'time' | 'wall' | 'wave' | 'cost' | 'status', Phaser.GameObjects.Text>
   private cards: UnitCard[] = []
   private overlayShown = false
+  /** 낙석 조준 모드 (버튼/Q 후 타일 클릭 대기) */
+  private targetingSkill = false
+  private repairBtn!: Phaser.GameObjects.Text
+  private skillBtn!: Phaser.GameObjects.Text
   /** scene.restart() 후에도 유지 — 선택한 스테이지 */
   private stageIndex = 0
   /** 스테이지 크기에 맞춘 타일 픽셀 (create에서 계산) */
@@ -92,6 +102,7 @@ export class BattleScene extends Phaser.Scene {
     this.selectedDefId = null
     this.hoverCell = null
     this.overlayShown = false
+    this.targetingSkill = false
     this.cards = [] // scene.restart()는 인스턴스를 재사용하므로 초기화 필수
 
     this.drawStaticGrid()
@@ -110,6 +121,11 @@ export class BattleScene extends Phaser.Scene {
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
       const cell = this.cellAt(p.x, p.y)
       if (!cell) return
+      if (this.targetingSkill) {
+        this.queue({ type: 'wallSkill', x: cell.x, y: cell.y })
+        this.targetingSkill = false
+        return
+      }
       if (this.selectedDefId) {
         this.queue({ type: 'deploy', unitDefId: this.selectedDefId, x: cell.x, y: cell.y })
         this.selectedDefId = null
@@ -125,7 +141,12 @@ export class BattleScene extends Phaser.Scene {
       keys.forEach((key, i) => {
         kb.on(`keydown-${key}`, () => this.selectCard(UNIT_DEFS[i]?.id ?? null))
       })
-      kb.on('keydown-ESC', () => this.selectCard(null))
+      kb.on('keydown-R', () => this.queue({ type: 'repairWall' }))
+      kb.on('keydown-Q', () => this.toggleSkillTargeting())
+      kb.on('keydown-ESC', () => {
+        this.selectCard(null)
+        this.targetingSkill = false
+      })
     }
   }
 
@@ -136,6 +157,13 @@ export class BattleScene extends Phaser.Scene {
 
   private selectCard(defId: string | null): void {
     this.selectedDefId = this.selectedDefId === defId ? null : defId
+    if (defId) this.targetingSkill = false
+  }
+
+  private toggleSkillTargeting(): void {
+    // 준비 여부 판정은 core가 한다 — 여기선 조준 모드 토글만
+    this.targetingSkill = !this.targetingSkill
+    if (this.targetingSkill) this.selectedDefId = null
   }
 
   private cellAt(px: number, py: number): { x: number; y: number } | null {
@@ -166,7 +194,24 @@ export class BattleScene extends Phaser.Scene {
     for (const e of this.sim.state.events) {
       if (e.type === 'deployRejected') this.toast(REJECT_LABELS[e.reason])
       else if (e.type === 'unitDied') this.toast('유닛 격파당함!')
+      else if (e.type === 'wallRepaired') this.toast(`성벽 수리 +${e.amount}`)
+      else if (e.type === 'wallActionRejected')
+        this.toast(`${e.action === 'repair' ? '수리' : '낙석'}: ${WALL_REJECT_LABELS[e.reason]}`)
+      else if (e.type === 'wallSkillFired') this.blastAt(e.x, e.y)
     }
+  }
+
+  /** 낙석 착탄 연출: 반경 원이 잠깐 번쩍이고 사라진다 */
+  private blastAt(x: number, y: number): void {
+    const g = this.add.graphics().setDepth(15)
+    const px = GRID_X + x * this.tile + this.tile / 2
+    const py = GRID_Y + y * this.tile + this.tile / 2
+    const r = this.sim.ctx.wallActions.skill.radius * this.tile
+    g.fillStyle(0xffd870, 0.45)
+    g.fillCircle(px, py, r)
+    g.lineStyle(3, 0xffb050, 1)
+    g.strokeCircle(px, py, r)
+    this.tweens.add({ targets: g, alpha: 0, duration: 500, onComplete: () => g.destroy() })
   }
 
   // ---------------------------------------------------------------- 렌더링
@@ -245,11 +290,35 @@ export class BattleScene extends Phaser.Scene {
       status: text(660, 96),
     }
 
+    // 성벽 액션 버튼 (수리 / 낙석)
+    const makeBtn = (x: number, onClick: () => void) => {
+      const btn = this.add
+        .text(x, 126, '', {
+          fontFamily: 'monospace',
+          fontSize: '13px',
+          color: '#e8e8f0',
+          backgroundColor: '#26263c',
+          padding: { x: 8, y: 5 },
+        })
+        .setDepth(20)
+        .setInteractive({ useHandCursor: true })
+      btn.on(
+        'pointerdown',
+        (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
+          ev.stopPropagation()
+          onClick()
+        },
+      )
+      return btn
+    }
+    this.repairBtn = makeBtn(660, () => this.queue({ type: 'repairWall' }))
+    this.skillBtn = makeBtn(790, () => this.toggleSkillTargeting())
+
     this.add
       .text(
         660,
         400,
-        '조작\n 1~6 또는 카드 클릭: 유닛 선택\n 타일 클릭: 배치 (core가 검증)\n 배치된 유닛 클릭: 철수(50% 환급)\n ESC: 선택 해제',
+        '조작\n 1~6 또는 카드 클릭: 유닛 선택\n 타일 클릭: 배치 (core가 검증)\n 배치된 유닛 클릭: 철수(50% 환급)\n R: 성벽 수리 · Q: 낙석 조준\n ESC: 선택/조준 해제',
         { fontFamily: 'monospace', fontSize: '12px', color: '#8888aa', lineSpacing: 4 },
       )
       .setDepth(20)
@@ -313,6 +382,16 @@ export class BattleScene extends Phaser.Scene {
     if (this.hoverCell) {
       g.lineStyle(2, 0xffffff, 0.5)
       g.strokeRect(GRID_X + this.hoverCell.x * this.tile, GRID_Y + this.hoverCell.y * this.tile, this.tile - 2, this.tile - 2)
+      // 낙석 조준 중이면 반경 미리보기
+      if (this.targetingSkill) {
+        const r = ctx.wallActions.skill.radius * this.tile
+        g.lineStyle(2, 0xffb050, 0.9)
+        g.strokeCircle(
+          GRID_X + this.hoverCell.x * this.tile + this.tile / 2,
+          GRID_Y + this.hoverCell.y * this.tile + this.tile / 2,
+          r,
+        )
+      }
     }
 
     // 유닛: 사각형 + HP바 + 저지 점
@@ -372,6 +451,18 @@ export class BattleScene extends Phaser.Scene {
     this.hud.status.setText(
       state.status === 'playing' ? '' : state.status === 'won' ? '승리!' : '패배',
     )
+
+    // 성벽 액션 버튼 상태
+    const wa = ctx.wallActions
+    const repairCd = (state.repairReadyAt - state.tick) / TICKS_PER_SECOND
+    const skillCd = (state.wallSkillReadyAt - state.tick) / TICKS_PER_SECOND
+    this.repairBtn.setText(
+      repairCd > 0 ? `R 수리 ${repairCd.toFixed(0)}s` : `R 수리 (${wa.repair.cost})`,
+    )
+    this.repairBtn.setAlpha(repairCd > 0 || state.cost < wa.repair.cost ? 0.45 : 1)
+    this.skillBtn.setText(skillCd > 0 ? `Q 낙석 ${skillCd.toFixed(0)}s` : 'Q 낙석 준비됨')
+    this.skillBtn.setAlpha(skillCd > 0 ? 0.45 : 1)
+    this.skillBtn.setBackgroundColor(this.targetingSkill ? '#3a3a58' : '#26263c')
 
     // 카드 상태: 선택 강조, 코스트 부족/쿨다운은 흐리게 (표시용 상태 조회)
     for (const card of this.cards) {
