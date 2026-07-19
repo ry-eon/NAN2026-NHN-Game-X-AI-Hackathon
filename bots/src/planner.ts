@@ -41,9 +41,37 @@ export function createPlannerPolicy(): BotPolicy {
     if (state.status !== 'playing') return []
     choke ??= findChokepoint(ctx)
     milestones ??= predictClumps(ctx)
-    const action = decide(ctx, state, choke, milestones)
-    return action ? [action] : []
+    const actions: PlayerAction[] = []
+    const skill = maybeWallSkill(ctx, state)
+    if (skill) actions.push(skill)
+    const main = decide(ctx, state, choke, milestones)
+    if (main) actions.push(main)
+    return actions
   }
+}
+
+/** 낙석 판단: 반경 내 3기 이상 클러스터, 또는 성벽 타격 중인 적(긴급)에 사용 */
+function maybeWallSkill(ctx: SimContext, state: GameState): PlayerAction | null {
+  if (state.wallSkillReadyAt > state.tick) return null
+  const skill = ctx.wallActions.skill
+  let best: { x: number; y: number; count: number; emergency: boolean } | null = null
+  for (const center of state.enemies) {
+    const cp = enemyWorldPos(ctx, center)
+    let count = 0
+    for (const e of state.enemies) {
+      const p = enemyWorldPos(ctx, e)
+      if (Math.hypot(p.x - cp.x, p.y - cp.y) <= skill.radius) count++
+    }
+    const emergency = center.atWall
+    if (!best || count > best.count || (count === best.count && emergency && !best.emergency)) {
+      best = { x: Math.round(cp.x), y: Math.round(cp.y), count, emergency }
+    }
+  }
+  if (!best) return null
+  if (best.count >= 3 || (best.emergency && best.count >= 1)) {
+    return { type: 'wallSkill', x: best.x, y: best.y }
+  }
+  return null
 }
 
 /**
@@ -224,6 +252,18 @@ function decide(
     const shooter = ranged.find(deployable)
     const cell = shooter && bestRangedCell(ctx, state, shooter, choke)
     if (shooter && cell) return { type: 'deploy', unitDefId: shooter.id, x: cell.x, y: cell.y }
+  }
+
+  // 5. 수리: 급한 배치 수요가 없을 때(위 단계 전부 통과) 성벽이 깎여 있으면
+  //    유닛 예비비(+10)를 남기고 수리 — "배치 vs 수리" 딜레마의 Planner식 해답.
+  //    수리 효율(코스트 12 → HP 180)이 좋으므로 여유가 있으면 적극적으로 되메운다
+  const repair = ctx.wallActions.repair
+  if (
+    state.repairReadyAt <= state.tick &&
+    state.wallHp < ctx.stage.wallHp &&
+    state.cost >= repair.cost + 10
+  ) {
+    return { type: 'repairWall' }
   }
   return null
 }

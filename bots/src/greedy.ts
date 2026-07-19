@@ -5,14 +5,42 @@
 //   - 원거리: 사거리로 경로 셀을 가장 많이 커버하는 성벽 위 셀부터
 // 스테이지 구조를 하드코딩하지 않는다 — 파이프라인이 생성한 임의 StageDef에서 동작해야 함.
 
+import { enemyWorldPos } from '@core'
 import type { CellPos, GameState, PlayerAction, SimContext, UnitDef } from '@core'
 import type { BotPolicy } from './runner'
 
 export function createGreedyPolicy(): BotPolicy {
   return (ctx, state) => {
     if (state.status !== 'playing') return []
+    const actions: PlayerAction[] = []
     const deploy = pickDeploy(ctx, state)
-    return deploy ? [deploy] : []
+    if (deploy) actions.push(deploy)
+
+    // 낙석: 준비되면 성벽에 가장 가까운 적에게 즉시 사용 (Greedy는 아끼지 않는다)
+    if (state.wallSkillReadyAt <= state.tick && state.enemies.length > 0) {
+      let target = state.enemies[0]!
+      let best = Infinity
+      for (const e of state.enemies) {
+        const remaining = ctx.stage.paths[e.pathIndex]!.length - 1 - e.pathPos
+        if (remaining < best) {
+          best = remaining
+          target = e
+        }
+      }
+      const p = enemyWorldPos(ctx, target)
+      actions.push({ type: 'wallSkill', x: Math.round(p.x), y: Math.round(p.y) })
+    }
+
+    // 수리: 성벽 절반 이하일 때만 (Greedy 수준의 생존 본능). 배치와 코스트 경합 회피
+    const spent = deploy && deploy.type === 'deploy' ? ctx.unitDefs[deploy.unitDefId]!.cost : 0
+    if (
+      state.repairReadyAt <= state.tick &&
+      state.wallHp < ctx.stage.wallHp * 0.5 &&
+      state.cost - spent >= ctx.wallActions.repair.cost
+    ) {
+      actions.push({ type: 'repairWall' })
+    }
+    return actions
   }
 }
 

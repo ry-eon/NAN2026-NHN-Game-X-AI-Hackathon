@@ -4,7 +4,7 @@
 // 모든 무작위성은 core의 시드 RNG 경유 — 같은 시드면 같은 플레이.
 
 import { TICKS_PER_SECOND, rngFloat, rngInt } from '@core'
-import type { CellPos, RngState, SimContext, UnitDef } from '@core'
+import type { CellPos, PlayerAction, RngState, SimContext, UnitDef } from '@core'
 import type { BotPolicy } from './runner'
 
 export function createRandomPolicy(seed: number): BotPolicy {
@@ -13,21 +13,44 @@ export function createRandomPolicy(seed: number): BotPolicy {
   return (ctx, state) => {
     if (state.status !== 'playing') return []
     if (state.tick % TICKS_PER_SECOND !== 0) return []
-    if (rngFloat(rng) < 0.5) return []
+    const actions: PlayerAction[] = []
+
+    // 성벽 액션도 무작위로 (25% 낙석 아무 적에게, 15% 수리)
+    if (
+      state.wallSkillReadyAt <= state.tick &&
+      state.enemies.length > 0 &&
+      rngFloat(rng) < 0.25
+    ) {
+      const e = state.enemies[rngInt(rng, state.enemies.length)]!
+      const path = ctx.stage.paths[e.pathIndex]!
+      const cell = path[Math.min(path.length - 1, Math.round(e.pathPos))]!
+      actions.push({ type: 'wallSkill', x: cell.x, y: cell.y })
+    }
+    if (
+      state.repairReadyAt <= state.tick &&
+      state.wallHp < ctx.stage.wallHp &&
+      state.cost >= ctx.wallActions.repair.cost &&
+      rngFloat(rng) < 0.15
+    ) {
+      actions.push({ type: 'repairWall' })
+    }
+
+    if (rngFloat(rng) < 0.5) return actions
 
     const defs = Object.values(ctx.unitDefs).sort((a, b) => a.id.localeCompare(b.id))
     const affordable = defs.filter(
       (d) => state.cost >= d.cost && (state.redeployReadyAt[d.id] ?? 0) <= state.tick,
     )
-    if (affordable.length === 0) return []
+    if (affordable.length === 0) return actions
     const def = affordable[rngInt(rng, affordable.length)]!
 
     const cells = placeableCells(ctx, def).filter(
       (c) => !state.units.some((u) => u.x === c.x && u.y === c.y),
     )
-    if (cells.length === 0) return []
+    if (cells.length === 0) return actions
     const cell = cells[rngInt(rng, cells.length)]!
-    return [{ type: 'deploy', unitDefId: def.id, x: cell.x, y: cell.y }]
+    actions.push({ type: 'deploy', unitDefId: def.id, x: cell.x, y: cell.y })
+    return actions
   }
 }
 
