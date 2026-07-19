@@ -9,6 +9,7 @@
     "build": "pnpm typecheck && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "pipeline": "tsx pipeline/src/run.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -16,6 +17,7 @@
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "vite": "^8.1.4",
     "vitest": "^4.1.10"
