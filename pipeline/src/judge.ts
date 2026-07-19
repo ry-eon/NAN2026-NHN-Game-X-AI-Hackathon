@@ -19,9 +19,12 @@ export type Verdict =
   | { accepted: true; tier: Tier }
   | { accepted: false; reason: RejectReason; detail: string }
 
-/** 판정 기준 v0 [초안 — 사용자 논의 후 확정] */
+/** 판정 기준 v1 (2026-07-20 사용자 승인 — 세부 수치는 [초안] 유지, 되돌림 가능) */
 export const CRITERIA_V0 = {
-  runsPerBot: 5,
+  /** 결정론 봇(Planner/Greedy)은 같은 스테이지에서 항상 같은 플레이 → 1회면 충분 */
+  topBotRuns: 1,
+  /** Random만 시드 변주가 의미 있다 */
+  randomRuns: 5,
   /** Random 클리어율이 이 이상이면 TRIVIAL */
   trivialRandomClearRate: 0.5,
   /** EASY/NORMAL 경계: Greedy 평균 성벽 잔여율 */

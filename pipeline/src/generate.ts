@@ -68,8 +68,11 @@ export function generateStage(seed: number): StageDef {
   const costRegenPerSec = 0.7 + rngInt(rng, 4) * 0.1 // 0.7~1.0
 
   // 웨이브: 완만한 시작 → 페어 → 총공세(중장병 + 동시 클럼프) 램프.
-  // 물량은 경제에 연동 — 수입(재생률)이 낮으면 감당 가능한 총 HP도 낮다
+  // 물량은 경제에 연동 — 수입(재생률)이 낮으면 감당 가능한 총 HP도 낮다.
+  // 공격성(aggro 0~2): 티어 분포 확보용 — 높을수록 NORMAL/HARD 후보
+  //   (과압박이면 판정이 UNSOLVABLE로 거른다)
   const rich = costRegenPerSec >= 0.9 ? 1 : 0
+  const aggro = rngInt(rng, 3)
   const spawns: SpawnDef[] = []
   const lane = () => rngInt(rng, paths.length)
 
@@ -81,7 +84,7 @@ export function generateStage(seed: number): StageDef {
   }
 
   t = Math.max(t + 4, 20) + rngInt(rng, 4)
-  const w2Groups = 2 + rngInt(rng, 2) + rich
+  const w2Groups = 2 + rngInt(rng, 2) + rich + (aggro >= 2 ? 1 : 0)
   for (let g = 0; g < w2Groups; g++) {
     const li = lane()
     const kind = rngFloat(rng) < 0.5 ? 'runner' : 'grunt'
@@ -100,12 +103,16 @@ export function generateStage(seed: number): StageDef {
     spawns.push({ tick: sec(t + 3), enemyDefId: 'siege', pathIndex: lane(), wave: 3 })
   }
   const clumpLane = lane()
-  const clumpSize = 2 + rngInt(rng, 2) + rich // 2~4 동시 (경제 연동)
+  const clumpSize = 2 + rngInt(rng, 2) + rich + (aggro >= 1 ? 1 : 0) // 경제·공격성 연동
   const clumpT = t + 4 + rngInt(rng, 3)
   for (let i = 0; i < clumpSize; i++) {
     spawns.push({ tick: sec(clumpT), enemyDefId: 'grunt', pathIndex: clumpLane, wave: 3 })
   }
-  const tailCount = 2 + rngInt(rng, 2) + rich
+  // 최고 공격성: 두 번째 갑주귀 파도
+  if (aggro >= 2) {
+    spawns.push({ tick: sec(clumpT + 6), enemyDefId: 'tank', pathIndex: lane(), wave: 3 })
+  }
+  const tailCount = 2 + rngInt(rng, 2) + rich + (aggro >= 1 ? 1 : 0)
   for (let i = 0; i < tailCount; i++) {
     spawns.push({
       tick: sec(clumpT + 4 + i * (2 + rngInt(rng, 2))),

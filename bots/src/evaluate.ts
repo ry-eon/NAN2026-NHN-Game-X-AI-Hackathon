@@ -11,6 +11,11 @@ export interface BotSpec {
   name: string
   /** 실행마다 새 정책 인스턴스 생성 (내부 상태·시드 격리). runIndex로 시드 변주 */
   create: (runIndex: number) => BotPolicy
+  /**
+   * 이 봇의 시뮬 횟수 (기본값 대신). 결정론 봇(Planner/Greedy)은 같은 스테이지에서
+   * 항상 같은 플레이를 하므로 1이면 충분 — N회는 순수 낭비다.
+   */
+  runs?: number
 }
 
 export interface BotAggregate {
@@ -34,18 +39,19 @@ export function evaluateBots(
   opts: RunOptions = {},
 ): BotAggregate[] {
   return bots.map((bot) => {
+    const runs = bot.runs ?? runsPerBot
     const results: BotRunResult[] = []
-    for (let i = 0; i < runsPerBot; i++) {
+    for (let i = 0; i < runs; i++) {
       results.push(runHeadless(stage, unitDefs, enemyDefs, bot.create(i), opts))
     }
     const clears = results.filter((r) => r.status === 'won').length
     const clearSeconds = results.filter((r) => r.status === 'won').map((r) => r.seconds)
     return {
       name: bot.name,
-      runs: runsPerBot,
+      runs,
       clears,
-      clearRate: clears / runsPerBot,
-      avgWallHpRatio: results.reduce((s, r) => s + r.wallHpRatio, 0) / runsPerBot,
+      clearRate: clears / runs,
+      avgWallHpRatio: results.reduce((s, r) => s + r.wallHpRatio, 0) / runs,
       avgClearSeconds:
         clearSeconds.length > 0
           ? clearSeconds.reduce((s, v) => s + v, 0) / clearSeconds.length

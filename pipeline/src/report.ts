@@ -51,7 +51,9 @@ export function writeReport(reportsDir: string, report: RunReport): { jsonPath: 
   const lines: string[] = [
     `# 파이프라인 리포트 — ${report.runAt}`,
     '',
-    `- 기준 시드: ${report.baseSeed} / 후보 ${report.count}개 / 봇별 ${String((report.criteria as { runsPerBot?: number }).runsPerBot ?? '?')}회 시뮬`,
+    report.baseSeed === -1
+      ? `- **재검사 실행** (기출고 ${report.count}개, 현행 판정 기준)`
+      : `- 기준 시드: ${report.baseSeed} / 후보 ${report.count}개 / 시뮬: 결정론 봇 ${String((report.criteria as { topBotRuns?: number }).topBotRuns ?? 1)}회 + Random ${String((report.criteria as { randomRuns?: number }).randomRuns ?? 5)}회`,
     `- 출고 ${report.accepted} / 반려 ${report.count - report.accepted} (${Object.entries(report.rejected).map(([k, v]) => `${k} ${v}`).join(', ') || '없음'})`,
     '',
     '| 후보 | 판정 | 티어/사유 | Planner | Greedy | Random | 상세 |',
