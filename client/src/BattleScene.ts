@@ -6,11 +6,11 @@
 
 import Phaser from 'phaser'
 import {
+  CHARACTERS,
   ENEMY_DEFS,
   STAGES,
   Simulation,
   TICKS_PER_SECOND,
-  UNIT_DEFS,
   enemyWorldPos,
 } from '@core'
 import type { DeployRejectReason, PlayerAction, TimedAction, TileType, UnitDef } from '@core'
@@ -28,7 +28,8 @@ const TILE_COLORS: Record<TileType, number> = {
   wallTop: 0x4a4a68,
   blocked: 0x14141f,
 }
-const UNIT_COLORS: Record<string, number> = {
+// 색상은 역할(원형) 기준 — 캐릭터가 늘어나도 역할이 같으면 같은 계열
+const ROLE_COLORS: Record<string, number> = {
   blocker: 0x4e9a5a,
   bruiser: 0xc4644a,
   archer: 0x5aa0d0,
@@ -36,6 +37,9 @@ const UNIT_COLORS: Record<string, number> = {
   healer: 0x5ad0a0,
   slower: 0xd0c05a,
 }
+const CHAR_BY_ID = new Map(CHARACTERS.map((c) => [c.id, c]))
+const colorFor = (defId: string): number =>
+  ROLE_COLORS[CHAR_BY_ID.get(defId)?.role ?? defId] ?? 0xffffff
 const ENEMY_STYLE: Record<string, { color: number; radius: number }> = {
   grunt: { color: 0xd05a5a, radius: 13 },
   runner: { color: 0xe0a050, radius: 9 },
@@ -96,7 +100,7 @@ export class BattleScene extends Phaser.Scene {
 
   create(): void {
     const stage = STAGES[this.stageIndex] ?? STAGES[0]!
-    this.sim = new Simulation(stage, UNIT_DEFS, ENEMY_DEFS)
+    this.sim = new Simulation(stage, CHARACTERS, ENEMY_DEFS)
     this.tile = Math.min(
       60,
       Math.floor(GRID_MAX_W / this.sim.ctx.width),
@@ -150,7 +154,7 @@ export class BattleScene extends Phaser.Scene {
     if (kb) {
       const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'] as const
       keys.forEach((key, i) => {
-        kb.on(`keydown-${key}`, () => this.selectCard(UNIT_DEFS[i]?.id ?? null))
+        kb.on(`keydown-${key}`, () => this.selectCard(CHARACTERS[i]?.id ?? null))
       })
       kb.on('keydown-R', () => this.queue({ type: 'repairWall' }))
       kb.on('keydown-Q', () => this.toggleSkillTargeting())
@@ -222,9 +226,12 @@ export class BattleScene extends Phaser.Scene {
         case 'deployRejected':
           this.toast(REJECT_LABELS[e.reason])
           break
-        case 'deployed':
-          this.deployRing(e.x, e.y, UNIT_COLORS[e.unitDefId] ?? 0xffffff)
+        case 'deployed': {
+          this.deployRing(e.x, e.y, colorFor(e.unitDefId))
+          const ch = CHAR_BY_ID.get(e.unitDefId)
+          if (ch) this.toast(`${ch.name}: "${ch.lines.deploy}"`)
           break
+        }
         case 'unitAttacked':
           this.attackEffect(e.unitId, e.unitDefId, e.targetIds, now)
           break
@@ -277,7 +284,7 @@ export class BattleScene extends Phaser.Scene {
     const def = this.sim.ctx.unitDefs[unitDefId]
     const from = this.unitPosMap.get(unitId)
     if (!def || !from) return
-    const color = UNIT_COLORS[unitDefId] ?? 0xffffff
+    const color = colorFor(unitDefId)
     const f = this.cellPx(from.x, from.y)
 
     for (const tid of targetIds) this.enemyFlash.set(tid, now + 120)
@@ -477,7 +484,7 @@ export class BattleScene extends Phaser.Scene {
 
   private createCards(): void {
     // 6종 로스터가 한 줄에 들어가는 콤팩트 카드 (96px × 6)
-    UNIT_DEFS.forEach((def, i) => {
+    CHARACTERS.forEach((def, i) => {
       const x = GRID_X + i * 102
       const y = 494
       const bg = this.add
@@ -494,7 +501,7 @@ export class BattleScene extends Phaser.Scene {
         },
       )
       this.add
-        .rectangle(x + 6, y + 13, 16, 16, UNIT_COLORS[def.id] ?? 0xffffff)
+        .rectangle(x + 6, y + 13, 16, 16, colorFor(def.id))
         .setOrigin(0, 0)
         .setDepth(21)
       const label = this.add
@@ -552,7 +559,7 @@ export class BattleScene extends Phaser.Scene {
       const def = ctx.unitDefs[u.defId]!
       const px = GRID_X + u.x * this.tile
       const py = GRID_Y + u.y * this.tile
-      g.fillStyle(UNIT_COLORS[u.defId] ?? 0xffffff, 1)
+      g.fillStyle(colorFor(u.defId), 1)
       g.fillRect(px + 8, py + 8, this.tile - 18, this.tile - 18)
       if ((this.unitFlash.get(u.id) ?? 0) > now) {
         g.fillStyle(0xff6a5a, 0.55)
@@ -674,6 +681,19 @@ export class BattleScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setDepth(41)
+    // 생존한 첫 가신의 승리 대사
+    const survivor = this.sim.state.units[0]
+    const ch = survivor ? CHAR_BY_ID.get(survivor.defId) : undefined
+    if (won && ch) {
+      this.add
+        .text(480, 350, `${ch.epithet} ${ch.name} — "${ch.lines.victory}"`, {
+          fontFamily: 'monospace',
+          fontSize: '15px',
+          color: '#c8c8dc',
+        })
+        .setOrigin(0.5)
+        .setDepth(41)
+    }
     this.add
       .text(480, 300, '클릭하면 다시 시작', { fontFamily: 'monospace', fontSize: '16px', color: '#c8c8dc' })
       .setOrigin(0.5)

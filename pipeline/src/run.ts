@@ -7,7 +7,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
-import { ENEMY_DEFS, UNIT_DEFS } from '@core'
+import { CHARACTERS, ENEMY_DEFS } from '@core'
 import type { StageDef } from '@core'
 import {
   createGreedyPolicy,
@@ -47,7 +47,7 @@ function examine(
       aggregates: null,
     }
   }
-  const aggregates = evaluateBots(stage, UNIT_DEFS, ENEMY_DEFS, [
+  const aggregates = evaluateBots(stage, CHARACTERS, ENEMY_DEFS, [
     { name: 'planner', create: () => createPlannerPolicy(), runs: CRITERIA_V0.topBotRuns },
     { name: 'greedy', create: () => createGreedyPolicy(), runs: CRITERIA_V0.topBotRuns },
     {

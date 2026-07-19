@@ -2,7 +2,7 @@
 // 판정 임계값은 전부 [초안] — 실측 리포트가 쌓이면 사용자와 논의해 확정한다
 // (docs/05-pipeline.md "판정 기준 v0 제안" 참조).
 
-import { ENEMY_DEFS, UNIT_DEFS, createContext } from '@core'
+import { CHARACTERS, ENEMY_DEFS, createContext } from '@core'
 import type { StageDef } from '@core'
 import type { BotAggregate } from '../../bots/src/index'
 
@@ -36,14 +36,14 @@ export const CRITERIA_V0 = {
 /** 정적 검증: 시뮬 없이 걸러낼 수 있는 결함 */
 export function validateStage(stage: StageDef): { ok: true } | { ok: false; detail: string } {
   try {
-    const ctx = createContext(stage, UNIT_DEFS, ENEMY_DEFS)
+    const ctx = createContext(stage, CHARACTERS, ENEMY_DEFS)
     if (stage.spawns.length < 5) return { ok: false, detail: `스폰 ${stage.spawns.length}개 (<5)` }
     for (const [pi, path] of stage.paths.entries()) {
       if (path.length < 7) return { ok: false, detail: `경로 ${pi} 길이 ${path.length} (<7)` }
       // 각 경로 종점이 최소 한 개의 성벽 위 칸 사거리(최대 원거리 기준)에 들어야
       // 성벽 캠핑 적을 처치할 수단이 존재한다
       const end = path[path.length - 1]!
-      const maxRange = Math.max(...UNIT_DEFS.filter((d) => d.range > 0).map((d) => d.range))
+      const maxRange = Math.max(...CHARACTERS.filter((d) => d.range > 0).map((d) => d.range))
       let covered = false
       for (let y = 0; y < ctx.height && !covered; y++) {
         for (let x = 0; x < ctx.width && !covered; x++) {

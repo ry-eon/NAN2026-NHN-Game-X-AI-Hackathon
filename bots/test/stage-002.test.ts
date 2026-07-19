@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ENEMY_DEFS, STAGE_002, UNIT_DEFS } from '@core'
+import { CHARACTERS, ENEMY_DEFS, STAGE_002 } from '@core'
 import {
   createGreedyPolicy,
   createPlannerPolicy,
@@ -13,7 +13,7 @@ describe('stage-002 등급 변별력', () => {
   it('Planner > Greedy > Random 순서로 성과가 갈린다', () => {
     const [planner, greedy, random] = evaluateBots(
       STAGE_002,
-      UNIT_DEFS,
+      CHARACTERS,
       ENEMY_DEFS,
       [
         { name: 'planner', create: () => createPlannerPolicy() },
