@@ -16,6 +16,9 @@ concurrency:
 
 jobs:
   build:
+    # 무료 플랜의 Pages는 public 리포 전용 — private인 동안은 스킵해서 커밋에
+    # 실패(빨간 X)가 안 붙게 한다. public 전환 후 첫 push부터 자동 재개.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
