@@ -24,6 +24,8 @@ docs/      기획·설계·디렉팅 로그
 pnpm install
 pnpm dev        # 개발 서버
 pnpm build      # 타입체크 + 프로덕션 빌드 (dist/)
+pnpm test       # core/bots/pipeline 테스트 (결정론·등급 변별력·판정 규칙)
+pnpm pipeline   # 스테이지 생성 → 봇 검증 → 통과분만 출고 (리포트: pipeline/reports/)
 ```
 
 배포: `main` 푸시 시 GitHub Actions가 GitHub Pages로 자동 배포.

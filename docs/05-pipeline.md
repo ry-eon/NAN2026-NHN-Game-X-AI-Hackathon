@@ -19,6 +19,38 @@
 - 모든 실행 결과는 `pipeline/reports/`에 축적. 기술 문서의 근거 자료.
 - 난이도 지표의 세부 임계값은 [미결] — W2에서 실측 데이터 보고 사용자와 확정.
 
+## 구현 현황 (2026-07-20, 하드 파이프라인 골격 완성)
+
+`pnpm pipeline [--count 8] [--seed 123] [--tier HARD] [--dry]` 한 번으로 [1]~[6] 전체가 돈다.
+
+| 단계 | 구현 | 비고 |
+|---|---|---|
+| [1] 생성 | `pipeline/src/generate.ts` | 절차적(템플릿+시드 변형). LLM 생성은 같은 StageDef 스키마로 교체/병행 예정 |
+| [2] 정적검증 | `pipeline/src/judge.ts` `validateStage` | 스키마·경로 인접성(core `createContext`) + 스폰 수·경로 길이·종점 원거리 커버 |
+| [3] 봇 시뮬 | `bots/src/evaluate.ts` `evaluateBots` | Planner/Greedy/Random × 5회 (Random만 시드 변주, 상위 봇은 결정론) |
+| [4] 지표 | `BotAggregate` | 클리어율, 평균 성벽 잔여율, 평균 클리어 시간, 사용 유닛 다양성 |
+| [5] 판정 | `pipeline/src/judge.ts` `judge` | 아래 CRITERIA_V0. 반려 사유 코드 부여 |
+| [6] 출고 | `pipeline/src/ship.ts` | `pipeline/accepted/*.json`(진실 원천) → `core/.../generated.ts` 코드젠 → STAGES 자동 포함 |
+| 리포트 | `pipeline/src/report.ts` | 실행마다 `pipeline/reports/<시각>-seed<N>.{json,md}`. 대표 1런의 액션 로그 포함(리플레이 재현용) |
+
+### 판정 기준 v0 — CRITERIA_V0 [초안, 논의 필요]
+| 규칙 | 값 | 근거 |
+|---|---|---|
+| UNSOLVABLE | Planner 클리어율 < 100% | Planner가 풀이 가능성의 오라클 (결정론이라 5회 전승/전패) |
+| TRIVIAL | Random 클리어율 ≥ 50% | stage-001 실측(Random 100%)을 하급 신호로 채택 |
+| DEGENERATE | Planner 사용 유닛 < 2종 | 단일 유닛 강제 스테이지 배제 |
+| 티어 EASY | Greedy 클리어 100% & 성벽 잔여 ≥ 70% | |
+| 티어 NORMAL | Greedy 클리어 100% & 잔여 < 70% | |
+| 티어 HARD | Greedy 클리어 < 100% (Planner 전용) | |
+| OFF_CURVE | `--tier` 목표와 불일치 시 반려 | 난이도 커브 채우기용 |
+
+### 첫 실측 (시드 100~111, 12후보)
+- 출고 8 / 반려 4 (TRIVIAL 3, UNSOLVABLE 1) — 수율 67%
+- 반려 사례가 자연 발생: 반려율·사유 통계가 "검증기가 진짜"라는 증거로 축적됨
+- **논의 안건**: ① 출고분이 전부 EASY — NORMAL/HARD가 나오도록 생성기 압박 상향 또는
+  티어 경계(70%) 조정 필요 ② TRIVIAL 경계 50%가 적정한가 ③ 봇별 5회가 충분한가
+  (상위 봇은 결정론이라 사실상 1회 — Random만 N회의 의미가 있음)
+
 ## 소프트 파이프라인 — 캐릭터
 ```
 [1] 기획 생성   세계관 문서 기반으로 프로필·스킬셋·대사 생성
