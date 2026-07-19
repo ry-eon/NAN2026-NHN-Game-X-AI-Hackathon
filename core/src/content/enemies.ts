@@ -10,7 +10,7 @@ export const ENEMY_DEFS: EnemyDef[] = [
   {
     id: 'grunt',
     name: '보병',
-    hp: 320,
+    hp: 480,
     atk: 70,
     def: 20,
     atkIntervalTicks: sec(1.5),
@@ -20,7 +20,7 @@ export const ENEMY_DEFS: EnemyDef[] = [
   {
     id: 'runner',
     name: '속행병',
-    hp: 160,
+    hp: 190,
     atk: 50,
     def: 0,
     atkIntervalTicks: sec(1.0),
@@ -30,7 +30,7 @@ export const ENEMY_DEFS: EnemyDef[] = [
   {
     id: 'tank',
     name: '중장병',
-    hp: 1100,
+    hp: 1250,
     atk: 90,
     def: 60,
     atkIntervalTicks: sec(2.0),
