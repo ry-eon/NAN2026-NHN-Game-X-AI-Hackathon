@@ -79,6 +79,12 @@ export class BattleScene extends Phaser.Scene {
   private targetingSkill = false
   private repairBtn!: Phaser.GameObjects.Text
   private skillBtn!: Phaser.GameObjects.Text
+  // 연출용 상태: 직전 틱의 엔티티 위치(사망 연출·트레이서용)와 피격 플래시 만료 시각
+  private enemyPosMap = new Map<number, { x: number; y: number }>()
+  private unitPosMap = new Map<number, { x: number; y: number }>()
+  private enemyFlash = new Map<number, number>()
+  private unitFlash = new Map<number, number>()
+  private wallFlashUntil = 0
   /** scene.restart() 후에도 유지 — 선택한 스테이지 */
   private stageIndex = 0
   /** 스테이지 크기에 맞춘 타일 픽셀 (create에서 계산) */
@@ -104,6 +110,11 @@ export class BattleScene extends Phaser.Scene {
     this.overlayShown = false
     this.targetingSkill = false
     this.cards = [] // scene.restart()는 인스턴스를 재사용하므로 초기화 필수
+    this.enemyPosMap.clear()
+    this.unitPosMap.clear()
+    this.enemyFlash.clear()
+    this.unitFlash.clear()
+    this.wallFlashUntil = 0
 
     this.drawStaticGrid()
     this.createHud()
@@ -180,6 +191,7 @@ export class BattleScene extends Phaser.Scene {
       this.accMs = Math.min(this.accMs + delta, STEP_MS * 6) // 프레임 드랍 시 폭주 방지
       while (this.accMs >= STEP_MS) {
         this.accMs -= STEP_MS
+        this.snapshotPositions() // 이번 틱에 죽는 엔티티의 연출 위치 확보
         this.sim.step(this.queued)
         this.queued = []
         this.consumeEvents()
@@ -190,15 +202,153 @@ export class BattleScene extends Phaser.Scene {
     this.render()
   }
 
-  private consumeEvents(): void {
-    for (const e of this.sim.state.events) {
-      if (e.type === 'deployRejected') this.toast(REJECT_LABELS[e.reason])
-      else if (e.type === 'unitDied') this.toast('유닛 격파당함!')
-      else if (e.type === 'wallRepaired') this.toast(`성벽 수리 +${e.amount}`)
-      else if (e.type === 'wallActionRejected')
-        this.toast(`${e.action === 'repair' ? '수리' : '낙석'}: ${WALL_REJECT_LABELS[e.reason]}`)
-      else if (e.type === 'wallSkillFired') this.blastAt(e.x, e.y)
+  private snapshotPositions(): void {
+    const { state, ctx } = this.sim
+    for (const en of state.enemies) this.enemyPosMap.set(en.id, enemyWorldPos(ctx, en))
+    for (const u of state.units) this.unitPosMap.set(u.id, { x: u.x, y: u.y })
+  }
+
+  private cellPx(x: number, y: number): { px: number; py: number } {
+    return {
+      px: GRID_X + x * this.tile + this.tile / 2,
+      py: GRID_Y + y * this.tile + this.tile / 2,
     }
+  }
+
+  private consumeEvents(): void {
+    const now = this.time.now
+    for (const e of this.sim.state.events) {
+      switch (e.type) {
+        case 'deployRejected':
+          this.toast(REJECT_LABELS[e.reason])
+          break
+        case 'deployed':
+          this.deployRing(e.x, e.y, UNIT_COLORS[e.unitDefId] ?? 0xffffff)
+          break
+        case 'unitAttacked':
+          this.attackEffect(e.unitId, e.unitDefId, e.targetIds, now)
+          break
+        case 'enemyAttacked':
+          this.unitFlash.set(e.targetUnitId, now + 120)
+          break
+        case 'unitHealed':
+          this.healBeam(e.healerId, e.targetId)
+          break
+        case 'enemyKilled': {
+          const pos = this.enemyPosMap.get(e.enemyId)
+          if (pos)
+            this.deathBurst(pos.x, pos.y, ENEMY_STYLE[e.enemyDefId]?.color ?? 0xffffff)
+          break
+        }
+        case 'unitDied': {
+          this.toast('유닛 격파당함!')
+          const pos = this.unitPosMap.get(e.unitId)
+          if (pos) this.deathBurst(pos.x, pos.y, 0x9999aa)
+          this.cameras.main.shake(120, 0.003)
+          break
+        }
+        case 'wallHit':
+          this.wallFlashUntil = now + 160
+          this.cameras.main.shake(90, 0.002)
+          break
+        case 'wallRepaired':
+          this.toast(`성벽 수리 +${e.amount}`)
+          break
+        case 'wallActionRejected':
+          this.toast(`${e.action === 'repair' ? '수리' : '낙석'}: ${WALL_REJECT_LABELS[e.reason]}`)
+          break
+        case 'wallSkillFired':
+          this.blastAt(e.x, e.y)
+          this.cameras.main.shake(150, 0.004)
+          break
+        case 'lost':
+          this.cameras.main.shake(400, 0.008)
+          break
+        default:
+          break
+      }
+    }
+  }
+
+  // ------------------------------------------------------------ 전투 이펙트
+
+  /** 공격 연출: 원거리는 트레이서(술사는 광역 파문 추가), 근접은 슬래시 */
+  private attackEffect(unitId: number, unitDefId: string, targetIds: number[], now: number): void {
+    const def = this.sim.ctx.unitDefs[unitDefId]
+    const from = this.unitPosMap.get(unitId)
+    if (!def || !from) return
+    const color = UNIT_COLORS[unitDefId] ?? 0xffffff
+    const f = this.cellPx(from.x, from.y)
+
+    for (const tid of targetIds) this.enemyFlash.set(tid, now + 120)
+
+    const firstTarget = targetIds[0] !== undefined ? this.enemyPosMap.get(targetIds[0]) : null
+    if (!firstTarget) return
+    const t = this.cellPx(firstTarget.x, firstTarget.y)
+
+    if (def.range > 0) {
+      const g = this.add.graphics().setDepth(14)
+      g.lineStyle(2, color, 0.9)
+      g.lineBetween(f.px, f.py, t.px, t.py)
+      if (def.aoeRadius) {
+        g.lineStyle(2, color, 0.6)
+        g.strokeCircle(t.px, t.py, def.aoeRadius * this.tile)
+      }
+      this.tweens.add({ targets: g, alpha: 0, duration: 160, onComplete: () => g.destroy() })
+    } else {
+      // 근접 슬래시: 표적 위 짧은 교차선
+      const g = this.add.graphics().setDepth(14)
+      g.lineStyle(3, 0xffffff, 0.9)
+      const r = this.tile * 0.22
+      g.lineBetween(t.px - r, t.py - r, t.px + r, t.py + r)
+      this.tweens.add({ targets: g, alpha: 0, duration: 130, onComplete: () => g.destroy() })
+    }
+  }
+
+  private healBeam(healerId: number, targetId: number): void {
+    const from = this.unitPosMap.get(healerId)
+    const to = this.unitPosMap.get(targetId)
+    if (!from || !to) return
+    const f = this.cellPx(from.x, from.y)
+    const t = this.cellPx(to.x, to.y)
+    const g = this.add.graphics().setDepth(14)
+    g.lineStyle(2, 0x5ad0a0, 0.8)
+    g.lineBetween(f.px, f.py, t.px, t.py)
+    g.lineStyle(3, 0x8affce, 1)
+    g.lineBetween(t.px - 5, t.py, t.px + 5, t.py)
+    g.lineBetween(t.px, t.py - 5, t.px, t.py + 5)
+    this.tweens.add({ targets: g, alpha: 0, duration: 300, onComplete: () => g.destroy() })
+  }
+
+  /** 사망 버스트: 커지며 사라지는 링 */
+  private deathBurst(x: number, y: number, color: number): void {
+    const { px, py } = this.cellPx(x, y)
+    const g = this.add.graphics({ x: px, y: py }).setDepth(15)
+    g.lineStyle(3, color, 0.9)
+    g.strokeCircle(0, 0, this.tile * 0.22)
+    g.fillStyle(color, 0.35)
+    g.fillCircle(0, 0, this.tile * 0.18)
+    this.tweens.add({
+      targets: g,
+      scale: 2.2,
+      alpha: 0,
+      duration: 320,
+      onComplete: () => g.destroy(),
+    })
+  }
+
+  private deployRing(x: number, y: number, color: number): void {
+    const { px, py } = this.cellPx(x, y)
+    const g = this.add.graphics({ x: px, y: py }).setDepth(15)
+    g.lineStyle(2, color, 0.9)
+    g.strokeCircle(0, 0, this.tile * 0.45)
+    this.tweens.add({
+      targets: g,
+      scale: 0.4,
+      alpha: 0,
+      duration: 260,
+      onComplete: () => g.destroy(),
+    })
   }
 
   /** 낙석 착탄 연출: 반경 원이 잠깐 번쩍이고 사라진다 */
@@ -394,19 +544,25 @@ export class BattleScene extends Phaser.Scene {
       }
     }
 
-    // 유닛: 사각형 + HP바 + 저지 점
+    const now = this.time.now
+
+    // 유닛: 사각형 + HP바 + 저지 점 (+피격 시 붉은 플래시)
     for (const u of state.units) {
       const def = ctx.unitDefs[u.defId]!
       const px = GRID_X + u.x * this.tile
       const py = GRID_Y + u.y * this.tile
       g.fillStyle(UNIT_COLORS[u.defId] ?? 0xffffff, 1)
       g.fillRect(px + 8, py + 8, this.tile - 18, this.tile - 18)
+      if ((this.unitFlash.get(u.id) ?? 0) > now) {
+        g.fillStyle(0xff6a5a, 0.55)
+        g.fillRect(px + 8, py + 8, this.tile - 18, this.tile - 18)
+      }
       this.bar(px + 8, py + this.tile - 8, this.tile - 18, u.hp / def.hp)
       g.fillStyle(0xffffff, 0.9)
       for (let b = 0; b < u.blockedEnemyIds.length; b++) g.fillCircle(px + 14 + b * 10, py + 14, 3)
     }
 
-    // 적: 원 + HP바 (경로 보간 위치, 같은 셀에 겹치면 id로 살짝 흩뜨림)
+    // 적: 원 + HP바 (경로 보간 위치, 같은 셀에 겹치면 id로 살짝 흩뜨림, 피격 시 백색 플래시)
     for (const e of state.enemies) {
       const style = ENEMY_STYLE[e.defId] ?? { color: 0xffffff, radius: 12 }
       const pos = enemyWorldPos(ctx, e)
@@ -414,6 +570,10 @@ export class BattleScene extends Phaser.Scene {
       const py = GRID_Y + pos.y * this.tile + this.tile / 2 + (((e.id * 7) % 3) - 1) * 6
       g.fillStyle(style.color, 1)
       g.fillCircle(px, py, style.radius)
+      if ((this.enemyFlash.get(e.id) ?? 0) > now) {
+        g.fillStyle(0xffffff, 0.7)
+        g.fillCircle(px, py, style.radius)
+      }
       const maxHp = ctx.enemyDefs[e.defId]!.hp
       this.bar(px - 15, py - style.radius - 7, 30, e.hp / maxHp)
     }
@@ -436,13 +596,17 @@ export class BattleScene extends Phaser.Scene {
 
     this.hud.time.setText(`t=${(state.tick / TICKS_PER_SECOND).toFixed(1)}s`)
 
-    // 성벽 HP 바
+    // 성벽 HP 바 (+피격 순간 붉은 플래시)
     const ratio = state.wallHp / ctx.stage.wallHp
     this.hud.wall.setText(`성벽 HP ${state.wallHp}/${ctx.stage.wallHp}`)
     g.fillStyle(0x000000, 0.6)
     g.fillRect(GRID_X + 190, 38, 410, 12)
     g.fillStyle(ratio > 0.5 ? 0x62c462 : ratio > 0.25 ? 0xe0c050 : 0xd05a5a, 1)
     g.fillRect(GRID_X + 190, 38, 410 * Phaser.Math.Clamp(ratio, 0, 1), 12)
+    if (this.wallFlashUntil > this.time.now) {
+      g.fillStyle(0xff5a4a, 0.5)
+      g.fillRect(GRID_X + 190, 38, 410, 12)
+    }
 
     this.hud.wave.setText(
       `스폰 ${state.spawnCursor}/${ctx.stage.spawns.length} · 적 생존 ${state.enemies.length}`,
