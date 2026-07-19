@@ -18,11 +18,13 @@ export function createGreedyPolicy(): BotPolicy {
 
 function pickDeploy(ctx: SimContext, state: GameState): PlayerAction | null {
   const defs = Object.values(ctx.unitDefs)
+  // 유틸리티(오라) 유닛도 제외 — 저지·화력 가치가 낮아 봇 구매 풀에서 뺀다
   const melee = defs
-    .filter((d) => d.placement === 'ground')
+    .filter((d) => d.placement === 'ground' && !d.aura)
     .sort((a, b) => b.blockCount - a.blockCount || a.id.localeCompare(b.id))
+  // 힐러는 제외 — Greedy도 '치유는 화력이 아니다'까지는 안다 (봇 힐러 운용은 W3 과제)
   const ranged = defs
-    .filter((d) => d.placement === 'wallTop')
+    .filter((d) => d.placement === 'wallTop' && !d.heals)
     .sort((a, b) => b.range - a.range || a.id.localeCompare(b.id))
 
   const meleeAlive = state.units.filter(

@@ -8,7 +8,7 @@
 //   4. 누수 대응 — 초크포인트를 통과한 적의 전방 셀에 긴급 저지선을 친다.
 // 상수는 전부 [초안] — 난이도 지표 논의(W2)에서 재조정.
 
-import { TICKS_PER_SECOND } from '@core'
+import { TICKS_PER_SECOND, enemyWorldPos } from '@core'
 import type { CellPos, GameState, PlayerAction, SimContext, UnitDef } from '@core'
 import type { BotPolicy } from './runner'
 
@@ -107,11 +107,13 @@ function decide(
   choke: CellPos,
   milestones: ClumpMilestone[],
 ): PlayerAction | null {
+  // 유틸리티(오라) 유닛 제외 — 봇의 감속사·의무병 운용 독트린은 W3 과제
   const melee = Object.values(ctx.unitDefs)
-    .filter((d) => d.placement === 'ground')
+    .filter((d) => d.placement === 'ground' && !d.aura)
     .sort((a, b) => b.blockCount - a.blockCount || b.hp - a.hp || a.id.localeCompare(b.id))
+  // 힐러는 화력이 아니므로 구매 대상(사수)에서 제외 — 봇의 힐러 운용은 W3 과제
   const ranged = Object.values(ctx.unitDefs)
-    .filter((d) => d.placement === 'wallTop')
+    .filter((d) => d.placement === 'wallTop' && !d.heals)
     .sort((a, b) => b.range - a.range || a.id.localeCompare(b.id))
 
   const deployable = (d: UnitDef) =>
@@ -152,9 +154,19 @@ function decide(
   const camperCell = uncoveredWallCamper(ctx, state)
   if (camperCell) {
     const shooter = ranged.find(deployable)
-    const cell = shooter && bestRangedCell(ctx, state, shooter, camperCell)
-    if (shooter && cell) return { type: 'deploy', unitDefId: shooter.id, x: cell.x, y: cell.y }
-    return null // 원거리 저축 — 캠퍼 방치가 제일 비싸다
+    if (shooter) {
+      const cell = bestRangedCell(ctx, state, shooter, camperCell)
+      if (cell && Math.hypot(cell.x - camperCell.x, cell.y - camperCell.y) <= shooter.range) {
+        return { type: 'deploy', unitDefId: shooter.id, x: cell.x, y: cell.y }
+      }
+    }
+    // 어떤 성벽 칸도 닿지 않는 위치(사거리 밖 포격 공성차) → 그 칸에 근접을
+    // 세워 직접 처치 (core의 근접 자기 칸 공격 규칙)
+    const striker = melee.find(deployable)
+    if (striker && !state.units.some((u) => u.x === camperCell.x && u.y === camperCell.y)) {
+      return { type: 'deploy', unitDefId: striker.id, x: camperCell.x, y: camperCell.y }
+    }
+    return null // 처치 수단이 생길 때까지 저축 — 캠퍼 방치가 제일 비싸다
   }
 
   // 2.4 클럼프 사전 대비: 예측된 동시 도착 무리보다 먼저 해당 레인의 저지
@@ -270,14 +282,17 @@ function findLeakCell(ctx: SimContext, state: GameState): CellPos | null {
   return null
 }
 
-/** 성벽을 때리는 중인데 사거리 안에 둔 아군 원거리가 없는 적의 위치(경로 끝 셀) */
+/** 성벽을 때리는 중인데 사거리 안에 둔 아군 원거리가 없는 적의 실제 위치 셀.
+ *  공성류는 경로 끝이 아니라 wallAttackRange만큼 떨어진 지점에서 포격하므로
+ *  반드시 보간 위치(enemyWorldPos) 기준으로 판정한다. */
 function uncoveredWallCamper(ctx: SimContext, state: GameState): CellPos | null {
   for (const e of state.enemies) {
     if (!e.atWall) continue
-    const cell = ctx.stage.paths[e.pathIndex]![ctx.stage.paths[e.pathIndex]!.length - 1]!
+    const pos = enemyWorldPos(ctx, e)
+    const cell = { x: Math.round(pos.x), y: Math.round(pos.y) }
     const covered = state.units.some((u) => {
       const d = ctx.unitDefs[u.defId]!
-      return d.range > 0 && Math.hypot(u.x - cell.x, u.y - cell.y) <= d.range
+      return d.range > 0 && !d.heals && Math.hypot(u.x - cell.x, u.y - cell.y) <= d.range
     })
     if (!covered) return cell
   }
@@ -354,6 +369,7 @@ function dpsDeficit(ctx: SimContext, state: GameState): boolean {
   // 근접 DPS는 저지 중일 때만 실현되므로 절반만 인정 — 과대평가하면 원거리를 안 산다
   const teamDps = state.units.reduce((sum, u) => {
     const d = ctx.unitDefs[u.defId]!
+    if (d.heals) return sum // 치유는 화력이 아니다
     const dps = (Math.max(1, d.atk - avgDef) * TICKS_PER_SECOND) / d.atkIntervalTicks
     return sum + (d.range > 0 ? dps : dps * 0.5)
   }, 0)
