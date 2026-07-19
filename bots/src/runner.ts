@@ -22,6 +22,8 @@ export interface RunOptions {
   seed?: number
   /** 안전 상한 (기본 10분) */
   maxTicks?: number
+  /** 연전(캠페인) 이월 시작 성벽 HP — 캠페인 시뮬·회복률 튜닝용 */
+  startWallHp?: number
 }
 
 export interface BotRunResult {
@@ -48,7 +50,7 @@ export function runHeadless(
   policy: BotPolicy,
   opts: RunOptions = {},
 ): BotRunResult {
-  const sim = new Simulation(stage, unitDefs, enemyDefs, opts.seed)
+  const sim = new Simulation(stage, unitDefs, enemyDefs, opts.seed, opts.startWallHp)
   const actionLog: TimedAction[] = []
   const tally = { deploys: 0, enemiesKilled: 0, wallHits: 0 }
   const maxTicks = opts.maxTicks ?? DEFAULT_MAX_TICKS
@@ -70,7 +72,7 @@ export function runReplay(
   actionLog: TimedAction[],
   opts: RunOptions = {},
 ): BotRunResult {
-  const sim = new Simulation(stage, unitDefs, enemyDefs, opts.seed)
+  const sim = new Simulation(stage, unitDefs, enemyDefs, opts.seed, opts.startWallHp)
   const byTick = new Map<number, PlayerAction[]>()
   for (const { tick, action } of actionLog) {
     const list = byTick.get(tick) ?? []

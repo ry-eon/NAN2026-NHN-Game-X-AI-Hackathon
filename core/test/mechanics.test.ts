@@ -80,6 +80,16 @@ describe('W2 신규 메커니즘', () => {
     expect(sim.state.wallHp).toBeLessThan(stage.wallHp)
   })
 
+  it('연전 이월: 시작 성벽 HP를 지정할 수 있고 최대치로 캡된다', () => {
+    const stage = lineStage()
+    const carried = new Simulation(stage, UNIT_DEFS, ENEMY_DEFS, undefined, 220)
+    expect(carried.state.wallHp).toBe(220)
+    const over = new Simulation(stage, UNIT_DEFS, ENEMY_DEFS, undefined, 9999)
+    expect(over.state.wallHp).toBe(stage.wallHp)
+    const floor = new Simulation(stage, UNIT_DEFS, ENEMY_DEFS, undefined, 0)
+    expect(floor.state.wallHp).toBe(1)
+  })
+
   it('성벽 수리: 코스트를 소모해 회복하고, 상한·쿨다운·잔액을 검증한다', () => {
     const sim = new Simulation(
       lineStage({ spawns: [{ tick: 99999, enemyDefId: 'grunt', pathIndex: 0, wave: 1 }] }),

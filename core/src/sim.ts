@@ -85,13 +85,24 @@ function tileTypeAt(tiles: TileType[][], x: number, y: number): TileType | undef
   return tiles[y]?.[x]
 }
 
-export function createInitialState(ctx: SimContext, seed?: number): GameState {
+/**
+ * @param startWallHp 연전(캠페인)에서 이월된 시작 성벽 HP.
+ *   생략 시 만피. 스테이지 최대치로 캡, 최소 1 (docs/02 성벽 지속 구조).
+ */
+export function createInitialState(
+  ctx: SimContext,
+  seed?: number,
+  startWallHp?: number,
+): GameState {
   return {
     tick: 0,
     status: 'playing',
     rngState: (seed ?? ctx.stage.seed) | 0,
     cost: ctx.stage.initialCost,
-    wallHp: ctx.stage.wallHp,
+    wallHp:
+      startWallHp !== undefined
+        ? Math.max(1, Math.min(ctx.stage.wallHp, Math.floor(startWallHp)))
+        : ctx.stage.wallHp,
     units: [],
     enemies: [],
     spawnCursor: 0,
@@ -482,9 +493,15 @@ export class Simulation {
   readonly ctx: SimContext
   state: GameState
 
-  constructor(stage: StageDef, unitDefs: UnitDef[], enemyDefs: EnemyDef[], seed?: number) {
+  constructor(
+    stage: StageDef,
+    unitDefs: UnitDef[],
+    enemyDefs: EnemyDef[],
+    seed?: number,
+    startWallHp?: number,
+  ) {
     this.ctx = createContext(stage, unitDefs, enemyDefs)
-    this.state = createInitialState(this.ctx, seed)
+    this.state = createInitialState(this.ctx, seed, startWallHp)
   }
 
   step(actions: PlayerAction[] = []): GameState {
