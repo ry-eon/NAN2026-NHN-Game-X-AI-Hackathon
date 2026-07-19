@@ -32,11 +32,15 @@ const UNIT_COLORS: Record<string, number> = {
   blocker: 0x4e9a5a,
   bruiser: 0xc4644a,
   archer: 0x5aa0d0,
+  mage: 0x8a5ad0,
+  healer: 0x5ad0a0,
+  slower: 0xd0c05a,
 }
 const ENEMY_STYLE: Record<string, { color: number; radius: number }> = {
   grunt: { color: 0xd05a5a, radius: 13 },
   runner: { color: 0xe0a050, radius: 9 },
   tank: { color: 0x9a4ad0, radius: 17 },
+  siege: { color: 0xd07a3a, radius: 15 },
 }
 const REJECT_LABELS: Record<DeployRejectReason, string> = {
   insufficientCost: '코스트 부족',
@@ -117,7 +121,7 @@ export class BattleScene extends Phaser.Scene {
     })
     const kb = this.input.keyboard
     if (kb) {
-      const keys = ['ONE', 'TWO', 'THREE'] as const
+      const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX'] as const
       keys.forEach((key, i) => {
         kb.on(`keydown-${key}`, () => this.selectCard(UNIT_DEFS[i]?.id ?? null))
       })
@@ -245,18 +249,19 @@ export class BattleScene extends Phaser.Scene {
       .text(
         660,
         400,
-        '조작\n 1·2·3 또는 카드 클릭: 유닛 선택\n 타일 클릭: 배치 (core가 검증)\n 배치된 유닛 클릭: 철수(50% 환급)\n ESC: 선택 해제',
+        '조작\n 1~6 또는 카드 클릭: 유닛 선택\n 타일 클릭: 배치 (core가 검증)\n 배치된 유닛 클릭: 철수(50% 환급)\n ESC: 선택 해제',
         { fontFamily: 'monospace', fontSize: '12px', color: '#8888aa', lineSpacing: 4 },
       )
       .setDepth(20)
   }
 
   private createCards(): void {
+    // 6종 로스터가 한 줄에 들어가는 콤팩트 카드 (96px × 6)
     UNIT_DEFS.forEach((def, i) => {
-      const x = GRID_X + i * 150
-      const y = 496
+      const x = GRID_X + i * 102
+      const y = 494
       const bg = this.add
-        .rectangle(x, y, 140, 40, 0x26263c)
+        .rectangle(x, y, 96, 42, 0x26263c)
         .setOrigin(0, 0)
         .setStrokeStyle(2, 0x44445f)
         .setDepth(20)
@@ -269,18 +274,18 @@ export class BattleScene extends Phaser.Scene {
         },
       )
       this.add
-        .rectangle(x + 8, y + 8, 24, 24, UNIT_COLORS[def.id] ?? 0xffffff)
+        .rectangle(x + 6, y + 13, 16, 16, UNIT_COLORS[def.id] ?? 0xffffff)
         .setOrigin(0, 0)
         .setDepth(21)
       const label = this.add
-        .text(x + 40, y + 6, `${i + 1} ${def.name}`, {
+        .text(x + 27, y + 5, `${i + 1} ${def.name}`, {
           fontFamily: 'monospace',
-          fontSize: '13px',
+          fontSize: '11px',
           color: '#e8e8f0',
         })
         .setDepth(21)
       const sub = this.add
-        .text(x + 40, y + 22, '', { fontFamily: 'monospace', fontSize: '12px', color: '#ffd870' })
+        .text(x + 27, y + 22, '', { fontFamily: 'monospace', fontSize: '11px', color: '#ffd870' })
         .setDepth(21)
       this.cards.push({ def, bg, label, sub })
     })
