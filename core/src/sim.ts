@@ -187,6 +187,19 @@ function spawnEnemies(ctx: SimContext, state: GameState): void {
   }
 }
 
+/** 감속 오라 적용 후의 이동 배율 (여러 오라가 겹치면 가장 강한 것 하나) */
+function slowFactorAt(ctx: SimContext, state: GameState, pos: CellPos): number {
+  let factor = 1
+  for (const u of state.units) {
+    const aura = ctx.unitDefs[u.defId]!.aura
+    if (!aura) continue
+    if (Math.hypot(u.x - pos.x, u.y - pos.y) <= aura.radius) {
+      factor = Math.min(factor, aura.speedFactor)
+    }
+  }
+  return factor
+}
+
 function moveAndBlock(ctx: SimContext, state: GameState): void {
   for (const enemy of state.enemies) {
     if (enemy.blockedBy !== null || enemy.atWall) continue
@@ -194,7 +207,17 @@ function moveAndBlock(ctx: SimContext, state: GameState): void {
     const path = ctx.stage.paths[enemy.pathIndex]!
     const last = path.length - 1
 
-    enemy.pathPos = Math.min(last, enemy.pathPos + def.speedTilesPerSec / TICKS_PER_SECOND)
+    const speed =
+      (def.speedTilesPerSec / TICKS_PER_SECOND) *
+      slowFactorAt(ctx, state, enemyWorldPos(ctx, enemy))
+    enemy.pathPos = Math.min(last, enemy.pathPos + speed)
+
+    // 공성류: 사거리 안에 들면 멈춰서 성벽 포격 개시 (저지 체크보다 먼저 —
+    // 정지 지점에 도달한 순간부터는 이동하지 않으므로 새로 저지되지 않는다)
+    if (def.wallAttackRange !== undefined && last - enemy.pathPos <= def.wallAttackRange) {
+      enemy.atWall = true
+      continue
+    }
 
     // 현재 셀(반올림 = 셀 중심 반타일 이내)에 여유 있는 블로커가 있으면 저지.
     // 여유가 없으면 그대로 통과한다 (저지 수 초과).
@@ -242,11 +265,47 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
     if (unit.cooldown > 0) continue
     const def = ctx.unitDefs[unit.defId]!
 
+    // 힐러: 사거리 내 가장 다친(비율 기준) 아군을 치유. 대상 없으면 대기
+    if (def.heals) {
+      let patient: ActiveUnit | undefined
+      let worst = 1
+      for (const ally of state.units) {
+        if (ally.id === unit.id) continue
+        const maxHp = ctx.unitDefs[ally.defId]!.hp
+        const ratio = ally.hp / maxHp
+        if (ratio >= 1) continue
+        if (Math.hypot(ally.x - unit.x, ally.y - unit.y) > def.range) continue
+        if (ratio < worst) {
+          worst = ratio
+          patient = ally
+        }
+      }
+      if (patient) {
+        patient.hp = Math.min(ctx.unitDefs[patient.defId]!.hp, patient.hp + def.atk)
+        unit.cooldown = def.atkIntervalTicks
+      }
+      continue
+    }
+
     let target: ActiveEnemy | undefined
     if (def.range <= 0) {
       // 근접: 저지 중인 적 중 첫 번째(저지 시작 순)
       const firstId = unit.blockedEnemyIds[0]
       if (firstId !== undefined) target = state.enemies.find((e) => e.id === firstId)
+      if (!target) {
+        // 저지 대상이 없으면 자기 칸(반타일 남짓) 안의 적을 직접 공격 —
+        // 포격 정지한 공성차처럼 저지가 성립하지 않는 적의 유일한 근접 처치 수단
+        let best = Infinity
+        for (const e of state.enemies) {
+          if (e.hp <= 0) continue
+          const p = enemyWorldPos(ctx, e)
+          const d = Math.hypot(p.x - unit.x, p.y - unit.y)
+          if (d <= 0.7 && d < best) {
+            best = d
+            target = e
+          }
+        }
+      }
     } else {
       // 원거리: 사거리 내에서 성벽에 가장 가까운 적 (동률이면 먼저 스폰된 적)
       // 같은 틱에 이미 죽은 적(hp<=0, 제거 대기)은 표적에서 제외 — 중복 킬 방지
@@ -264,9 +323,21 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
     }
     if (!target) continue
 
-    target.hp -= damage(def.atk, ctx.enemyDefs[target.defId]!.def)
+    // 광역: 주 표적 주변 aoeRadius 내 모든 적에 동일 피해 (주 표적 포함)
+    const victims =
+      def.aoeRadius !== undefined
+        ? state.enemies.filter((e) => {
+            if (e.hp <= 0) return false
+            const tp = enemyWorldPos(ctx, target)
+            const ep = enemyWorldPos(ctx, e)
+            return Math.hypot(ep.x - tp.x, ep.y - tp.y) <= def.aoeRadius!
+          })
+        : [target]
+    for (const victim of victims) {
+      victim.hp -= damage(def.atk, ctx.enemyDefs[victim.defId]!.def)
+      if (victim.hp <= 0) killEnemy(state, victim, unit.id)
+    }
     unit.cooldown = def.atkIntervalTicks
-    if (target.hp <= 0) killEnemy(state, target, unit.id)
   }
   state.enemies = state.enemies.filter((e) => e.hp > 0)
 }

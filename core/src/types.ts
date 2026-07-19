@@ -79,6 +79,12 @@ export interface UnitDef {
   blockCount: number
   /** 철수·사망 후 재배치 대기 틱 */
   redeployTicks: number
+  /** 광역 반경 (타일). 지정 시 주 표적 주변까지 피해 (술사류) */
+  aoeRadius?: number
+  /** true면 공격 대신 사거리 내 가장 다친 아군을 atk만큼 치유 (힐러류) */
+  heals?: boolean
+  /** 감속 오라: 반경 내 적 이동 속도에 speedFactor를 곱한다 (특수류) */
+  aura?: { radius: number; speedFactor: number }
 }
 
 export interface EnemyDef {
@@ -92,6 +98,11 @@ export interface EnemyDef {
   speedTilesPerSec: number
   /** 성벽 타격 시 피해 (방어력 무시, atkIntervalTicks 주기) */
   wallDamage: number
+  /**
+   * 공성류: 경로 끝에서 이 거리(타일) 안에 들면 멈춰서 원거리로 성벽을 포격한다.
+   * 성벽 접점의 원거리 커버만으론 못 잡는다 — 경로 안쪽 커버 또는 전방 저지가 필요.
+   */
+  wallAttackRange?: number
 }
 
 // ---------------------------------------------------------------- 런타임 상태
