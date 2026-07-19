@@ -249,8 +249,10 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
       if (firstId !== undefined) target = state.enemies.find((e) => e.id === firstId)
     } else {
       // 원거리: 사거리 내에서 성벽에 가장 가까운 적 (동률이면 먼저 스폰된 적)
+      // 같은 틱에 이미 죽은 적(hp<=0, 제거 대기)은 표적에서 제외 — 중복 킬 방지
       let best = Infinity
       for (const e of state.enemies) {
+        if (e.hp <= 0) continue
         const p = enemyWorldPos(ctx, e)
         if (Math.hypot(p.x - unit.x, p.y - unit.y) > def.range) continue
         const d = distanceToWall(ctx, e)
