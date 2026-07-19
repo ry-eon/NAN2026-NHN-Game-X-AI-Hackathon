@@ -1,0 +1,56 @@
+{
+  "id": "c-7015",
+  "name": "수솔",
+  "placement": "wallTop",
+  "cost": 9,
+  "hp": 458,
+  "atk": 122,
+  "def": 10,
+  "atkIntervalTicks": 30,
+  "range": 3.5,
+  "blockCount": 0,
+  "redeployTicks": 900,
+  "role": "archer",
+  "epithet": "상처 입은",
+  "lore": "무너진 동쪽 관문 출신. 스승을(를) 잃고, 다시는 잃지 않으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "여기까지다.",
+    "skill": "무너져라!",
+    "victory": "…다음이 또 온다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-pierce",
+      "name": "꿰뚫기",
+      "desc": "적 방어력을 50% 무시한다.",
+      "slot": "passive",
+      "effect": {
+        "kind": "armorPierce",
+        "ratio": 0.5
+      }
+    },
+    "auto": {
+      "id": "a-bulwark",
+      "name": "방벽",
+      "desc": "12초마다 피해를 흡수하는 보호막 150.",
+      "slot": "auto",
+      "effect": {
+        "kind": "shield",
+        "amount": 150,
+        "intervalTicks": 360
+      }
+    },
+    "active": {
+      "id": "x-nova",
+      "name": "충격파",
+      "desc": "자기 주변 1.6타일에 방어 무시 250 피해.",
+      "slot": "active",
+      "effect": {
+        "kind": "nova",
+        "damage": 250,
+        "radius": 1.6
+      },
+      "cooldownTicks": 1050
+    }
+  }
+}

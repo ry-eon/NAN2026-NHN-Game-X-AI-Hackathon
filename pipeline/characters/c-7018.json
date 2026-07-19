@@ -1,0 +1,56 @@
+{
+  "id": "c-7018",
+  "name": "시해",
+  "placement": "ground",
+  "cost": 11,
+  "hp": 838,
+  "atk": 244,
+  "def": 25,
+  "atkIntervalTicks": 39,
+  "range": 0,
+  "blockCount": 1,
+  "redeployTicks": 900,
+  "role": "bruiser",
+  "epithet": "밤을 걷는",
+  "lore": "함락된 북쪽 초소 출신. 스승을(를) 잃고, 빚을 갚으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "시작하지.",
+    "skill": "무너져라!",
+    "victory": "아직 살아 있다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-pierce",
+      "name": "꿰뚫기",
+      "desc": "적 방어력을 50% 무시한다.",
+      "slot": "passive",
+      "effect": {
+        "kind": "armorPierce",
+        "ratio": 0.5
+      }
+    },
+    "auto": {
+      "id": "a-mend",
+      "name": "응급 처치",
+      "desc": "HP 50% 미만이 되면 200 회복 (8초 주기).",
+      "slot": "auto",
+      "effect": {
+        "kind": "selfHeal",
+        "thresholdRatio": 0.5,
+        "amount": 200,
+        "cooldownTicks": 240
+      }
+    },
+    "active": {
+      "id": "x-second-wind",
+      "name": "재기",
+      "desc": "즉시 400 회복.",
+      "slot": "active",
+      "effect": {
+        "kind": "heal",
+        "amount": 400
+      },
+      "cooldownTicks": 900
+    }
+  }
+}

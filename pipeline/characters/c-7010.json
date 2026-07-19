@@ -1,0 +1,57 @@
+{
+  "id": "c-7010",
+  "name": "유주",
+  "placement": "ground",
+  "cost": 11,
+  "hp": 840,
+  "atk": 238,
+  "def": 25,
+  "atkIntervalTicks": 39,
+  "range": 0,
+  "blockCount": 1,
+  "redeployTicks": 900,
+  "role": "bruiser",
+  "epithet": "침묵하는",
+  "lore": "얼어붙은 나루터 출신. 왼눈을(를) 잃고, 빚을 갚으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "…왔군.",
+    "skill": "지금이다!",
+    "victory": "오늘 몫은 했다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-pierce",
+      "name": "꿰뚫기",
+      "desc": "적 방어력을 50% 무시한다.",
+      "slot": "passive",
+      "effect": {
+        "kind": "armorPierce",
+        "ratio": 0.5
+      }
+    },
+    "auto": {
+      "id": "a-pulse",
+      "name": "파문",
+      "desc": "3회 공격마다 표적 주변에 70% 광역 피해.",
+      "slot": "auto",
+      "effect": {
+        "kind": "aoePulse",
+        "everyNAttacks": 3,
+        "radius": 1.2,
+        "dmgMul": 0.7
+      }
+    },
+    "active": {
+      "id": "x-frenzy",
+      "name": "전의 폭발",
+      "desc": "6초간 공격 속도 2배.",
+      "slot": "active",
+      "effect": {
+        "kind": "frenzy",
+        "atkSpeedMul": 2,
+        "durationTicks": 180
+      },
+      "cooldownTicks": 900
+    }
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "id": "c-7002",
+  "name": "도린",
+  "placement": "wallTop",
+  "cost": 13,
+  "hp": 398,
+  "atk": 142,
+  "def": 5,
+  "atkIntervalTicks": 60,
+  "range": 3,
+  "blockCount": 0,
+  "redeployTicks": 900,
+  "aoeRadius": 1.3,
+  "role": "mage",
+  "epithet": "마지막 보루의",
+  "lore": "함락된 북쪽 초소 출신. 스승을(를) 잃고, 다시는 잃지 않으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "자리는 내가 지킨다.",
+    "skill": "지금이다!",
+    "victory": "아직 살아 있다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-eagle",
+      "name": "매의 눈",
+      "desc": "사거리 +0.5 (원거리 전용).",
+      "slot": "passive",
+      "effect": {
+        "kind": "statMod",
+        "rangeAdd": 0.5
+      }
+    },
+    "auto": {
+      "id": "a-bulwark",
+      "name": "방벽",
+      "desc": "12초마다 피해를 흡수하는 보호막 150.",
+      "slot": "auto",
+      "effect": {
+        "kind": "shield",
+        "amount": 150,
+        "intervalTicks": 360
+      }
+    },
+    "active": {
+      "id": "x-nova",
+      "name": "충격파",
+      "desc": "자기 주변 1.6타일에 방어 무시 250 피해.",
+      "slot": "active",
+      "effect": {
+        "kind": "nova",
+        "damage": 250,
+        "radius": 1.6
+      },
+      "cooldownTicks": 1050
+    }
+  }
+}

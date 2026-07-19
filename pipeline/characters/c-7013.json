@@ -1,0 +1,57 @@
+{
+  "id": "c-7013",
+  "name": "수온",
+  "placement": "ground",
+  "cost": 11,
+  "hp": 945,
+  "atk": 252,
+  "def": 25,
+  "atkIntervalTicks": 39,
+  "range": 0,
+  "blockCount": 1,
+  "redeployTicks": 900,
+  "role": "bruiser",
+  "epithet": "상처 입은",
+  "lore": "얼어붙은 나루터 출신. 스승을(를) 잃고, 빚을 갚으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "숨죽여라.",
+    "skill": "지금이다!",
+    "victory": "…다음이 또 온다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-guard",
+      "name": "수호 본능",
+      "desc": "저지 수 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "statMod",
+        "blockAdd": 1
+      }
+    },
+    "auto": {
+      "id": "a-regen",
+      "name": "재생",
+      "desc": "3초마다 40 회복.",
+      "slot": "auto",
+      "effect": {
+        "kind": "selfHeal",
+        "thresholdRatio": 1,
+        "amount": 40,
+        "cooldownTicks": 90
+      }
+    },
+    "active": {
+      "id": "x-nova",
+      "name": "충격파",
+      "desc": "자기 주변 1.6타일에 방어 무시 250 피해.",
+      "slot": "active",
+      "effect": {
+        "kind": "nova",
+        "damage": 250,
+        "radius": 1.6
+      },
+      "cooldownTicks": 1050
+    }
+  }
+}

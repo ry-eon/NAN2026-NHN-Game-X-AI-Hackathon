@@ -1,0 +1,56 @@
+{
+  "id": "c-7006",
+  "name": "재온",
+  "placement": "ground",
+  "cost": 14,
+  "hp": 1509,
+  "atk": 89,
+  "def": 40,
+  "atkIntervalTicks": 45,
+  "range": 0,
+  "blockCount": 3,
+  "redeployTicks": 900,
+  "role": "blocker",
+  "epithet": "불씨를 쥔",
+  "lore": "버려진 수도원 출신. 왼눈을(를) 잃고, 빚을 갚으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "숨죽여라.",
+    "skill": "무너져라!",
+    "victory": "성은 지켜졌다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-scavenge",
+      "name": "전리품",
+      "desc": "적 처치 시 코스트 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "onKillCost",
+        "amount": 1
+      }
+    },
+    "auto": {
+      "id": "a-pulse",
+      "name": "파문",
+      "desc": "3회 공격마다 표적 주변에 70% 광역 피해.",
+      "slot": "auto",
+      "effect": {
+        "kind": "aoePulse",
+        "everyNAttacks": 3,
+        "radius": 1.2,
+        "dmgMul": 0.7
+      }
+    },
+    "active": {
+      "id": "x-second-wind",
+      "name": "재기",
+      "desc": "즉시 400 회복.",
+      "slot": "active",
+      "effect": {
+        "kind": "heal",
+        "amount": 400
+      },
+      "cooldownTicks": 900
+    }
+  }
+}

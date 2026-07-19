@@ -1,0 +1,57 @@
+{
+  "id": "c-7028",
+  "name": "수준",
+  "placement": "wallTop",
+  "cost": 9,
+  "hp": 457,
+  "atk": 135,
+  "def": 10,
+  "atkIntervalTicks": 30,
+  "range": 3.5,
+  "blockCount": 0,
+  "redeployTicks": 900,
+  "role": "archer",
+  "epithet": "침묵하는",
+  "lore": "재가 된 시장거리 출신. 스승을(를) 잃고, 다시는 잃지 않으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "벽 뒤로 물러서라.",
+    "skill": "버텨!",
+    "victory": "성은 지켜졌다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-scavenge",
+      "name": "전리품",
+      "desc": "적 처치 시 코스트 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "onKillCost",
+        "amount": 1
+      }
+    },
+    "auto": {
+      "id": "a-regen",
+      "name": "재생",
+      "desc": "3초마다 40 회복.",
+      "slot": "auto",
+      "effect": {
+        "kind": "selfHeal",
+        "thresholdRatio": 1,
+        "amount": 40,
+        "cooldownTicks": 90
+      }
+    },
+    "active": {
+      "id": "x-nova",
+      "name": "충격파",
+      "desc": "자기 주변 1.6타일에 방어 무시 250 피해.",
+      "slot": "active",
+      "effect": {
+        "kind": "nova",
+        "damage": 250,
+        "radius": 1.6
+      },
+      "cooldownTicks": 1050
+    }
+  }
+}

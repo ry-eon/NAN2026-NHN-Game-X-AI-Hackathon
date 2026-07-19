@@ -1,0 +1,56 @@
+{
+  "id": "c-7021",
+  "name": "세주",
+  "placement": "ground",
+  "cost": 11,
+  "hp": 835,
+  "atk": 248,
+  "def": 25,
+  "atkIntervalTicks": 39,
+  "range": 0,
+  "blockCount": 1,
+  "redeployTicks": 900,
+  "role": "bruiser",
+  "epithet": "탑그림자",
+  "lore": "버려진 수도원 출신. 전우을(를) 잃고, 빚을 갚으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "자리는 내가 지킨다.",
+    "skill": "지금이다!",
+    "victory": "…다음이 또 온다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-guard",
+      "name": "수호 본능",
+      "desc": "저지 수 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "statMod",
+        "blockAdd": 1
+      }
+    },
+    "auto": {
+      "id": "a-regen",
+      "name": "재생",
+      "desc": "3초마다 40 회복.",
+      "slot": "auto",
+      "effect": {
+        "kind": "selfHeal",
+        "thresholdRatio": 1,
+        "amount": 40,
+        "cooldownTicks": 90
+      }
+    },
+    "active": {
+      "id": "x-second-wind",
+      "name": "재기",
+      "desc": "즉시 400 회복.",
+      "slot": "active",
+      "effect": {
+        "kind": "heal",
+        "amount": 400
+      },
+      "cooldownTicks": 900
+    }
+  }
+}

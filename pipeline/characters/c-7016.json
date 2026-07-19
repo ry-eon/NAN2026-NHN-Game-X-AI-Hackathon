@@ -1,0 +1,56 @@
+{
+  "id": "c-7016",
+  "name": "채목",
+  "placement": "ground",
+  "cost": 14,
+  "hp": 1317,
+  "atk": 97,
+  "def": 40,
+  "atkIntervalTicks": 45,
+  "range": 0,
+  "blockCount": 3,
+  "redeployTicks": 900,
+  "role": "blocker",
+  "epithet": "무너진 문의",
+  "lore": "폐쇄된 갱도 출신. 왼눈을(를) 잃고, 괴수의 피를 갚으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "숨죽여라.",
+    "skill": "버텨!",
+    "victory": "오늘 몫은 했다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-scavenge",
+      "name": "전리품",
+      "desc": "적 처치 시 코스트 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "onKillCost",
+        "amount": 1
+      }
+    },
+    "auto": {
+      "id": "a-pulse",
+      "name": "파문",
+      "desc": "3회 공격마다 표적 주변에 70% 광역 피해.",
+      "slot": "auto",
+      "effect": {
+        "kind": "aoePulse",
+        "everyNAttacks": 3,
+        "radius": 1.2,
+        "dmgMul": 0.7
+      }
+    },
+    "active": {
+      "id": "x-repel",
+      "name": "밀쳐내기",
+      "desc": "저지 중인 적을 2타일 밀쳐내고 저지를 푼다.",
+      "slot": "active",
+      "effect": {
+        "kind": "knockback",
+        "tiles": 2
+      },
+      "cooldownTicks": 750
+    }
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "id": "c-7003",
+  "name": "하린",
+  "placement": "ground",
+  "cost": 11,
+  "hp": 838,
+  "atk": 225,
+  "def": 25,
+  "atkIntervalTicks": 39,
+  "range": 0,
+  "blockCount": 1,
+  "redeployTicks": 900,
+  "role": "bruiser",
+  "epithet": "밤을 걷는",
+  "lore": "함락된 북쪽 초소 출신. 왼눈을(를) 잃고, 돌아갈 곳이 없어 성벽에 섰다.",
+  "lines": {
+    "deploy": "시작하지.",
+    "skill": "무너져라!",
+    "victory": "아직 살아 있다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-pierce",
+      "name": "꿰뚫기",
+      "desc": "적 방어력을 50% 무시한다.",
+      "slot": "passive",
+      "effect": {
+        "kind": "armorPierce",
+        "ratio": 0.5
+      }
+    },
+    "auto": {
+      "id": "a-regen",
+      "name": "재생",
+      "desc": "3초마다 40 회복.",
+      "slot": "auto",
+      "effect": {
+        "kind": "selfHeal",
+        "thresholdRatio": 1,
+        "amount": 40,
+        "cooldownTicks": 90
+      }
+    },
+    "active": {
+      "id": "x-repel",
+      "name": "밀쳐내기",
+      "desc": "저지 중인 적을 2타일 밀쳐내고 저지를 푼다.",
+      "slot": "active",
+      "effect": {
+        "kind": "knockback",
+        "tiles": 2
+      },
+      "cooldownTicks": 750
+    }
+  }
+}

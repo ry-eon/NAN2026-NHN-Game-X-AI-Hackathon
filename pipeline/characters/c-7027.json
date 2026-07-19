@@ -1,0 +1,56 @@
+{
+  "id": "c-7027",
+  "name": "수우",
+  "placement": "wallTop",
+  "cost": 9,
+  "hp": 441,
+  "atk": 120,
+  "def": 10,
+  "atkIntervalTicks": 30,
+  "range": 3.5,
+  "blockCount": 0,
+  "redeployTicks": 900,
+  "role": "archer",
+  "epithet": "녹슨 칼날의",
+  "lore": "얼어붙은 나루터 출신. 전우을(를) 잃고, 괴수의 피를 갚으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "자리는 내가 지킨다.",
+    "skill": "지금이다!",
+    "victory": "수고했다, 모두."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-eagle",
+      "name": "매의 눈",
+      "desc": "사거리 +0.5 (원거리 전용).",
+      "slot": "passive",
+      "effect": {
+        "kind": "statMod",
+        "rangeAdd": 0.5
+      }
+    },
+    "auto": {
+      "id": "a-pulse",
+      "name": "파문",
+      "desc": "3회 공격마다 표적 주변에 70% 광역 피해.",
+      "slot": "auto",
+      "effect": {
+        "kind": "aoePulse",
+        "everyNAttacks": 3,
+        "radius": 1.2,
+        "dmgMul": 0.7
+      }
+    },
+    "active": {
+      "id": "x-second-wind",
+      "name": "재기",
+      "desc": "즉시 400 회복.",
+      "slot": "active",
+      "effect": {
+        "kind": "heal",
+        "amount": 400
+      },
+      "cooldownTicks": 900
+    }
+  }
+}

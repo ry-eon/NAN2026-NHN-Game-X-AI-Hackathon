@@ -1,0 +1,55 @@
+{
+  "id": "c-7004",
+  "name": "은람",
+  "placement": "wallTop",
+  "cost": 9,
+  "hp": 444,
+  "atk": 124,
+  "def": 10,
+  "atkIntervalTicks": 30,
+  "range": 3.5,
+  "blockCount": 0,
+  "redeployTicks": 900,
+  "role": "archer",
+  "epithet": "잿빛",
+  "lore": "폐쇄된 갱도 출신. 전우을(를) 잃고, 다시는 잃지 않으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "자리는 내가 지킨다.",
+    "skill": "무너져라!",
+    "victory": "수고했다, 모두."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-scavenge",
+      "name": "전리품",
+      "desc": "적 처치 시 코스트 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "onKillCost",
+        "amount": 1
+      }
+    },
+    "auto": {
+      "id": "a-bulwark",
+      "name": "방벽",
+      "desc": "12초마다 피해를 흡수하는 보호막 150.",
+      "slot": "auto",
+      "effect": {
+        "kind": "shield",
+        "amount": 150,
+        "intervalTicks": 360
+      }
+    },
+    "active": {
+      "id": "x-repel",
+      "name": "밀쳐내기",
+      "desc": "저지 중인 적을 2타일 밀쳐내고 저지를 푼다.",
+      "slot": "active",
+      "effect": {
+        "kind": "knockback",
+        "tiles": 2
+      },
+      "cooldownTicks": 750
+    }
+  }
+}

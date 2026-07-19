@@ -1,0 +1,57 @@
+{
+  "id": "c-7011",
+  "name": "도찬",
+  "placement": "wallTop",
+  "cost": 13,
+  "hp": 380,
+  "atk": 155,
+  "def": 5,
+  "atkIntervalTicks": 60,
+  "range": 3,
+  "blockCount": 0,
+  "redeployTicks": 900,
+  "aoeRadius": 1.3,
+  "role": "mage",
+  "epithet": "한파의",
+  "lore": "폐쇄된 갱도 출신. 가족을(를) 잃고, 돌아갈 곳이 없어 성벽에 섰다.",
+  "lines": {
+    "deploy": "여기까지다.",
+    "skill": "…끝을 보자.",
+    "victory": "수고했다, 모두."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-eagle",
+      "name": "매의 눈",
+      "desc": "사거리 +0.5 (원거리 전용).",
+      "slot": "passive",
+      "effect": {
+        "kind": "statMod",
+        "rangeAdd": 0.5
+      }
+    },
+    "auto": {
+      "id": "a-regen",
+      "name": "재생",
+      "desc": "3초마다 40 회복.",
+      "slot": "auto",
+      "effect": {
+        "kind": "selfHeal",
+        "thresholdRatio": 1,
+        "amount": 40,
+        "cooldownTicks": 90
+      }
+    },
+    "active": {
+      "id": "x-second-wind",
+      "name": "재기",
+      "desc": "즉시 400 회복.",
+      "slot": "active",
+      "effect": {
+        "kind": "heal",
+        "amount": 400
+      },
+      "cooldownTicks": 900
+    }
+  }
+}

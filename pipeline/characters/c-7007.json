@@ -1,0 +1,57 @@
+{
+  "id": "c-7007",
+  "name": "온람",
+  "placement": "wallTop",
+  "cost": 9,
+  "hp": 415,
+  "atk": 123,
+  "def": 10,
+  "atkIntervalTicks": 30,
+  "range": 3.5,
+  "blockCount": 0,
+  "redeployTicks": 900,
+  "role": "archer",
+  "epithet": "마지막 보루의",
+  "lore": "얼어붙은 나루터 출신. 가족을(를) 잃고, 다시는 잃지 않으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "…왔군.",
+    "skill": "…끝을 보자.",
+    "victory": "…다음이 또 온다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-scavenge",
+      "name": "전리품",
+      "desc": "적 처치 시 코스트 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "onKillCost",
+        "amount": 1
+      }
+    },
+    "auto": {
+      "id": "a-mend",
+      "name": "응급 처치",
+      "desc": "HP 50% 미만이 되면 200 회복 (8초 주기).",
+      "slot": "auto",
+      "effect": {
+        "kind": "selfHeal",
+        "thresholdRatio": 0.5,
+        "amount": 200,
+        "cooldownTicks": 240
+      }
+    },
+    "active": {
+      "id": "x-nova",
+      "name": "충격파",
+      "desc": "자기 주변 1.6타일에 방어 무시 250 피해.",
+      "slot": "active",
+      "effect": {
+        "kind": "nova",
+        "damage": 250,
+        "radius": 1.6
+      },
+      "cooldownTicks": 1050
+    }
+  }
+}

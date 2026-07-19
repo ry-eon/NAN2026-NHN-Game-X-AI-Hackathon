@@ -1,0 +1,57 @@
+{
+  "id": "c-7014",
+  "name": "서람",
+  "placement": "wallTop",
+  "cost": 9,
+  "hp": 449,
+  "atk": 135,
+  "def": 10,
+  "atkIntervalTicks": 30,
+  "range": 3.5,
+  "blockCount": 0,
+  "redeployTicks": 900,
+  "role": "archer",
+  "epithet": "한파의",
+  "lore": "재가 된 시장거리 출신. 고향을(를) 잃고, 다시는 잃지 않으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "여기까지다.",
+    "skill": "지금이다!",
+    "victory": "…다음이 또 온다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-scavenge",
+      "name": "전리품",
+      "desc": "적 처치 시 코스트 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "onKillCost",
+        "amount": 1
+      }
+    },
+    "auto": {
+      "id": "a-pulse",
+      "name": "파문",
+      "desc": "3회 공격마다 표적 주변에 70% 광역 피해.",
+      "slot": "auto",
+      "effect": {
+        "kind": "aoePulse",
+        "everyNAttacks": 3,
+        "radius": 1.2,
+        "dmgMul": 0.7
+      }
+    },
+    "active": {
+      "id": "x-frenzy",
+      "name": "전의 폭발",
+      "desc": "6초간 공격 속도 2배.",
+      "slot": "active",
+      "effect": {
+        "kind": "frenzy",
+        "atkSpeedMul": 2,
+        "durationTicks": 180
+      },
+      "cooldownTicks": 900
+    }
+  }
+}

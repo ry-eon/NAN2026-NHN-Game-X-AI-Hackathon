@@ -1,0 +1,57 @@
+{
+  "id": "c-7023",
+  "name": "은온",
+  "placement": "ground",
+  "cost": 14,
+  "hp": 1433,
+  "atk": 95,
+  "def": 40,
+  "atkIntervalTicks": 45,
+  "range": 0,
+  "blockCount": 3,
+  "redeployTicks": 900,
+  "role": "blocker",
+  "epithet": "무너진 문의",
+  "lore": "함락된 북쪽 초소 출신. 왼눈을(를) 잃고, 빚을 갚으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "여기까지다.",
+    "skill": "지금이다!",
+    "victory": "아직 살아 있다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-guard",
+      "name": "수호 본능",
+      "desc": "저지 수 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "statMod",
+        "blockAdd": 1
+      }
+    },
+    "auto": {
+      "id": "a-pulse",
+      "name": "파문",
+      "desc": "3회 공격마다 표적 주변에 70% 광역 피해.",
+      "slot": "auto",
+      "effect": {
+        "kind": "aoePulse",
+        "everyNAttacks": 3,
+        "radius": 1.2,
+        "dmgMul": 0.7
+      }
+    },
+    "active": {
+      "id": "x-nova",
+      "name": "충격파",
+      "desc": "자기 주변 1.6타일에 방어 무시 250 피해.",
+      "slot": "active",
+      "effect": {
+        "kind": "nova",
+        "damage": 250,
+        "radius": 1.6
+      },
+      "cooldownTicks": 1050
+    }
+  }
+}

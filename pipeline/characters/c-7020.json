@@ -1,0 +1,57 @@
+{
+  "id": "c-7020",
+  "name": "무온",
+  "placement": "wallTop",
+  "cost": 13,
+  "hp": 358,
+  "atk": 158,
+  "def": 5,
+  "atkIntervalTicks": 60,
+  "range": 3,
+  "blockCount": 0,
+  "redeployTicks": 900,
+  "aoeRadius": 1.3,
+  "role": "mage",
+  "epithet": "한파의",
+  "lore": "함락된 북쪽 초소 출신. 이름을(를) 잃고, 돌아갈 곳이 없어 성벽에 섰다.",
+  "lines": {
+    "deploy": "벽 뒤로 물러서라.",
+    "skill": "버텨!",
+    "victory": "…다음이 또 온다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-scavenge",
+      "name": "전리품",
+      "desc": "적 처치 시 코스트 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "onKillCost",
+        "amount": 1
+      }
+    },
+    "auto": {
+      "id": "a-pulse",
+      "name": "파문",
+      "desc": "3회 공격마다 표적 주변에 70% 광역 피해.",
+      "slot": "auto",
+      "effect": {
+        "kind": "aoePulse",
+        "everyNAttacks": 3,
+        "radius": 1.2,
+        "dmgMul": 0.7
+      }
+    },
+    "active": {
+      "id": "x-repel",
+      "name": "밀쳐내기",
+      "desc": "저지 중인 적을 2타일 밀쳐내고 저지를 푼다.",
+      "slot": "active",
+      "effect": {
+        "kind": "knockback",
+        "tiles": 2
+      },
+      "cooldownTicks": 750
+    }
+  }
+}

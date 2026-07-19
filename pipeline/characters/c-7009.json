@@ -1,0 +1,56 @@
+{
+  "id": "c-7009",
+  "name": "온아",
+  "placement": "ground",
+  "cost": 14,
+  "hp": 1418,
+  "atk": 90,
+  "def": 40,
+  "atkIntervalTicks": 45,
+  "range": 0,
+  "blockCount": 3,
+  "redeployTicks": 900,
+  "role": "blocker",
+  "epithet": "침묵하는",
+  "lore": "얼어붙은 나루터 출신. 전우을(를) 잃고, 다시는 잃지 않으려 성벽에 섰다.",
+  "lines": {
+    "deploy": "숨죽여라.",
+    "skill": "…끝을 보자.",
+    "victory": "아직 살아 있다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-guard",
+      "name": "수호 본능",
+      "desc": "저지 수 +1.",
+      "slot": "passive",
+      "effect": {
+        "kind": "statMod",
+        "blockAdd": 1
+      }
+    },
+    "auto": {
+      "id": "a-pulse",
+      "name": "파문",
+      "desc": "3회 공격마다 표적 주변에 70% 광역 피해.",
+      "slot": "auto",
+      "effect": {
+        "kind": "aoePulse",
+        "everyNAttacks": 3,
+        "radius": 1.2,
+        "dmgMul": 0.7
+      }
+    },
+    "active": {
+      "id": "x-repel",
+      "name": "밀쳐내기",
+      "desc": "저지 중인 적을 2타일 밀쳐내고 저지를 푼다.",
+      "slot": "active",
+      "effect": {
+        "kind": "knockback",
+        "tiles": 2
+      },
+      "cooldownTicks": 750
+    }
+  }
+}

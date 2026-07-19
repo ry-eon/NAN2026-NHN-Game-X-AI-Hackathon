@@ -1,0 +1,57 @@
+{
+  "id": "c-7005",
+  "name": "수해",
+  "placement": "ground",
+  "cost": 14,
+  "hp": 1330,
+  "atk": 95,
+  "def": 40,
+  "atkIntervalTicks": 45,
+  "range": 0,
+  "blockCount": 3,
+  "redeployTicks": 900,
+  "role": "blocker",
+  "epithet": "마지막 보루의",
+  "lore": "무너진 등대 출신. 왼눈을(를) 잃고, 돌아갈 곳이 없어 성벽에 섰다.",
+  "lines": {
+    "deploy": "자리는 내가 지킨다.",
+    "skill": "무너져라!",
+    "victory": "성은 지켜졌다."
+  },
+  "skillSet": {
+    "passive": {
+      "id": "p-pierce",
+      "name": "꿰뚫기",
+      "desc": "적 방어력을 50% 무시한다.",
+      "slot": "passive",
+      "effect": {
+        "kind": "armorPierce",
+        "ratio": 0.5
+      }
+    },
+    "auto": {
+      "id": "a-pulse",
+      "name": "파문",
+      "desc": "3회 공격마다 표적 주변에 70% 광역 피해.",
+      "slot": "auto",
+      "effect": {
+        "kind": "aoePulse",
+        "everyNAttacks": 3,
+        "radius": 1.2,
+        "dmgMul": 0.7
+      }
+    },
+    "active": {
+      "id": "x-frenzy",
+      "name": "전의 폭발",
+      "desc": "6초간 공격 속도 2배.",
+      "slot": "active",
+      "effect": {
+        "kind": "frenzy",
+        "atkSpeedMul": 2,
+        "durationTicks": 180
+      },
+      "cooldownTicks": 900
+    }
+  }
+}
