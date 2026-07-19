@@ -67,7 +67,9 @@ export function generateStage(seed: number): StageDef {
   const initialCost = 8 + rngInt(rng, 5) // 8~12
   const costRegenPerSec = 0.7 + rngInt(rng, 4) * 0.1 // 0.7~1.0
 
-  // 웨이브: 완만한 시작 → 페어 → 총공세(중장병 + 동시 클럼프) 램프
+  // 웨이브: 완만한 시작 → 페어 → 총공세(중장병 + 동시 클럼프) 램프.
+  // 물량은 경제에 연동 — 수입(재생률)이 낮으면 감당 가능한 총 HP도 낮다
+  const rich = costRegenPerSec >= 0.9 ? 1 : 0
   const spawns: SpawnDef[] = []
   const lane = () => rngInt(rng, paths.length)
 
@@ -79,7 +81,7 @@ export function generateStage(seed: number): StageDef {
   }
 
   t = Math.max(t + 4, 20) + rngInt(rng, 4)
-  const w2Groups = 3 + rngInt(rng, 2)
+  const w2Groups = 2 + rngInt(rng, 2) + rich
   for (let g = 0; g < w2Groups; g++) {
     const li = lane()
     const kind = rngFloat(rng) < 0.5 ? 'runner' : 'grunt'
@@ -92,13 +94,18 @@ export function generateStage(seed: number): StageDef {
   for (let li = 0; li < paths.length; li++) {
     spawns.push({ tick: sec(t + li * 2), enemyDefId: 'tank', pathIndex: li, wave: 3 })
   }
+  // 35% 확률로 공성차 투입 — 경로 안쪽 커버가 없는 맵이면 봇이 못 잡고
+  // 판정에서 UNSOLVABLE로 자동 반려된다 (검증기가 맵 결함을 거른다)
+  if (rngFloat(rng) < 0.35) {
+    spawns.push({ tick: sec(t + 3), enemyDefId: 'siege', pathIndex: lane(), wave: 3 })
+  }
   const clumpLane = lane()
-  const clumpSize = 3 + rngInt(rng, 3) // 3~5 동시
+  const clumpSize = 2 + rngInt(rng, 2) + rich // 2~4 동시 (경제 연동)
   const clumpT = t + 4 + rngInt(rng, 3)
   for (let i = 0; i < clumpSize; i++) {
     spawns.push({ tick: sec(clumpT), enemyDefId: 'grunt', pathIndex: clumpLane, wave: 3 })
   }
-  const tailCount = 3 + rngInt(rng, 3)
+  const tailCount = 2 + rngInt(rng, 2) + rich
   for (let i = 0; i < tailCount; i++) {
     spawns.push({
       tick: sec(clumpT + 4 + i * (2 + rngInt(rng, 2))),
