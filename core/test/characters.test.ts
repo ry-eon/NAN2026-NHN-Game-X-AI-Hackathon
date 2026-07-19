@@ -13,13 +13,14 @@ describe('캐릭터 로스터', () => {
   it('스탯이 역할 원형과 정확히 일치한다 (정체성 레이어만 추가)', () => {
     for (const c of CHARACTERS) {
       const archetype = UNIT_DEFS.find((d) => d.id === c.role)!
-      const { id, name, role, epithet, lore, lines, ...stats } = c
+      const { id, name, role, epithet, lore, lines, skillSet, ...stats } = c
       const { id: aId, name: aName, ...aStats } = archetype
       expect(stats, `${name}(${role})의 스탯`).toEqual(aStats)
       expect(id).not.toBe(aId) // 캐릭터 id는 원형 id와 달라야 한다
       expect(epithet.length).toBeGreaterThan(0)
       expect(lore.length).toBeGreaterThan(0)
       expect(lines.deploy && lines.skill && lines.victory).toBeTruthy()
+      expect(skillSet, `${name} 기술 3종`).toBeDefined()
     }
   })
 

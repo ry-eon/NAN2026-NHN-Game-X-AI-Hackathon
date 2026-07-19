@@ -4,7 +4,19 @@
 // 첫 수혜 대상이며, 상세 원장은 docs/06-characters.md.
 
 import { UNIT_DEFS } from './units'
-import type { CharacterDef, UnitDef } from '../types'
+import { SKILL_LIBRARY } from './skills'
+import type { CharacterDef, SkillDef, UnitDef } from '../types'
+
+const sk = (id: string): SkillDef => {
+  const def = SKILL_LIBRARY.find((s) => s.id === id)
+  if (!def) throw new Error(`기술 없음: ${id}`)
+  return def
+}
+const set = (passive: string, auto: string, active: string) => ({
+  passive: sk(passive),
+  auto: sk(auto),
+  active: sk(active),
+})
 
 function archetype(roleId: string): UnitDef {
   const def = UNIT_DEFS.find((d) => d.id === roleId)
@@ -14,7 +26,7 @@ function archetype(roleId: string): UnitDef {
 
 const from = (
   roleId: string,
-  identity: Pick<CharacterDef, 'id' | 'name' | 'epithet' | 'lore' | 'lines'>,
+  identity: Pick<CharacterDef, 'id' | 'name' | 'epithet' | 'lore' | 'lines' | 'skillSet'>,
 ): CharacterDef => ({
   ...archetype(roleId),
   ...identity,
@@ -32,6 +44,7 @@ export const CHARACTERS: CharacterDef[] = [
       skill: '버텨라…!',
       victory: '성벽은 아직 서 있다.',
     },
+    skillSet: set('p-guard', 'a-bulwark', 'x-repel'),
   }),
   from('bruiser', {
     id: 'garam',
@@ -43,6 +56,7 @@ export const CHARACTERS: CharacterDef[] = [
       skill: '한 놈씩 와라.',
       victory: '칼은 아직 무디지 않았어.',
     },
+    skillSet: set('p-pierce', 'a-mend', 'x-frenzy'),
   }),
   from('archer', {
     id: 'sea',
@@ -54,6 +68,7 @@ export const CHARACTERS: CharacterDef[] = [
       skill: '놓치지 않아.',
       victory: '다음 침공도 여기서 지켜볼게.',
     },
+    skillSet: set('p-eagle', 'a-pulse', 'x-frenzy'),
   }),
   from('mage', {
     id: 'muyeong',
@@ -65,6 +80,7 @@ export const CHARACTERS: CharacterDef[] = [
       skill: '재가 되어라.',
       victory: '…아직 내 불은 꺼지지 않았다.',
     },
+    skillSet: set('p-scavenge', 'a-pulse', 'x-nova'),
   }),
   from('healer', {
     id: 'danbi',
@@ -76,6 +92,7 @@ export const CHARACTERS: CharacterDef[] = [
       skill: '숨을 붙들어요…!',
       victory: '오늘은 아무도 잃지 않았어요.',
     },
+    skillSet: set('p-eagle', 'a-regen', 'x-second-wind'),
   }),
   from('slower', {
     id: 'hajan',
@@ -87,5 +104,6 @@ export const CHARACTERS: CharacterDef[] = [
       skill: '덫은 이미 놓였다.',
       victory: '…끝.',
     },
+    skillSet: set('p-scavenge', 'a-regen', 'x-repel'),
   }),
 ]
