@@ -85,12 +85,50 @@ export interface UnitDef {
   heals?: boolean
   /** 감속 오라: 반경 내 적 이동 속도에 speedFactor를 곱한다 (특수류) */
   aura?: { radius: number; speedFactor: number }
+  /** 해금된 기술 목록 (applyLevel이 채운다). statMod 패시브는 이미 스탯에 구워져 있음 */
+  skills?: SkillDef[]
+}
+
+// ---------------------------------------------------------------- 기술 (docs/07 v2)
+
+/** 패시브: 레벨 적용 시 스탯에 굽거나(statMod), 전투 중 상시 발동(관통/처치 코스트) */
+export type PassiveEffect =
+  | { kind: 'statMod'; atkMul?: number; hpMul?: number; rangeAdd?: number; blockAdd?: number; defAdd?: number }
+  | { kind: 'armorPierce'; ratio: number } // 적 방어력을 ratio만큼 무시
+  | { kind: 'onKillCost'; amount: number } // 처치 시 코스트 획득
+
+/** 자동: 조건/주기 충족 시 스스로 발동 */
+export type AutoEffect =
+  | { kind: 'aoePulse'; everyNAttacks: number; radius: number; dmgMul: number }
+  | { kind: 'selfHeal'; thresholdRatio: number; amount: number; cooldownTicks: number }
+  | { kind: 'shield'; amount: number; intervalTicks: number }
+
+/** 액티브: 수동 발동(useSkill), 쿨다운제 — 성벽 액션과 같은 조작 결 */
+export type ActiveEffect =
+  | { kind: 'frenzy'; atkSpeedMul: number; durationTicks: number }
+  | { kind: 'knockback'; tiles: number } // 저지 중인 적을 밀쳐내고 저지 해제
+  | { kind: 'heal'; amount: number } // 즉시 자가 회복
+  | { kind: 'nova'; damage: number; radius: number } // 자기 주변 폭발 (방어 무시)
+
+export type SkillSlot = 'passive' | 'auto' | 'active'
+
+export interface SkillDef {
+  id: string
+  name: string
+  desc: string
+  slot: SkillSlot
+  effect: PassiveEffect | AutoEffect | ActiveEffect
+  /** active 전용 재사용 대기 */
+  cooldownTicks?: number
 }
 
 /**
  * 캐릭터 = 정체성을 가진 유닛 (2026-07-20 확정: 직군 → 캐릭터 중심 개편).
  * 기계적으로는 UnitDef와 동일하게 시뮬레이션된다 — sim은 정체성 필드를 모른다.
  * role은 역할 원형(구 직군) id로, 소프트 파이프라인 밸런스 검증의 기준점.
+ *
+ * v2 (docs/07): skillSet은 고유기술 3종(패시브/자동/액티브), 해금은 Lv1/3/5.
+ * 전투에 들어가는 것은 applyLevel()이 만든 배틀 def — sim은 레벨을 모른다.
  */
 export interface CharacterDef extends UnitDef {
   role: string
@@ -99,6 +137,8 @@ export interface CharacterDef extends UnitDef {
   lore: string
   /** 대사: 배치/스킬/승리 (docs/02 캐릭터 구성 요소) */
   lines: { deploy: string; skill: string; victory: string }
+  /** 고유기술 3종 (v2). 임시 로스터는 아직 없음 */
+  skillSet?: { passive: SkillDef; auto: SkillDef; active: SkillDef }
 }
 
 export interface EnemyDef {
@@ -131,6 +171,17 @@ export interface ActiveUnit {
   cooldown: number
   /** 저지 중인 적 id 목록 (저지 시작 순) */
   blockedEnemyIds: number[]
+  // ---- 기술 런타임 (docs/07 v2) ----
+  /** 남은 보호막 (피해를 먼저 흡수) */
+  shield: number
+  /** 누적 공격 횟수 (aoePulse 주기용) */
+  attackCount: number
+  /** 자동 기술 다음 발동 가능 틱 */
+  autoReadyAt: number
+  /** 액티브 기술 재사용 가능 틱 */
+  activeReadyAt: number
+  /** 액티브 버프(frenzy 등) 만료 틱 */
+  activeUntil: number
 }
 
 export interface ActiveEnemy {
@@ -187,6 +238,7 @@ export type PlayerAction =
   | { type: 'withdraw'; unitId: number }
   | { type: 'repairWall' }
   | { type: 'wallSkill'; x: number; y: number }
+  | { type: 'useSkill'; unitId: number } // 캐릭터 액티브 기술 발동
 
 /** 리플레이 = {tick, action} 시퀀스. 봇과 플레이어가 같은 형식을 쓴다. */
 export interface TimedAction {
@@ -214,6 +266,8 @@ export type SimEvent =
   | { type: 'wallRepaired'; amount: number; wallHp: number }
   | { type: 'wallSkillFired'; x: number; y: number; hits: number }
   | { type: 'wallActionRejected'; action: 'repair' | 'skill'; reason: WallActionRejectReason }
+  | { type: 'skillUsed'; unitId: number; skillId: string }
+  | { type: 'skillRejected'; unitId: number; reason: 'unknownUnit' | 'noActiveSkill' | 'onCooldown' }
   | { type: 'withdrawn'; unitId: number; unitDefId: string; refund: number }
   | { type: 'enemySpawned'; enemyId: number; enemyDefId: string; wave: number }
   | { type: 'enemyKilled'; enemyId: number; enemyDefId: string; by: number }

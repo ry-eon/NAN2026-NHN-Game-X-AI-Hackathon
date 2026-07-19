@@ -123,6 +123,7 @@ export function step(ctx: SimContext, state: GameState, actions: PlayerAction[] 
   applyActions(ctx, state, actions)
   spawnEnemies(ctx, state)
   moveAndBlock(ctx, state)
+  runAutoSkills(ctx, state)
   unitsAttack(ctx, state)
   enemiesAttack(ctx, state)
   state.cost = Math.min(ctx.stage.costMax, state.cost + ctx.stage.costRegenPerSec / TICKS_PER_SECOND)
@@ -137,7 +138,8 @@ function applyActions(ctx: SimContext, state: GameState, actions: PlayerAction[]
     if (action.type === 'deploy') applyDeploy(ctx, state, action)
     else if (action.type === 'withdraw') applyWithdraw(ctx, state, action.unitId)
     else if (action.type === 'repairWall') applyRepair(ctx, state)
-    else applyWallSkill(ctx, state, action.x, action.y)
+    else if (action.type === 'wallSkill') applyWallSkill(ctx, state, action.x, action.y)
+    else applyUseSkill(ctx, state, action.unitId)
   }
 }
 
@@ -170,6 +172,11 @@ function applyDeploy(
     hp: def.hp,
     cooldown: 0,
     blockedEnemyIds: [],
+    shield: 0,
+    attackCount: 0,
+    autoReadyAt: 0,
+    activeReadyAt: 0,
+    activeUntil: 0,
   }
   state.units.push(unit)
   state.events.push({ type: 'deployed', unitId: unit.id, unitDefId: def.id, x: a.x, y: a.y })
@@ -224,6 +231,79 @@ function applyWallSkill(ctx: SimContext, state: GameState, x: number, y: number)
   state.enemies = state.enemies.filter((e) => e.hp > 0)
   state.wallSkillReadyAt = state.tick + def.cooldownTicks
   state.events.push({ type: 'wallSkillFired', x, y, hits })
+}
+
+/** 캐릭터 액티브 기술 발동 (docs/07 v2 — 수동, 쿨다운제) */
+function applyUseSkill(ctx: SimContext, state: GameState, unitId: number): void {
+  const reject = (reason: 'unknownUnit' | 'noActiveSkill' | 'onCooldown'): void => {
+    state.events.push({ type: 'skillRejected', unitId, reason })
+  }
+  const unit = state.units.find((u) => u.id === unitId)
+  if (!unit) return reject('unknownUnit')
+  const skill = skillOf(ctx, unit, 'active')
+  if (!skill) return reject('noActiveSkill')
+  if (unit.activeReadyAt > state.tick) return reject('onCooldown')
+
+  const effect = skill.effect
+  if (effect.kind === 'frenzy') {
+    unit.activeUntil = state.tick + effect.durationTicks
+  } else if (effect.kind === 'knockback') {
+    for (const id of unit.blockedEnemyIds) {
+      const e = state.enemies.find((en) => en.id === id)
+      if (!e) continue
+      e.blockedBy = null
+      e.pathPos = Math.max(0, e.pathPos - effect.tiles)
+      e.atWall = false
+    }
+    unit.blockedEnemyIds = []
+  } else if (effect.kind === 'heal') {
+    unit.hp = Math.min(ctx.unitDefs[unit.defId]!.hp, unit.hp + effect.amount)
+  } else if (effect.kind === 'nova') {
+    for (const e of state.enemies) {
+      if (e.hp <= 0) continue
+      const p = enemyWorldPos(ctx, e)
+      if (Math.hypot(p.x - unit.x, p.y - unit.y) > effect.radius) continue
+      e.hp -= effect.damage // 방어 무시
+      if (e.hp <= 0) killEnemy(state, e, unit.id)
+    }
+    state.enemies = state.enemies.filter((e) => e.hp > 0)
+  }
+  unit.activeReadyAt = state.tick + (skill.cooldownTicks ?? 0)
+  state.events.push({ type: 'skillUsed', unitId, skillId: skill.id })
+}
+
+/** 유닛의 슬롯별 기술 (statMod 패시브는 레벨 적용 시 이미 스탯에 구워짐) */
+function skillOf(ctx: SimContext, unit: ActiveUnit, slot: 'passive' | 'auto' | 'active') {
+  return ctx.unitDefs[unit.defId]!.skills?.find((sk) => sk.slot === slot)
+}
+
+/** 방어 관통 패시브를 반영한 대적 피해 */
+function damageVsEnemy(ctx: SimContext, unit: ActiveUnit, atk: number, enemyDef: number): number {
+  const pierce = skillOf(ctx, unit, 'passive')?.effect
+  const effDef =
+    pierce && pierce.kind === 'armorPierce' ? enemyDef * (1 - pierce.ratio) : enemyDef
+  return Math.max(1, Math.round(atk - effDef))
+}
+
+/** 자동 기술 틱 처리 (selfHeal / shield) — 유닛 공격 단계 직전에 호출 */
+function runAutoSkills(ctx: SimContext, state: GameState): void {
+  for (const unit of state.units) {
+    const auto = skillOf(ctx, unit, 'auto')
+    if (!auto) continue
+    const def = ctx.unitDefs[unit.defId]!
+    const effect = auto.effect
+    if (effect.kind === 'selfHeal') {
+      if (state.tick >= unit.autoReadyAt && unit.hp < def.hp * effect.thresholdRatio) {
+        unit.hp = Math.min(def.hp, unit.hp + effect.amount)
+        unit.autoReadyAt = state.tick + effect.cooldownTicks
+      }
+    } else if (effect.kind === 'shield') {
+      if (state.tick >= unit.autoReadyAt) {
+        unit.shield = Math.max(unit.shield, effect.amount)
+        unit.autoReadyAt = state.tick + effect.intervalTicks
+      }
+    }
+  }
 }
 
 // ---------------------------------------------------------------- 스폰/이동/저지
@@ -402,17 +482,52 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
             return Math.hypot(ep.x - tp.x, ep.y - tp.y) <= def.aoeRadius!
           })
         : [target]
+    let kills = 0
     for (const victim of victims) {
-      victim.hp -= damage(def.atk, ctx.enemyDefs[victim.defId]!.def)
-      if (victim.hp <= 0) killEnemy(state, victim, unit.id)
+      victim.hp -= damageVsEnemy(ctx, unit, def.atk, ctx.enemyDefs[victim.defId]!.def)
+      if (victim.hp <= 0) {
+        killEnemy(state, victim, unit.id)
+        kills++
+      }
     }
+    unit.attackCount++
+
+    // 자동 기술: n회 공격마다 주 표적 주변 광역 펄스
+    const auto = skillOf(ctx, unit, 'auto')?.effect
+    if (auto && auto.kind === 'aoePulse' && unit.attackCount % auto.everyNAttacks === 0) {
+      const tp = enemyWorldPos(ctx, target)
+      for (const e of state.enemies) {
+        if (e.hp <= 0) continue
+        const p = enemyWorldPos(ctx, e)
+        if (Math.hypot(p.x - tp.x, p.y - tp.y) > auto.radius) continue
+        e.hp -= damageVsEnemy(ctx, unit, Math.round(def.atk * auto.dmgMul), ctx.enemyDefs[e.defId]!.def)
+        if (e.hp <= 0) {
+          killEnemy(state, e, unit.id)
+          kills++
+        }
+      }
+    }
+
+    // 패시브: 처치 시 코스트 획득
+    const passive = skillOf(ctx, unit, 'passive')?.effect
+    if (kills > 0 && passive && passive.kind === 'onKillCost') {
+      state.cost = Math.min(ctx.stage.costMax, state.cost + passive.amount * kills)
+    }
+
     state.events.push({
       type: 'unitAttacked',
       unitId: unit.id,
       unitDefId: def.id,
       targetIds: victims.map((v) => v.id),
     })
-    unit.cooldown = def.atkIntervalTicks
+
+    // 액티브 버프(frenzy): 지속 중이면 공격 간격 단축
+    const active = skillOf(ctx, unit, 'active')?.effect
+    const frenzied =
+      active && active.kind === 'frenzy' && unit.activeUntil > state.tick
+        ? active.atkSpeedMul
+        : 1
+    unit.cooldown = Math.max(1, Math.round(def.atkIntervalTicks / frenzied))
   }
   state.enemies = state.enemies.filter((e) => e.hp > 0)
 }
@@ -426,7 +541,10 @@ function enemiesAttack(ctx: SimContext, state: GameState): void {
     if (enemy.blockedBy !== null) {
       const unit = state.units.find((u) => u.id === enemy.blockedBy)
       if (!unit) continue
-      unit.hp -= damage(def.atk, ctx.unitDefs[unit.defId]!.def)
+      const dmg = damage(def.atk, ctx.unitDefs[unit.defId]!.def)
+      const absorbed = Math.min(unit.shield, dmg)
+      unit.shield -= absorbed
+      unit.hp -= dmg - absorbed
       enemy.cooldown = def.atkIntervalTicks
       state.events.push({ type: 'enemyAttacked', enemyId: enemy.id, targetUnitId: unit.id })
       if (unit.hp <= 0) {
