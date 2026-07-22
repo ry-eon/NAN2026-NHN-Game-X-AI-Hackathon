@@ -11,6 +11,7 @@
     "test": "vitest run",
     "pipeline": "tsx pipeline/src/run.ts",
     "pipeline:chars": "tsx pipeline/src/run-chars.ts",
+    "campaign-sim": "tsx pipeline/src/run-campaign-sim.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

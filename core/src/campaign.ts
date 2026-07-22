@@ -12,7 +12,13 @@ import type { CharacterDef, StageDef } from './types'
 
 /** 연전 길이 (심사자 30초 이해 요건 — 짧게) [초안] */
 export const CAMPAIGN_LENGTH = 5
-/** 전투 사이 회복: 잃은 성벽의 이 비율을 되찾는다 [초안 — 봇 캠페인 시뮬로 튜닝 예정] */
+/**
+ * 전투 사이 회복: 잃은 성벽의 이 비율을 되찾는다.
+ * [확정 근거 2026-07-23] 봇 캠페인 스윕(0~100%, reports/*campaign-recovery-sweep.md):
+ * 전 구간 데스 스파이럴 없음 — 판 내 수리 경제가 생존을 담당하므로 이 값은
+ * 생존 임계가 아니라 "이월의 체감 강도" 파라미터다. 40% = 이월이 느껴지되
+ * (100% 리셋 아님) 벌점이 과하지 않은 중간값으로 유지.
+ */
 export const RECOVERY_RATE = 0.4
 /** 시작 가신 (D1 확정) */
 export const STARTING_IDS = ['doha', 'sea', 'danbi']
@@ -89,6 +95,7 @@ export function onStageCleared(
   state: CampaignState,
   endWallRatio: number,
   deployedCharIds: string[],
+  recoveryRate: number = RECOVERY_RATE, // 봇 캠페인 시뮬의 회복률 스윕용 오버라이드
 ): CampaignState {
   const next: CampaignState = {
     ...state,
@@ -97,7 +104,7 @@ export function onStageCleared(
         ? { ...r, level: Math.min(MAX_LEVEL, r.level + 1) }
         : r,
     ),
-    wallRatio: Math.min(1, endWallRatio + (1 - endWallRatio) * RECOVERY_RATE),
+    wallRatio: Math.min(1, endWallRatio + (1 - endWallRatio) * recoveryRate),
     stageIndex: state.stageIndex + 1,
     pendingCandidateIds: null,
   }
