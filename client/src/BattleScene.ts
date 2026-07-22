@@ -29,10 +29,10 @@ import type {
   DeployRejectReason,
   PlayerAction,
   TimedAction,
-  TileType,
   UnitDef,
 } from '@core'
 import { clearCampaign, loadCampaign, saveCampaign } from './meta/save'
+import { ENEMY_SCALE, registerPixelTextures } from './pixel'
 
 const GRID_X = 20
 const GRID_Y = 64
@@ -41,12 +41,6 @@ const GRID_MAX_W = 620
 const GRID_MAX_H = 415
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
-const TILE_COLORS: Record<TileType, number> = {
-  ground: 0x32324a,
-  road: 0x63523a,
-  wallTop: 0x4a4a68,
-  blocked: 0x14141f,
-}
 // 색상은 역할(원형) 기준 — 캐릭터가 늘어나도 역할이 같으면 같은 계열
 const ROLE_COLORS: Record<string, number> = {
   blocker: 0x4e9a5a,
@@ -108,6 +102,9 @@ export class BattleScene extends Phaser.Scene {
   private enemyFlash = new Map<number, number>()
   private unitFlash = new Map<number, number>()
   private wallFlashUntil = 0
+  // 픽셀 스프라이트 풀 (entityId → Image). scene.restart 시 오브젝트는 파괴되므로 맵만 비운다
+  private unitSprites = new Map<number, Phaser.GameObjects.Image>()
+  private enemySprites = new Map<number, Phaser.GameObjects.Image>()
   /** scene.restart() 후에도 유지 — 선택한 스테이지 */
   private stageIndex = 0
   /** 스테이지 크기에 맞춘 타일 픽셀 (create에서 계산) */
@@ -166,7 +163,10 @@ export class BattleScene extends Phaser.Scene {
     this.deployedCharIds.clear()
     this.recruitOpen = false
     this.unitMenuFor = null
+    this.unitSprites.clear()
+    this.enemySprites.clear()
 
+    registerPixelTextures(this)
     this.drawStaticGrid()
     this.createHud()
     this.createCards()
@@ -443,14 +443,19 @@ export class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 렌더링
 
   private drawStaticGrid(): void {
-    const g = this.add.graphics().setDepth(0)
     const { tiles, width, height } = this.sim.ctx
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const t = tiles[y]?.[x]
         if (!t) continue
-        g.fillStyle(TILE_COLORS[t], 1)
-        g.fillRect(GRID_X + x * this.tile, GRID_Y + y * this.tile, this.tile - 2, this.tile - 2)
+        this.add
+          .image(
+            GRID_X + x * this.tile + (this.tile - 2) / 2,
+            GRID_Y + y * this.tile + (this.tile - 2) / 2,
+            `tile-${t}`,
+          )
+          .setDisplaySize(this.tile - 2, this.tile - 2)
+          .setDepth(0)
       }
     }
     // 진입 방향 안내 (스폰 → 성벽)
@@ -599,9 +604,10 @@ export class BattleScene extends Phaser.Scene {
           this.selectCard(def.id)
         },
       )
+      const role = CHAR_BY_ID.get(def.id)?.role ?? def.id
       this.add
-        .rectangle(x + 6, y + 13, 16, 16, colorFor(def.id))
-        .setOrigin(0, 0)
+        .image(x + 14, y + 21, this.textures.exists(`unit-${role}`) ? `unit-${role}` : 'unit-blocker')
+        .setDisplaySize(20, 20)
         .setDepth(21)
       const lv =
         this.mode === 'campaign'
@@ -662,36 +668,60 @@ export class BattleScene extends Phaser.Scene {
 
     const now = this.time.now
 
-    // 유닛: 사각형 + HP바 + 저지 점 (+피격 시 붉은 플래시)
+    // 유닛: 픽셀 스프라이트 동기화 + HP바 + 저지 점 (+피격 시 적색 틴트)
     for (const u of state.units) {
       const def = ctx.unitDefs[u.defId]!
       const px = GRID_X + u.x * this.tile
       const py = GRID_Y + u.y * this.tile
-      g.fillStyle(colorFor(u.defId), 1)
-      g.fillRect(px + 8, py + 8, this.tile - 18, this.tile - 18)
-      if ((this.unitFlash.get(u.id) ?? 0) > now) {
-        g.fillStyle(0xff6a5a, 0.55)
-        g.fillRect(px + 8, py + 8, this.tile - 18, this.tile - 18)
+      let spr = this.unitSprites.get(u.id)
+      if (!spr) {
+        const role = CHAR_BY_ID.get(u.defId)?.role ?? u.defId
+        spr = this.add
+          .image(0, 0, this.textures.exists(`unit-${role}`) ? `unit-${role}` : 'unit-blocker')
+          .setDepth(5)
+        spr.setDisplaySize(this.tile * 0.82, this.tile * 0.82)
+        this.unitSprites.set(u.id, spr)
       }
+      spr.setPosition(px + this.tile / 2, py + this.tile / 2)
+      if ((this.unitFlash.get(u.id) ?? 0) > now) spr.setTintFill(0xff6a5a)
+      else spr.clearTint()
       this.bar(px + 8, py + this.tile - 8, this.tile - 18, u.hp / def.hp)
       g.fillStyle(0xffffff, 0.9)
       for (let b = 0; b < u.blockedEnemyIds.length; b++) g.fillCircle(px + 14 + b * 10, py + 14, 3)
     }
+    // 사라진 유닛(사망·철수) 스프라이트 정리
+    for (const [id, spr] of this.unitSprites) {
+      if (!state.units.some((u) => u.id === id)) {
+        spr.destroy()
+        this.unitSprites.delete(id)
+      }
+    }
 
-    // 적: 원 + HP바 (경로 보간 위치, 같은 셀에 겹치면 id로 살짝 흩뜨림, 피격 시 백색 플래시)
+    // 괴수: 픽셀 스프라이트 동기화 (경로 보간 위치, 겹치면 id로 흩뜨림, 피격 시 백색 틴트)
     for (const e of state.enemies) {
-      const style = ENEMY_STYLE[e.defId] ?? { color: 0xffffff, radius: 12 }
       const pos = enemyWorldPos(ctx, e)
       const px = GRID_X + pos.x * this.tile + this.tile / 2 + ((e.id % 3) - 1) * 8
       const py = GRID_Y + pos.y * this.tile + this.tile / 2 + (((e.id * 7) % 3) - 1) * 6
-      g.fillStyle(style.color, 1)
-      g.fillCircle(px, py, style.radius)
-      if ((this.enemyFlash.get(e.id) ?? 0) > now) {
-        g.fillStyle(0xffffff, 0.7)
-        g.fillCircle(px, py, style.radius)
+      let spr = this.enemySprites.get(e.id)
+      if (!spr) {
+        spr = this.add
+          .image(0, 0, this.textures.exists(`enemy-${e.defId}`) ? `enemy-${e.defId}` : 'enemy-grunt')
+          .setDepth(6)
+        const scale = ENEMY_SCALE[e.defId] ?? 0.6
+        spr.setDisplaySize(this.tile * scale, this.tile * scale)
+        this.enemySprites.set(e.id, spr)
       }
+      spr.setPosition(px, py)
+      if ((this.enemyFlash.get(e.id) ?? 0) > now) spr.setTintFill(0xffffff)
+      else spr.clearTint()
       const maxHp = ctx.enemyDefs[e.defId]!.hp
-      this.bar(px - 15, py - style.radius - 7, 30, e.hp / maxHp)
+      this.bar(px - 15, py - (spr.displayHeight / 2) - 7, 30, e.hp / maxHp)
+    }
+    for (const [id, spr] of this.enemySprites) {
+      if (!state.enemies.some((e) => e.id === id)) {
+        spr.destroy()
+        this.enemySprites.delete(id)
+      }
     }
 
     this.renderHud()

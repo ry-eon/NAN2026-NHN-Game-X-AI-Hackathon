@@ -9,6 +9,7 @@ new Phaser.Game({
   width: 960,
   height: 540,
   backgroundColor: '#16162a',
+  pixelArt: true, // 코드 생성 픽셀 텍스처의 nearest-neighbor 확대
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
