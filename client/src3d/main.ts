@@ -31,7 +31,7 @@ renderer.toneMappingExposure = 1.12
 document.getElementById('game')!.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-scene.fog = new THREE.Fog(0x0a0c16, 50, 140) // 밤안개 — 시야 끝이 어둠에 잠긴다
+scene.fog = new THREE.Fog(0x0a0c16, 46, 150) // 밤안개 — 시야 끝이 어둠에 잠긴다
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200)
 
@@ -40,7 +40,7 @@ const hemi = new THREE.HemisphereLight(0x55608a, 0x20222c, 1.1)
 scene.add(hemi)
 // 달빛 — 차갑고 낮은 키 라이트 (동쪽에서 길게 드리우는 그림자)
 const sun = new THREE.DirectionalLight(0x9fb0dd, 2.6)
-sun.position.set(34, 22, -16)
+sun.position.set(40, 34, -18)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
 sun.shadow.camera.left = -50
@@ -53,6 +53,24 @@ scene.add(sun)
 const decor = buildCastle(scene)
 buildEnvironment(scene)
 const ash = buildAsh(scene)
+
+// 달빛 광선 (가짜 볼류메트릭) — 어둠을 가르는 빛줄기
+for (let i = 0; i < 3; i++) {
+  const shaft = new THREE.Mesh(
+    new THREE.PlaneGeometry(7 + i * 3, 46),
+    new THREE.MeshBasicMaterial({
+      color: 0x5a6a9a,
+      transparent: true,
+      opacity: 0.05,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  )
+  shaft.position.set(8 + i * 11, 18, -6 + i * 7)
+  shaft.rotation.set(0.28, 0.5, 0.62)
+  scene.add(shaft)
+}
 
 // ---------------------------------------------------------------- 포스트프로세싱
 const composer = new EffectComposer(renderer)
@@ -199,7 +217,42 @@ const { state, spawns } = createSiege(20260725)
 let acc = 0
 let last = performance.now()
 
+const occlusionRay = new THREE.Raycaster()
+
+/** 카메라와 성주 사이를 가리는 구조물을 반투명 처리 (RTS 관례) */
+function fadeOccluders(): void {
+  const lordPos = new THREE.Vector3(state.lord.pos.x, 1.2, state.lord.pos.z)
+  const dir = lordPos.clone().sub(camera.position)
+  const dist = dir.length()
+  occlusionRay.set(camera.position, dir.normalize())
+  occlusionRay.far = dist - 0.5
+  // 광역 판정: 시선 광선에 '가까운' 대형 구조물도 페이드 (정확 교차만으론 화면 절반을 먹는 탑을 못 잡는다)
+  const ray = occlusionRay.ray
+  const hits = new Set<THREE.Object3D>()
+  const sphere = new THREE.Sphere()
+  for (const mesh of decor.occluders) {
+    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere()
+    sphere.copy(mesh.geometry.boundingSphere!).applyMatrix4(mesh.matrixWorld)
+    const toCam = sphere.center.distanceTo(camera.position)
+    if (toCam > dist + sphere.radius) continue // 성주보다 훨씬 뒤 → 무시
+    if (ray.distanceToPoint(sphere.center) < sphere.radius * 0.55 + 1.2) hits.add(mesh)
+  }
+  for (const mesh of decor.occluders) {
+    const mat = (mesh as THREE.Mesh).material as THREE.MeshStandardMaterial
+    const targetOpacity = hits.has(mesh) ? 0.18 : 1
+    if (mat.opacity !== targetOpacity) {
+      mat.transparent = true
+      mat.opacity += (targetOpacity - mat.opacity) * 0.25
+      if (Math.abs(mat.opacity - targetOpacity) < 0.02) {
+        mat.opacity = targetOpacity
+        if (targetOpacity === 1) mat.transparent = false
+      }
+    }
+  }
+}
+
 function syncScene(): void {
+  fadeOccluders()
   lordMesh.position.set(state.lord.pos.x, 0, state.lord.pos.z)
   lordMesh.rotation.y = state.lord.facing
 
@@ -230,7 +283,7 @@ function syncScene(): void {
   // 카메라: LoL식 고정 부감 — 성주 남쪽 상공에서 내려다보며 추적
   const target = new THREE.Vector3(state.lord.pos.x, 0, state.lord.pos.z)
   // 비스듬한 앵글(약 43°) — 성벽·인물·바위의 수직면이 화면에 실린다
-  camera.position.set(target.x, camDist * 0.7, target.z + camDist * 0.74)
+  camera.position.set(target.x, camDist * 0.82, target.z + camDist * 0.68)
   camera.lookAt(target.x, 1.0, target.z - 1.5)
 
   // HUD

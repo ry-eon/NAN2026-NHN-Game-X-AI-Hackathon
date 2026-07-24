@@ -16,9 +16,9 @@ export const CASTLE = {
   west: WALL_X - 24,
   north: -18,
   south: 18,
-  wallH: 7,
-  wallT: 2.6,
-  gateHalf: 3,
+  wallH: 11, // 전장 정면은 카메라 시선을 넘지 않는 높이 — 웅장함은 후방 첨탑군이 담당
+  wallT: 3.4,
+  gateHalf: 3.2,
 }
 
 // ---------------------------------------------------------------- PBR 재질
@@ -118,12 +118,14 @@ export function buildAsh(scene: THREE.Scene): THREE.Points {
 export interface WorldDecor {
   torchLights: THREE.PointLight[]
   flags: THREE.Mesh[]
+  /** 카메라-성주 사이에 끼면 반투명 처리할 대형 구조물 */
+  occluders: THREE.Mesh[]
 }
 
 /** 흉벽 달린 성벽 구간 (축 정렬) */
 function wallSegment(
   scene: THREE.Scene,
-  mat: THREE.Material,
+  decor: WorldDecor,
   darkMat: THREE.Material,
   axis: 'x' | 'z',
   fixed: number,
@@ -133,27 +135,30 @@ function wallSegment(
   const len = Math.abs(to - from)
   const mid = (from + to) / 2
   const { wallH, wallT } = CASTLE
+  // 텍스처 반복을 벽 크기에 비례 — 늘어짐 방지 (구간별 독립 재질)
+  const mat = pbrDisplaced('bricks', len / 5.5, wallH / 5.5, 0.22, { color: 0x9aa0b0 })
   // 변위 맵이 실제 요철을 만들도록 세분화
   const geo =
     axis === 'z'
       ? new THREE.BoxGeometry(wallT, wallH, len, 4, 24, Math.max(24, Math.floor(len * 2)))
       : new THREE.BoxGeometry(len, wallH, wallT, Math.max(24, Math.floor(len * 2)), 24, 4)
   const seg = new THREE.Mesh(geo, mat)
+  decor.occluders.push(seg)
   seg.position.set(axis === 'z' ? fixed : mid, wallH / 2, axis === 'z' ? mid : fixed)
   seg.castShadow = true
   seg.receiveShadow = true
   scene.add(seg)
   // 흉벽
-  for (let d = -len / 2 + 1.1; d < len / 2 - 0.5; d += 2.3) {
+  for (let d = -len / 2 + 1.8; d < len / 2 - 1; d += 4.2) {
     const m = new THREE.Mesh(
       axis === 'z'
-        ? new THREE.BoxGeometry(wallT, 1.1, 1.25)
-        : new THREE.BoxGeometry(1.25, 1.1, wallT),
+        ? new THREE.BoxGeometry(wallT, 2.2, 2.1)
+        : new THREE.BoxGeometry(2.1, 2.2, wallT),
       darkMat,
     )
     m.position.set(
       axis === 'z' ? fixed : mid + d,
-      wallH + 0.55,
+      wallH + 1.1,
       axis === 'z' ? mid + d : fixed,
     )
     m.castShadow = true
@@ -162,7 +167,7 @@ function wallSegment(
 }
 
 export function buildCastle(scene: THREE.Scene): WorldDecor {
-  const decor: WorldDecor = { torchLights: [], flags: [] }
+  const decor: WorldDecor = { torchLights: [], flags: [], occluders: [] }
   const stone = pbrDisplaced('bricks', 2.5, 1, 0.22, { color: 0x9aa0b0 })
   const stoneDark = pbr('bricks', 1.2, 0.6, { color: 0x9a9aa8 })
   const wood = new THREE.MeshStandardMaterial({ color: 0x4a3826, roughness: 0.85 })
@@ -170,43 +175,48 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   const { east, west, north, south, wallH, gateHalf } = CASTLE
 
   // 4면 성곽 (동면은 성문 개구부)
-  wallSegment(scene, stone, stoneDark, 'z', east, north, -gateHalf)
-  wallSegment(scene, stone, stoneDark, 'z', east, gateHalf, south)
-  wallSegment(scene, stone, stoneDark, 'z', west, north, south)
-  wallSegment(scene, stone, stoneDark, 'x', north, west, east)
-  wallSegment(scene, stone, stoneDark, 'x', south, west, east)
+  wallSegment(scene, decor, stoneDark, 'z', east, north, -gateHalf)
+  wallSegment(scene, decor, stoneDark, 'z', east, gateHalf, south)
+  wallSegment(scene, decor, stoneDark, 'z', west, north, south)
+  wallSegment(scene, decor, stoneDark, 'x', north, west, east)
+  wallSegment(scene, decor, stoneDark, 'x', south, west, east)
 
   // 성문루: 아치형 개구 (Shape에 구멍) + 상부 총안
   const arch = new THREE.Shape()
-  const gw = gateHalf + 1.4
+  const gw = gateHalf + 2.2
+  const gh = gateHalf * 0.95
+  const archTop = 10.5 // 고딕 첨두 정점
   arch.moveTo(-gw, 0)
-  arch.lineTo(-gw, wallH + 1.6)
-  arch.lineTo(gw, wallH + 1.6)
+  arch.lineTo(-gw, wallH + 3)
+  arch.lineTo(gw, wallH + 3)
   arch.lineTo(gw, 0)
-  arch.lineTo(gateHalf * 0.9, 0)
-  arch.lineTo(gateHalf * 0.9, 3.4)
-  arch.absarc(0, 3.4, gateHalf * 0.9, 0, Math.PI, false)
-  arch.lineTo(-gateHalf * 0.9, 0)
+  arch.lineTo(gh, 0)
+  // 첨두 아치 (좌우 원호가 정점에서 만난다)
+  arch.lineTo(gh, 6)
+  arch.quadraticCurveTo(gh * 0.9, archTop * 0.92, 0, archTop)
+  arch.quadraticCurveTo(-gh * 0.9, archTop * 0.92, -gh, 6)
+  arch.lineTo(-gh, 0)
   arch.lineTo(-gw, 0)
   const gateGeo = new THREE.ExtrudeGeometry(arch, { depth: CASTLE.wallT + 1, bevelEnabled: false })
-  const gatehouse = new THREE.Mesh(gateGeo, pbr('bricks', 0.5, 0.35, { color: 0x9aa0b0 }))
+  const gatehouse = new THREE.Mesh(gateGeo, pbr('bricks', 0.28, 0.2, { color: 0x9aa0b0 }))
   gatehouse.rotation.y = -Math.PI / 2
   gatehouse.position.set(east + (CASTLE.wallT + 1) / 2, 0, -gw)
   // ExtrudeGeometry 좌표계 보정: shape의 x가 -z가 되도록 회전했으므로 z 오프셋
   gatehouse.position.z = gw
   gatehouse.castShadow = true
   gatehouse.receiveShadow = true
+  decor.occluders.push(gatehouse)
   scene.add(gatehouse)
   // 아치 위 머시콜레이션(내밀린 총안 돌기)
-  for (let z = -gw + 0.6; z < gw; z += 1.2) {
-    const cor = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), stone)
-    cor.position.set(east + 1.6, wallH + 1.2, z)
+  for (let z = -gw + 0.8; z < gw; z += 1.6) {
+    const cor = new THREE.Mesh(new THREE.BoxGeometry(1, 1.2, 1), stone)
+    cor.position.set(east + 2, wallH + 2.4, z)
     cor.castShadow = true
     scene.add(cor)
   }
   for (const side of [-1, 1]) {
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.35, 5.2, gateHalf * 0.95), wood)
-    door.position.set(east + 0.5, 2.6, side * gateHalf * 0.6)
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9.5, gateHalf * 0.95), wood)
+    door.position.set(east + 0.5, 4.75, side * gateHalf * 0.6)
     door.rotation.y = side * 0.55
     door.castShadow = true
     scene.add(door)
@@ -214,13 +224,13 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
 
   // 버트레스: 동벽 바깥 경사 지지벽 — 성벽 실루엣을 풍부하게
   for (const bz of [-14, -8.5, 8.5, 14]) {
-    const but = new THREE.Mesh(new THREE.BoxGeometry(1.6, wallH * 0.75, 1.4), stone)
-    but.position.set(east + 0.9, (wallH * 0.75) / 2, bz)
-    but.rotation.z = -0.06
+    const but = new THREE.Mesh(new THREE.BoxGeometry(2.4, wallH * 0.82, 2.2), stone)
+    but.position.set(east + 1.4, (wallH * 0.82) / 2, bz)
+    but.rotation.z = -0.05
     but.castShadow = true
     scene.add(but)
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.5, 1.7), stoneDark)
-    cap.position.set(east + 0.85, wallH * 0.75, bz)
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.8, 2.6), stoneDark)
+    cap.position.set(east + 1.3, wallH * 0.82, bz)
     cap.castShadow = true
     scene.add(cap)
   }
@@ -235,29 +245,33 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     [east, gateHalf + 2.4, false],
   ]
   for (const [ti, [tx, tz, big]] of towers.entries()) {
-    const r = big ? 3.0 : 2.0
-    const h = big ? 12 : 10
-    const tower = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r, h, 24, 16), stone)
+    const r = big ? 3.6 : 2.4
+    const h = big ? 26 : 18 // 모서리 탑은 안개 속으로, 성문탑은 절제
+    const tower = new THREE.Mesh(
+      new THREE.CylinderGeometry(r * 0.9, r, h, 24, 16),
+      pbrDisplaced('bricks', (r * 6.28) / 5.5, h / 5.5, 0.2, { color: 0x9aa0b0 }),
+    )
     tower.position.set(tx, h / 2, tz)
     tower.castShadow = true
     tower.receiveShadow = true
+    decor.occluders.push(tower)
     scene.add(tower)
     const rim = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.08, r * 1.08, 0.9, 12), stoneDark)
     rim.position.set(tx, h - 0.2, tz)
     rim.castShadow = true
     scene.add(rim)
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(r * 1.2, big ? 3.4 : 2.8, 12), roofMat)
-    roof.position.set(tx, h + (big ? 1.7 : 1.4), tz)
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(r * 1.15, big ? 9 : 7, 12), roofMat)
+    roof.position.set(tx, h + (big ? 4.5 : 3.5), tz)
     roof.castShadow = true
     scene.add(roof)
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.8, 6), wood)
-    pole.position.set(tx, h + (big ? 4.4 : 3.8), tz)
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 4, 6), wood)
+    pole.position.set(tx, h + (big ? 10.5 : 8.5), tz)
     scene.add(pole)
     const flag = new THREE.Mesh(
       new THREE.PlaneGeometry(1.7, 0.95),
       new THREE.MeshStandardMaterial({ color: 0x4e1616, side: THREE.DoubleSide, roughness: 0.85 }),
     )
-    flag.position.set(tx + 0.9, h + (big ? 4.9 : 4.3), tz)
+    flag.position.set(tx + 1, h + (big ? 11 : 9), tz)
     decor.flags.push(flag)
     scene.add(flag)
     void ti
@@ -269,35 +283,62 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
       new THREE.ConeGeometry(0.2, 0.5, 6),
       new THREE.MeshBasicMaterial({ color: 0xffb050 }),
     )
-    flame.position.set(east + 1.45, 4.4, tz)
+    flame.position.set(east + 1.85, 6.2, tz)
     scene.add(flame)
     const light = new THREE.PointLight(0xff8838, 20, 14, 1.9)
-    light.position.set(east + 1.7, 4.6, tz)
+    light.position.set(east + 2.1, 6.4, tz)
     decor.torchLights.push(light)
     scene.add(light)
   }
 
-  // 내성 (안뜰 서쪽): 본성 + 지붕 + 창 불빛
-  const keep = new THREE.Mesh(new THREE.BoxGeometry(7, 12, 10), stone)
-  keep.position.set(west + 6, 6, 0)
+  // 내성: 대성당형 본성 — 첨탑 군집이 밤하늘 실루엣을 만든다
+  const keep = new THREE.Mesh(
+    new THREE.BoxGeometry(9, 26, 13),
+    pbrDisplaced('bricks', 13 / 5.5, 26 / 5.5, 0.2, { color: 0x9aa0b0 }),
+  )
+  keep.position.set(west + 6, 13, 0)
   keep.castShadow = true
   keep.receiveShadow = true
+  decor.occluders.push(keep)
   scene.add(keep)
-  const keepRoof = new THREE.Mesh(new THREE.ConeGeometry(6.6, 4, 4), roofMat)
-  keepRoof.position.set(west + 6, 14, 0)
+  const keepRoof = new THREE.Mesh(new THREE.ConeGeometry(8, 10, 4), roofMat)
+  keepRoof.position.set(west + 6, 31, 0)
   keepRoof.rotation.y = Math.PI / 4
   keepRoof.castShadow = true
   scene.add(keepRoof)
+  // 측면 첨탑 4기 (높이 차등 — 고딕 실루엣)
+  for (const [si, [sx, sz, sh]] of ([
+    [west + 2.5, -5.5, 34],
+    [west + 2.5, 5.5, 30],
+    [west + 9.5, -5.5, 28],
+    [west + 9.5, 5.5, 36],
+  ] as const).entries()) {
+    const spireBody = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.1, 1.4, sh, 8),
+      pbr('bricks', 1.6, sh / 5.5, { color: 0x9aa0b0 }),
+    )
+    spireBody.position.set(sx, sh / 2, sz)
+    spireBody.castShadow = true
+    decor.occluders.push(spireBody)
+    scene.add(spireBody)
+    const spireTop = new THREE.Mesh(new THREE.ConeGeometry(1.5, 6, 8), roofMat)
+    spireTop.position.set(sx, sh + 3, sz)
+    spireTop.castShadow = true
+    scene.add(spireTop)
+    void si
+  }
   for (const [wy, wz] of [
-    [7, -2.4],
-    [7, 2.4],
-    [9.5, 0],
+    [12, -3],
+    [12, 3],
+    [18, 0],
+    [22, -3],
+    [22, 3],
   ] as const) {
     const win = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.7, 1.1),
+      new THREE.PlaneGeometry(0.9, 1.8),
       new THREE.MeshBasicMaterial({ color: 0xffc060 }),
     )
-    win.position.set(west + 9.52, wy, wz)
+    win.position.set(west + 10.52, wy, wz)
     win.rotation.y = Math.PI / 2
     scene.add(win)
   }
@@ -326,6 +367,49 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
         scene.add(inst)
       }
     })
+  }
+
+  // 세로 대형 깃발 — 동벽에 늘어진 낡은 문장기 (다크소울 문법)
+  for (const bz of [-10.5, 0, 10.5]) {
+    const banner = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.6, 11),
+      new THREE.MeshStandardMaterial({ color: 0x30100e, side: THREE.DoubleSide, roughness: 0.98 }),
+    )
+    banner.position.set(east + CASTLE.wallT / 2 + 0.12, wallH - 6.5, bz)
+    banner.rotation.y = Math.PI / 2
+    decor.flags.push(banner)
+    scene.add(banner)
+    // 문장 (밝은 마름모)
+    const emblem = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.1, 1.1),
+      new THREE.MeshStandardMaterial({ color: 0x6a5830, side: THREE.DoubleSide, roughness: 0.85 }),
+    )
+    emblem.position.set(east + CASTLE.wallT / 2 + 0.16, wallH - 4.5, bz)
+    emblem.rotation.y = Math.PI / 2
+    emblem.rotation.z = Math.PI / 4
+    scene.add(emblem)
+  }
+
+  // 성문 양옆 거대 석상 — 두건 쓴 파수꾼 (절차 조합, 6m)
+  for (const side of [-1, 1]) {
+    const g = new THREE.Group()
+    const robe = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.6, 4.2, 8), stoneDark)
+    robe.position.y = 2.1
+    const shoulders = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 6), stoneDark)
+    shoulders.position.y = 4.3
+    const hood = new THREE.Mesh(new THREE.ConeGeometry(0.75, 1.6, 8), stoneDark)
+    hood.position.y = 5.4
+    const swordBlade = new THREE.Mesh(new THREE.BoxGeometry(0.22, 3.6, 0.5), stoneDark)
+    swordBlade.position.set(0, 1.8, 1.15)
+    const pedestal = new THREE.Mesh(new THREE.BoxGeometry(3, 1.1, 3), stone)
+    pedestal.position.y = 0.55
+    for (const mm of [robe, shoulders, hood, swordBlade, pedestal]) {
+      mm.castShadow = true
+      g.add(mm)
+    }
+    g.position.set(east + 3.4, 0, side * (gateHalf + 4.6))
+    g.rotation.y = Math.PI / 2
+    scene.add(g)
   }
 
   // 길가 화톳불 2기 — 어둠을 견디는 전초의 불빛
