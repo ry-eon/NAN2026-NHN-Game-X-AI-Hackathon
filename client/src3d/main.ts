@@ -10,7 +10,7 @@ import {
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
 import type { SiegeInput } from '../../siege/sim/world'
-import { buildCastle, buildEnvironment } from './environment'
+import { buildCastle, buildEnvironment, loadSky } from './environment'
 
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
@@ -19,17 +19,21 @@ const renderer = new THREE.WebGLRenderer({ antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 0.9
 document.getElementById('game')!.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-scene.fog = new THREE.Fog(0x12121e, 55, 110)
+scene.fog = new THREE.Fog(0x2a2333, 60, 130)
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200)
 
-const hemi = new THREE.HemisphereLight(0xaabbdd, 0x334433, 1.35)
+loadSky(scene, renderer)
+const hemi = new THREE.HemisphereLight(0x8899bb, 0x33402e, 0.35)
 scene.add(hemi)
-const sun = new THREE.DirectionalLight(0xffeecc, 1.5)
-sun.position.set(-20, 30, 10)
+const sun = new THREE.DirectionalLight(0xffd9a0, 2.2)
+sun.position.set(-28, 24, 14)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
 sun.shadow.camera.left = -50
@@ -42,29 +46,30 @@ scene.add(sun)
 const decor = buildCastle(scene)
 buildEnvironment(scene)
 
-// 성주 (복셀풍 임시 모델: 몸+머리+망토)
+// 성주 (임시 — M2a-2에서 캐릭터 퀄리티 확정 후 교체)
 function makeLord(): THREE.Group {
   const g = new THREE.Group()
   const body = new THREE.Mesh(
-    new THREE.BoxGeometry(0.8, 1.1, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0x5aa0d0 }),
+    new THREE.CapsuleGeometry(0.34, 0.85, 6, 12),
+    new THREE.MeshStandardMaterial({ color: 0x3a5a80, roughness: 0.6, metalness: 0.25 }),
   )
-  body.position.y = 0.85
+  body.position.y = 0.95
   const head = new THREE.Mesh(
-    new THREE.BoxGeometry(0.55, 0.5, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0xd8b090 }),
+    new THREE.SphereGeometry(0.26, 12, 10),
+    new THREE.MeshStandardMaterial({ color: 0xd8b090, roughness: 0.7 }),
   )
-  head.position.y = 1.7
+  head.position.y = 1.75
   const crown = new THREE.Mesh(
-    new THREE.BoxGeometry(0.6, 0.18, 0.55),
-    new THREE.MeshStandardMaterial({ color: 0xffd048, emissive: 0x332200 }),
+    new THREE.TorusGeometry(0.2, 0.05, 6, 12),
+    new THREE.MeshStandardMaterial({ color: 0xd4a838, roughness: 0.35, metalness: 0.8 }),
   )
-  crown.position.y = 2.0
+  crown.rotation.x = Math.PI / 2
+  crown.position.y = 1.95
   const cape = new THREE.Mesh(
-    new THREE.BoxGeometry(0.7, 1.0, 0.15),
-    new THREE.MeshStandardMaterial({ color: 0x8a2a2a }),
+    new THREE.BoxGeometry(0.6, 1.05, 0.1),
+    new THREE.MeshStandardMaterial({ color: 0x6a1e1e, roughness: 0.85 }),
   )
-  cape.position.set(0, 0.85, -0.3)
+  cape.position.set(0, 0.95, -0.32)
   for (const m of [body, head, crown, cape]) m.castShadow = true
   g.add(body, head, crown, cape)
   return g
@@ -165,9 +170,10 @@ function syncScene(): void {
     if (!mesh) {
       const def = ENEMY_KINDS[e.kind]!
       mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(def.radius * 2, def.radius * 2.4, def.radius * 2),
+        new THREE.SphereGeometry(def.radius, 8, 7),
         enemyMats[e.kind] ?? enemyMats.grunt!,
       )
+      mesh.scale.y = 1.25
       mesh.castShadow = true
       enemyMeshes.set(e.id, mesh)
       scene.add(mesh)

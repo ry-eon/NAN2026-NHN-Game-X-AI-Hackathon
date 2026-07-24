@@ -8,7 +8,7 @@ export const TICKS_PER_SECOND = 30
 const DT = 1 / TICKS_PER_SECOND
 
 // ---------------------------------------------------------------- 월드 상수 [초안]
-export const FIELD = { minX: -14, maxX: 42, minZ: -18, maxZ: 18 }
+export const FIELD = { minX: -34, maxX: 42, minZ: -22, maxZ: 22 }
 /** 성벽 평면 x — 이 서쪽이 성 내부 */
 export const WALL_X = -6
 export const WALL_HP = 2000
