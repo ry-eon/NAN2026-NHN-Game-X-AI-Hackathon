@@ -468,6 +468,26 @@ export class BattleScene extends Phaser.Scene {
 
   private drawStaticGrid(): void {
     const { tiles, width, height } = this.sim.ctx
+    // UI 패널: 우측 HUD·하단 카드 스트립 배경, 전장 테두리
+    this.add
+      .rectangle(806, 300, 300, 460, 0x1c1c2e)
+      .setStrokeStyle(1, 0x33334e)
+      .setDepth(1)
+    this.add
+      .rectangle(480, 516, 952, 46, 0x1c1c2e)
+      .setStrokeStyle(1, 0x33334e)
+      .setDepth(1)
+    this.add
+      .rectangle(
+        GRID_X + (width * this.tile) / 2 - 1,
+        GRID_Y + (height * this.tile) / 2 - 1,
+        width * this.tile + 6,
+        height * this.tile + 6,
+        0x000000,
+        0,
+      )
+      .setStrokeStyle(2, 0x3a3a56)
+      .setDepth(1)
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const t = tiles[y]?.[x]
@@ -479,7 +499,7 @@ export class BattleScene extends Phaser.Scene {
             `tile-${t}`,
           )
           .setDisplaySize(this.tile - 2, this.tile - 2)
-          .setDepth(0)
+          .setDepth(2)
       }
     }
     // 진입 방향 안내 (스폰 → 성벽)
