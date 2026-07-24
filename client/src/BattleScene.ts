@@ -124,10 +124,13 @@ export class BattleScene extends Phaser.Scene {
   private deployedCharIds = new Set<string>()
   /** 영입 패널 표시 중 (전투 정지) */
   private recruitOpen = false
-  /** 유닛 클릭 메뉴 (기술/철수) 대상 */
+  /** 유닛 클릭 메뉴 (기술/이동/철수) 대상 */
   private unitMenuFor: number | null = null
   private menuSkillBtn!: Phaser.GameObjects.Text
+  private menuMoveBtn!: Phaser.GameObjects.Text
   private menuWithdrawBtn!: Phaser.GameObjects.Text
+  /** 이동 조준 중인 유닛 id (타일 클릭 대기) */
+  private movingUnitId: number | null = null
 
   constructor() {
     super('battle')
@@ -172,6 +175,7 @@ export class BattleScene extends Phaser.Scene {
     this.deployedCharIds.clear()
     this.recruitOpen = false
     this.unitMenuFor = null
+    this.movingUnitId = null
     this.unitSprites.clear()
     this.enemySprites.clear()
     this.lastWaveSeen = 0
@@ -207,6 +211,11 @@ export class BattleScene extends Phaser.Scene {
       }
       const cell = this.cellAt(p.x, p.y)
       if (!cell) return
+      if (this.movingUnitId !== null) {
+        this.queue({ type: 'moveUnit', unitId: this.movingUnitId, x: cell.x, y: cell.y })
+        this.movingUnitId = null
+        return
+      }
       if (this.targetingSkill) {
         this.queue({ type: 'wallSkill', x: cell.x, y: cell.y })
         this.targetingSkill = false
@@ -233,6 +242,7 @@ export class BattleScene extends Phaser.Scene {
       kb.on('keydown-ESC', () => {
         this.selectedDefId = null
         this.targetingSkill = false
+        this.movingUnitId = null
         this.closeUnitMenu()
       })
     }
@@ -348,6 +358,21 @@ export class BattleScene extends Phaser.Scene {
             this.deathBurst(pos.x, pos.y, ENEMY_STYLE[e.enemyDefId]?.color ?? 0xffffff)
           break
         }
+        case 'unitMoved':
+          Sfx.play('deploy')
+          this.deployRing(e.x, e.y, 0xffffff)
+          break
+        case 'moveRejected':
+          this.toast(
+            e.reason === 'onCooldown'
+              ? '이동: 아직 대기 중'
+              : e.reason === 'invalidTile'
+                ? '이동: 배치할 수 없는 타일'
+                : e.reason === 'occupied'
+                  ? '이동: 이미 유닛이 있음'
+                  : '이동 불가',
+          )
+          break
         case 'unitDied': {
           Sfx.play('unitDie')
           this.toast('가신이 쓰러졌다!')
@@ -797,9 +822,13 @@ export class BattleScene extends Phaser.Scene {
       this.closeUnitMenu()
     }
 
-    // 배치 미리보기: 선택한 유닛의 배치 가능 타일 하이라이트 (정의 데이터 표시일 뿐 판정은 core 몫)
-    if (this.selectedDefId) {
-      const def = ctx.unitDefs[this.selectedDefId]
+    // 배치/이동 미리보기: 대상 유닛의 배치 가능 타일 하이라이트 (판정은 core 몫)
+    const previewDefId =
+      this.movingUnitId !== null
+        ? state.units.find((u) => u.id === this.movingUnitId)?.defId ?? null
+        : this.selectedDefId
+    if (previewDefId) {
+      const def = ctx.unitDefs[previewDefId]
       if (def) {
         g.fillStyle(0xffffff, 0.08)
         for (let y = 0; y < ctx.height; y++) {
@@ -810,6 +839,10 @@ export class BattleScene extends Phaser.Scene {
           }
         }
       }
+    }
+    // 이동 대상 유닛이 사라지면 조준 해제
+    if (this.movingUnitId !== null && !state.units.some((u) => u.id === this.movingUnitId)) {
+      this.movingUnitId = null
     }
     if (this.hoverCell) {
       g.lineStyle(2, 0xffffff, 0.5)
@@ -1205,6 +1238,15 @@ export class BattleScene extends Phaser.Scene {
       if (this.unitMenuFor !== null) this.queue({ type: 'useSkill', unitId: this.unitMenuFor })
       this.closeUnitMenu()
     })
+    this.menuMoveBtn = makeMenuBtn('이동', () => {
+      if (this.unitMenuFor !== null) {
+        this.movingUnitId = this.unitMenuFor
+        this.selectedDefId = null
+        this.targetingSkill = false
+        this.toast('이동할 타일을 클릭하세요')
+      }
+      this.closeUnitMenu()
+    })
     this.menuWithdrawBtn = makeMenuBtn('철수 (50%)', () => {
       if (this.unitMenuFor !== null) {
         Sfx.play('withdraw')
@@ -1221,13 +1263,16 @@ export class BattleScene extends Phaser.Scene {
     const { px, py } = this.cellPx(unit.x, unit.y)
     const def = this.sim.ctx.unitDefs[unit.defId]!
     const hasActive = def.skills?.some((sk) => sk.slot === 'active') ?? false
-    this.menuSkillBtn.setVisible(hasActive).setPosition(px + this.tile / 2 + 4, py - 26)
-    this.menuWithdrawBtn.setVisible(true).setPosition(px + this.tile / 2 + 4, py + 2)
+    const mx = px + this.tile / 2 + 4
+    this.menuSkillBtn.setVisible(hasActive).setPosition(mx, py - 40)
+    this.menuMoveBtn.setVisible(true).setPosition(mx, py - 12)
+    this.menuWithdrawBtn.setVisible(true).setPosition(mx, py + 16)
   }
 
   private closeUnitMenu(): void {
     this.unitMenuFor = null
     this.menuSkillBtn.setVisible(false)
+    this.menuMoveBtn.setVisible(false)
     this.menuWithdrawBtn.setVisible(false)
   }
 }

@@ -171,6 +171,8 @@ export interface ActiveUnit {
   cooldown: number
   /** 저지 중인 적 id 목록 (저지 시작 순) */
   blockedEnemyIds: number[]
+  /** 재이동 가능 틱 (moveUnit 쿨다운) */
+  moveReadyAt: number
   // ---- 기술 런타임 (docs/07 v2) ----
   /** 남은 보호막 (피해를 먼저 흡수) */
   shield: number
@@ -236,6 +238,7 @@ export interface WallActionDefs {
 export type PlayerAction =
   | { type: 'deploy'; unitDefId: string; x: number; y: number }
   | { type: 'withdraw'; unitId: number }
+  | { type: 'moveUnit'; unitId: number; x: number; y: number } // 재배치 (쿨다운제)
   | { type: 'repairWall' }
   | { type: 'wallSkill'; x: number; y: number }
   | { type: 'useSkill'; unitId: number } // 캐릭터 액티브 기술 발동
@@ -269,6 +272,8 @@ export type SimEvent =
   | { type: 'skillUsed'; unitId: number; skillId: string }
   | { type: 'skillRejected'; unitId: number; reason: 'unknownUnit' | 'noActiveSkill' | 'onCooldown' }
   | { type: 'withdrawn'; unitId: number; unitDefId: string; refund: number }
+  | { type: 'unitMoved'; unitId: number; x: number; y: number }
+  | { type: 'moveRejected'; unitId: number; reason: 'unknownUnit' | 'onCooldown' | 'invalidTile' | 'occupied' }
   | { type: 'enemySpawned'; enemyId: number; enemyDefId: string; wave: number }
   | { type: 'enemyKilled'; enemyId: number; enemyDefId: string; by: number }
   | { type: 'unitDied'; unitId: number; unitDefId: string }

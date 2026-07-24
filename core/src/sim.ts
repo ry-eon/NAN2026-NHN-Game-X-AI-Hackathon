@@ -17,6 +17,11 @@ import type {
   WallActionDefs,
 } from './types'
 
+/** 유닛 재배치(이동) 쿨다운 [초안] — 철수+재배치보다 가볍되 남용은 막는다 */
+export const MOVE_COOLDOWN_TICKS = 8 * TICKS_PER_SECOND
+/** 이동 직후 전열 재정비 시간 (공격 불가) [초안] */
+const MOVE_SETTLE_TICKS = Math.round(0.5 * TICKS_PER_SECOND)
+
 /** 성벽 액션 기본 규칙 [초안]. createContext에서 교체 가능 (데이터 주도) */
 export const DEFAULT_WALL_ACTIONS: WallActionDefs = {
   repair: { cost: 12, heal: 180, cooldownTicks: 8 * TICKS_PER_SECOND },
@@ -137,6 +142,7 @@ function applyActions(ctx: SimContext, state: GameState, actions: PlayerAction[]
   for (const action of actions) {
     if (action.type === 'deploy') applyDeploy(ctx, state, action)
     else if (action.type === 'withdraw') applyWithdraw(ctx, state, action.unitId)
+    else if (action.type === 'moveUnit') applyMove(ctx, state, action)
     else if (action.type === 'repairWall') applyRepair(ctx, state)
     else if (action.type === 'wallSkill') applyWallSkill(ctx, state, action.x, action.y)
     else applyUseSkill(ctx, state, action.unitId)
@@ -172,6 +178,7 @@ function applyDeploy(
     hp: def.hp,
     cooldown: 0,
     blockedEnemyIds: [],
+    moveReadyAt: 0,
     shield: 0,
     attackCount: 0,
     autoReadyAt: 0,
@@ -193,6 +200,34 @@ function applyWithdraw(ctx: SimContext, state: GameState, unitId: number): void 
   state.cost = Math.min(ctx.stage.costMax, state.cost + refund)
   state.redeployReadyAt[def.id] = state.tick + def.redeployTicks
   state.events.push({ type: 'withdrawn', unitId, unitDefId: def.id, refund })
+}
+
+/** 재배치: 배치 규칙 동일 검증, 저지 해제, 짧은 재정비 후 전투 재개 */
+function applyMove(
+  ctx: SimContext,
+  state: GameState,
+  a: { unitId: number; x: number; y: number },
+): void {
+  const reject = (reason: 'unknownUnit' | 'onCooldown' | 'invalidTile' | 'occupied'): void => {
+    state.events.push({ type: 'moveRejected', unitId: a.unitId, reason })
+  }
+  const unit = state.units.find((u) => u.id === a.unitId)
+  if (!unit) return reject('unknownUnit')
+  if (unit.moveReadyAt > state.tick) return reject('onCooldown')
+  const def = ctx.unitDefs[unit.defId]!
+  const tile = tileTypeAt(ctx.tiles, a.x, a.y)
+  const placeable =
+    def.placement === 'wallTop' ? tile === 'wallTop' : tile === 'ground' || tile === 'road'
+  if (!placeable) return reject('invalidTile')
+  if (state.units.some((u) => u.id !== unit.id && u.x === a.x && u.y === a.y))
+    return reject('occupied')
+
+  releaseBlocked(state, unit)
+  unit.x = a.x
+  unit.y = a.y
+  unit.cooldown = Math.max(unit.cooldown, MOVE_SETTLE_TICKS)
+  unit.moveReadyAt = state.tick + MOVE_COOLDOWN_TICKS
+  state.events.push({ type: 'unitMoved', unitId: unit.id, x: a.x, y: a.y })
 }
 
 function applyRepair(ctx: SimContext, state: GameState): void {

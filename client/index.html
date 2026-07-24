@@ -8,14 +8,15 @@
       html,
       body {
         margin: 0;
+        width: 100%;
         height: 100%;
         background: #0d0d17;
-        display: grid;
-        place-items: center;
+        overflow: hidden;
       }
-      canvas {
-        max-width: 100vw;
-        max-height: 100vh;
+      /* Phaser Scale.FIT은 부모 크기를 기준으로 확대한다 — 뷰포트 전체를 채운다 */
+      #game {
+        width: 100%;
+        height: 100%;
       }
     </style>
   </head>

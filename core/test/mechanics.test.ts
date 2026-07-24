@@ -142,6 +142,34 @@ describe('W2 신규 메커니즘', () => {
     ).toBe(true)
   })
 
+  it('재배치(이동): 저지를 풀고 이동하며, 쿨다운·타일 규칙을 지킨다', () => {
+    const stage = lineStage({
+      spawns: [{ tick: 1, enemyDefId: 'grunt', pathIndex: 0, wave: 1 }],
+    })
+    const sim = new Simulation(stage, UNIT_DEFS, ENEMY_DEFS)
+    sim.step([{ type: 'deploy', unitDefId: 'blocker', x: 3, y: 1 }])
+    const unitId = sim.state.units[0]!.id
+    while (sim.state.enemies[0]?.blockedBy == null && sim.state.tick < 3000) sim.step()
+
+    sim.step([{ type: 'moveUnit', unitId, x: 1, y: 1 }]) // 저지 중 이동 → 저지 해제
+    const unit = sim.state.units[0]!
+    expect(unit.x).toBe(1)
+    expect(unit.blockedEnemyIds).toHaveLength(0)
+    expect(sim.state.enemies[0]!.blockedBy).toBeNull()
+
+    sim.step([{ type: 'moveUnit', unitId, x: 2, y: 1 }]) // 쿨다운 중
+    expect(
+      sim.state.events.some((e) => e.type === 'moveRejected' && e.reason === 'onCooldown'),
+    ).toBe(true)
+    expect(sim.state.units[0]!.x).toBe(1)
+
+    sim.state.units[0]!.moveReadyAt = 0
+    sim.step([{ type: 'moveUnit', unitId, x: 0, y: 1 }]) // 근접 → 성벽 위 불가
+    expect(
+      sim.state.events.some((e) => e.type === 'moveRejected' && e.reason === 'invalidTile'),
+    ).toBe(true)
+  })
+
   it('근접 자기 칸 공격: 원거리가 닿지 않는 포격 공성차를 근접으로 처치할 수 있다', () => {
     // 성벽 위 칸(0,2)이 포격 지점(x≈3.5, y1)에서 3.64타일 — 아처 사거리(3.5) 밖
     const stage: StageDef = {
