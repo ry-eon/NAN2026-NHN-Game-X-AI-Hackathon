@@ -10,7 +10,7 @@ import {
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
 import type { SiegeInput } from '../../siege/sim/world'
-import { buildCastle, buildEnvironment, loadSky } from './environment'
+import { buildAsh, buildCastle, buildEnvironment, loadSky } from './environment'
 
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
@@ -21,19 +21,20 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 0.9
+renderer.toneMappingExposure = 0.88
 document.getElementById('game')!.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-scene.fog = new THREE.Fog(0x2a2333, 60, 130)
+scene.fog = new THREE.Fog(0x05060c, 42, 115) // 밤안개 — 시야 끝이 어둠에 잠긴다
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200)
 
 loadSky(scene, renderer)
-const hemi = new THREE.HemisphereLight(0x8899bb, 0x33402e, 0.35)
+const hemi = new THREE.HemisphereLight(0x46506e, 0x181a22, 0.85)
 scene.add(hemi)
-const sun = new THREE.DirectionalLight(0xffd9a0, 2.2)
-sun.position.set(-28, 24, 14)
+// 달빛 — 차갑고 낮은 키 라이트 (동쪽에서 길게 드리우는 그림자)
+const sun = new THREE.DirectionalLight(0x93a4d2, 1.7)
+sun.position.set(34, 22, -16)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
 sun.shadow.camera.left = -50
@@ -45,6 +46,7 @@ scene.add(sun)
 // 성채·배경 (M2a-1: 절차 생성 비주얼)
 const decor = buildCastle(scene)
 buildEnvironment(scene)
+const ash = buildAsh(scene)
 
 // 성주 (임시 — M2a-2에서 캐릭터 퀄리티 확정 후 교체)
 function makeLord(): THREE.Group {
@@ -234,6 +236,15 @@ function frame(now: number): void {
   decor.flags.forEach((f, i) => {
     f.rotation.y = Math.sin(t * 2.2 + i) * 0.35
   })
+  // 재 입자: 느리게 흩날린다
+  const ap = ash.geometry.attributes.position as THREE.BufferAttribute
+  for (let i = 0; i < ap.count; i++) {
+    let y = ap.getY(i) - 0.006
+    if (y < 0) y = 14
+    ap.setY(i, y)
+    ap.setX(i, ap.getX(i) + Math.sin(t * 0.5 + i) * 0.003)
+  }
+  ap.needsUpdate = true
 
   syncScene()
   renderer.render(scene, camera)

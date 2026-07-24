@@ -51,12 +51,45 @@ function pbr(
 export function loadSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer): void {
   new RGBELoader().load('/assets/hdr/dusk_1k.hdr', (hdr) => {
     hdr.mapping = THREE.EquirectangularReflectionMapping
-    scene.environment = hdr // PBR 반사·간접광
-    scene.background = hdr
-    scene.backgroundIntensity = 0.5 // 황혼 무드로 감쇠
-    scene.environmentIntensity = 0.55
+    scene.environment = hdr // PBR 미세 간접광만 (반사 디테일용)
+    scene.environmentIntensity = 0.16
     void renderer
   })
+  // 배경: 칠흑에 가까운 밤 — 다크소울 톤
+  scene.background = new THREE.Color(0x05060c)
+
+  // 창백한 달 (안개 무시, 낮게)
+  const moon = new THREE.Mesh(
+    new THREE.SphereGeometry(3.2, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0x9aa4bd, fog: false }),
+  )
+  moon.position.set(FIELD.maxX + 60, 30, -40)
+  scene.add(moon)
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(4.6, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0x6a7490, transparent: true, opacity: 0.22, fog: false }),
+  )
+  halo.position.copy(moon.position)
+  scene.add(halo)
+}
+
+/** 떠다니는 재(灰) 입자 — 렌더러 전용 연출 */
+export function buildAsh(scene: THREE.Scene): THREE.Points {
+  const N = 380
+  const positions = new Float32Array(N * 3)
+  for (let i = 0; i < N; i++) {
+    positions[i * 3] = FIELD.minX - 10 + rand01(i, 71) * (FIELD.maxX - FIELD.minX + 30)
+    positions[i * 3 + 1] = rand01(i, 72) * 14
+    positions[i * 3 + 2] = FIELD.minZ - 10 + rand01(i, 73) * (FIELD.maxZ - FIELD.minZ + 20)
+  }
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  const pts = new THREE.Points(
+    geo,
+    new THREE.PointsMaterial({ color: 0x9a9aa2, size: 0.08, transparent: true, opacity: 0.32 }),
+  )
+  scene.add(pts)
+  return pts
 }
 
 // ---------------------------------------------------------------- 성채
@@ -108,10 +141,10 @@ function wallSegment(
 
 export function buildCastle(scene: THREE.Scene): WorldDecor {
   const decor: WorldDecor = { torchLights: [], flags: [] }
-  const stone = pbr('bricks', 2.5, 1)
+  const stone = pbr('bricks', 2.5, 1, { color: 0x9aa0b0 })
   const stoneDark = pbr('bricks', 1.2, 0.6, { color: 0x9a9aa8 })
   const wood = new THREE.MeshStandardMaterial({ color: 0x4a3826, roughness: 0.85 })
-  const roofMat = new THREE.MeshStandardMaterial({ color: 0x5a3232, roughness: 0.7 })
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x22232e, roughness: 0.75 })
   const { east, west, north, south, wallH, gateHalf } = CASTLE
 
   // 4면 성곽 (동면은 성문 개구부)
@@ -164,7 +197,7 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     scene.add(pole)
     const flag = new THREE.Mesh(
       new THREE.PlaneGeometry(1.7, 0.95),
-      new THREE.MeshStandardMaterial({ color: 0x8a2020, side: THREE.DoubleSide, roughness: 0.7 }),
+      new THREE.MeshStandardMaterial({ color: 0x4e1616, side: THREE.DoubleSide, roughness: 0.85 }),
     )
     flag.position.set(tx + 0.9, h + (big ? 4.9 : 4.3), tz)
     decor.flags.push(flag)
@@ -231,6 +264,27 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     scene.add(crate)
   }
 
+  // 길가 화톳불 2기 — 어둠을 견디는 전초의 불빛
+  for (const [bx, bz] of [
+    [east + 10, -5],
+    [east + 22, 5.5],
+  ] as const) {
+    const pit = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.85, 0.45, 8), stoneDark)
+    pit.position.set(bx, 0.22, bz)
+    pit.castShadow = true
+    scene.add(pit)
+    const fire = new THREE.Mesh(
+      new THREE.ConeGeometry(0.4, 0.9, 7),
+      new THREE.MeshBasicMaterial({ color: 0xff9a40 }),
+    )
+    fire.position.set(bx, 0.85, bz)
+    scene.add(fire)
+    const light = new THREE.PointLight(0xff7a30, 26, 16, 1.9)
+    light.position.set(bx, 1.6, bz)
+    decor.torchLights.push(light)
+    scene.add(light)
+  }
+
   return decor
 }
 
@@ -238,7 +292,7 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
 
 export function buildEnvironment(scene: THREE.Scene): void {
   // 들판 (PBR 풀)
-  const grassMat = pbr('grass', 18, 12, { color: 0x8a9a7a }) // 황혼 감쇠 틴트
+  const grassMat = pbr('grass', 18, 12, { color: 0x60604f }) // 죽은 들판 — 잿빛 감쇠
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(FIELD.maxX - FIELD.minX + 90, FIELD.maxZ - FIELD.minZ + 70),
     grassMat,
@@ -249,7 +303,7 @@ export function buildEnvironment(scene: THREE.Scene): void {
   scene.add(ground)
 
   // 흙길: 동쪽 지평 → 성문
-  const dirtMat = pbr('dirt', 7, 1)
+  const dirtMat = pbr('dirt', 7, 1, { color: 0x8a8078 })
   const road = new THREE.Mesh(new THREE.PlaneGeometry(FIELD.maxX - CASTLE.east + 20, 5.5), dirtMat)
   road.rotation.x = -Math.PI / 2
   road.position.set((CASTLE.east + FIELD.maxX) / 2 + 10, 0.02, 0)
@@ -257,7 +311,7 @@ export function buildEnvironment(scene: THREE.Scene): void {
   scene.add(road)
 
   // 안뜰 돌바닥 (PBR 포석)
-  const paveMat = pbr('stone', 8, 10)
+  const paveMat = pbr('stone', 8, 10, { color: 0x9098a8 })
   const courtyard = new THREE.Mesh(
     new THREE.PlaneGeometry(CASTLE.east - CASTLE.west - 1, CASTLE.south - CASTLE.north - 1),
     paveMat,
