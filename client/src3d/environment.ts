@@ -124,6 +124,7 @@ function wallSegment(
   fixed: number,
   from: number,
   to: number,
+  outerSign = 1, // 흉벽을 놓을 바깥 가장자리 방향
 ): void {
   const len = Math.abs(to - from)
   const mid = (from + to) / 2
@@ -141,18 +142,19 @@ function wallSegment(
   seg.castShadow = true
   seg.receiveShadow = true
   scene.add(seg)
-  // 흉벽
+  // 흉벽 — 보도 바깥 가장자리 (안쪽은 배치 공간으로 비운다)
+  const lip = (wallT / 2 - 0.55) * outerSign
   for (let d = -len / 2 + 1.8; d < len / 2 - 1; d += 4.2) {
     const m = new THREE.Mesh(
       axis === 'z'
-        ? new THREE.BoxGeometry(wallT, 2.2, 2.1)
-        : new THREE.BoxGeometry(2.1, 2.2, wallT),
+        ? new THREE.BoxGeometry(1.1, 2.2, 2.1)
+        : new THREE.BoxGeometry(2.1, 2.2, 1.1),
       darkMat,
     )
     m.position.set(
-      axis === 'z' ? fixed : mid + d,
+      axis === 'z' ? fixed + lip : mid + d,
       wallH + 1.1,
-      axis === 'z' ? mid + d : fixed,
+      axis === 'z' ? mid + d : fixed + lip,
     )
     m.castShadow = true
     scene.add(m)
@@ -168,11 +170,11 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   const { east, west, north, south, wallH, gateHalf } = CASTLE
 
   // 4면 성곽 (동면은 성문 개구부)
-  wallSegment(scene, decor, stoneDark, 'z', east, north, -gateHalf)
-  wallSegment(scene, decor, stoneDark, 'z', east, gateHalf, south)
-  wallSegment(scene, decor, stoneDark, 'z', west, north, south)
-  wallSegment(scene, decor, stoneDark, 'x', north, west, east)
-  wallSegment(scene, decor, stoneDark, 'x', south, west, east)
+  wallSegment(scene, decor, stoneDark, 'z', east, north, -gateHalf, 1)
+  wallSegment(scene, decor, stoneDark, 'z', east, gateHalf, south, 1)
+  wallSegment(scene, decor, stoneDark, 'z', west, north, south, -1)
+  wallSegment(scene, decor, stoneDark, 'x', north, west, east, -1)
+  wallSegment(scene, decor, stoneDark, 'x', south, west, east, 1)
 
   // 성문루: 아치형 개구 (Shape에 구멍) + 상부 총안
   const arch = new THREE.Shape()
@@ -454,13 +456,13 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   {
     const stepMat = pbr('stone', 1.4, 0.5, { color: 0x9aa0b0 })
     const halfT2 = CASTLE.wallT / 2
-    const sx = east - halfT2 - 0.8 // 계단 중심 x
+    const sx = east - halfT2 - 1.2 // 계단 중심 x (sim 존과 일치)
     const STEPS = 14
     for (const dir of [1, -1]) {
       for (let i = 0; i < STEPS; i++) {
         const z0 = dir * (4.5 + (10.5 * i) / STEPS)
         const h = (wallH * (i + 1)) / STEPS
-        const tread = new THREE.Mesh(new THREE.BoxGeometry(1.6, h, (10.5 / STEPS) * 1.05), stepMat)
+        const tread = new THREE.Mesh(new THREE.BoxGeometry(2.4, h, (10.5 / STEPS) * 1.05), stepMat)
         tread.position.set(sx, h / 2, z0 + (dir * (10.5 / STEPS)) / 2)
         tread.castShadow = true
         tread.receiveShadow = true
@@ -471,7 +473,7 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
         new THREE.BoxGeometry(0.18, 0.9, 10.8),
         new THREE.MeshStandardMaterial({ color: 0x3e3e50, roughness: 0.9 }),
       )
-      rail.position.set(sx - 0.85, wallH / 2 + 0.45, dir * 9.75)
+      rail.position.set(sx - 1.25, wallH / 2 + 0.45, dir * 9.75)
       rail.rotation.x = dir * -Math.atan2(wallH, 10.5)
       rail.castShadow = true
       scene.add(rail)

@@ -218,17 +218,14 @@ function fadeOccluders(): void {
   const dist = dir.length()
   occlusionRay.set(camera.position, dir.normalize())
   occlusionRay.far = dist - 0.5
-  // 광역 판정: 시선 광선에 '가까운' 대형 구조물도 페이드 (정확 교차만으론 화면 절반을 먹는 탑을 못 잡는다)
-  const ray = occlusionRay.ray
-  const hits = new Set<THREE.Object3D>()
-  const sphere = new THREE.Sphere()
-  for (const mesh of decor.occluders) {
-    if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere()
-    sphere.copy(mesh.geometry.boundingSphere!).applyMatrix4(mesh.matrixWorld)
-    const toCam = sphere.center.distanceTo(camera.position)
-    if (toCam > dist + sphere.radius) continue // 성주보다 훨씬 뒤 → 무시
-    if (ray.distanceToPoint(sphere.center) < sphere.radius * 0.55 + 1.2) hits.add(mesh)
-  }
+  // 엄격 판정: 실제로 시선을 막는 것만 페이드. 성주가 성벽 위면 페이드 안 함
+  // (벽 옆에 붙었을 때 훤히 뚫려 보이는 문제 방지)
+  const lordElevated = heightAt(state.lord.pos.x, state.lord.pos.z) > 1
+  const hits = lordElevated
+    ? new Set<THREE.Object3D>()
+    : new Set<THREE.Object3D>(
+        occlusionRay.intersectObjects(decor.occluders, false).map((h) => h.object),
+      )
   for (const mesh of decor.occluders) {
     const mat = (mesh as THREE.Mesh).material as THREE.MeshStandardMaterial
     const targetOpacity = hits.has(mesh) ? 0.18 : 1

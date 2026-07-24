@@ -20,7 +20,7 @@ export const CASTLE = {
   north: -18,
   south: 18,
   wallH: 11,
-  wallT: 3.4,
+  wallT: 5.2, // 성벽 보도 폭 — 병사·공성 병기 배치 공간
   gateHalf: 3.2,
 }
 
@@ -64,8 +64,8 @@ function blockedGround(x: number, z: number): boolean {
 
 /** 성벽 보도·계단 높이. 계단 2기(성문 남북 안쪽 벽면), 보도는 동벽 상단(성문 구간 제외) */
 export function heightAt(x: number, z: number): number {
-  const stairX0 = C.east - halfT - 1.6
-  const stairX1 = C.east - halfT
+  const stairX0 = C.east - halfT - 2.4
+  const stairX1 = C.east - halfT + 0.2 // 계단↔보도 겹침 여유
   // 남측 계단: z 4.5(바닥) → 15(정상)
   if (x >= stairX0 && x <= stairX1 && z >= 4.5 && z <= 15) {
     return (C.wallH * (z - 4.5)) / 10.5
@@ -85,6 +85,64 @@ export function heightAt(x: number, z: number): number {
     return C.wallH
   }
   return 0
+}
+
+/** 1유닛 격자 BFS — 계단·성문을 경유하는 보행 경로. 결정론(고정 이웃 순서) */
+export function findPath(from: Vec2, to: Vec2): Vec2[] | null {
+  const res = 1.0
+  const W = Math.ceil((FIELD.maxX - FIELD.minX) / res) + 1
+  const H = Math.ceil((FIELD.maxZ - FIELD.minZ) / res) + 1
+  const toCell = (v: Vec2): [number, number] => [
+    Math.round((v.x - FIELD.minX) / res),
+    Math.round((v.z - FIELD.minZ) / res),
+  ]
+  const toWorld = (cx: number, cz: number): Vec2 => ({
+    x: FIELD.minX + cx * res,
+    z: FIELD.minZ + cz * res,
+  })
+  const [sx, sz] = toCell(from)
+  const [tx, tz] = toCell(to)
+  const idx = (cx: number, cz: number): number => cz * W + cx
+  const prev = new Int32Array(W * H).fill(-2) // -2 미방문, -1 시작점
+  const queue: number[] = [idx(sx, sz)]
+  prev[idx(sx, sz)] = -1
+  let found = -1
+  for (let qi = 0; qi < queue.length; qi++) {
+    const cur = queue[qi]!
+    if (cur === idx(tx, tz)) {
+      found = cur
+      break
+    }
+    const cx = cur % W
+    const cz = Math.floor(cur / W)
+    const cw = toWorld(cx, cz)
+    for (const [dx, dz] of [
+      [0, -1],
+      [1, 0],
+      [0, 1],
+      [-1, 0],
+    ] as const) {
+      const nx = cx + dx
+      const nz = cz + dz
+      if (nx < 0 || nz < 0 || nx >= W || nz >= H) continue
+      const ni = idx(nx, nz)
+      if (prev[ni] !== -2) continue
+      const nw = toWorld(nx, nz)
+      if (!canStand(cw.x, cw.z, nw.x, nw.z)) continue
+      prev[ni] = cur
+      queue.push(ni)
+    }
+  }
+  if (found < 0) return null
+  const path: Vec2[] = []
+  for (let i = found; i >= 0; i = prev[i]!) {
+    path.unshift(toWorld(i % W, Math.floor(i / W)))
+    if (prev[i] === -1) break
+  }
+  // 최종 목표점 근사 (같은 높이면 정확 지점으로)
+  const last = path[path.length - 1]!
+  if (canStand(last.x, last.z, to.x, to.z)) path.push({ ...to })
+  return path
 }
 
 /**
@@ -146,6 +204,8 @@ export interface LordState {
   facing: number
   /** 이동 목표 (우클릭 명령). null = 정지 */
   target: Vec2 | null
+  /** 경로 탐색 웨이포인트 (BFS) — 계단 경유 등벽이 여기서 나온다 */
+  path: Vec2[]
 }
 
 export type SiegeStatus = 'prep' | 'assault' | 'won' | 'lost'
@@ -212,7 +272,7 @@ export function createSiege(seed: number): { state: SiegeState; spawns: EnemySpa
       tick: 0,
       status: 'prep',
       wallHp: WALL_HP,
-      lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null },
+      lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null, path: [] },
       enemies: [],
       spawnCursor: 0,
       nextId: 1,
@@ -230,12 +290,20 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   if (state.status === 'won' || state.status === 'lost') return state
   state.tick++
 
-  // 성주 이동 (우클릭 명령 → 목표 지점까지 걸어감. 준비/침공 공통)
+  // 성주 이동 (우클릭 명령 → BFS 경로 추종 — 계단·성문 자동 경유)
   if (input.moveTo) {
-    state.lord.target = {
+    const goal = {
       x: clamp(input.moveTo.x, FIELD.minX, FIELD.maxX),
       z: clamp(input.moveTo.z, FIELD.minZ, FIELD.maxZ),
     }
+    const path = findPath(state.lord.pos, goal)
+    if (path && path.length > 0) {
+      state.lord.path = path
+      state.lord.target = goal
+    }
+  }
+  if (state.lord.path.length > 0) {
+    state.lord.target = state.lord.path[0]!
   }
   if (state.lord.target) {
     const dx = state.lord.target.x - state.lord.pos.x
@@ -254,14 +322,15 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     } else if (canStand(px, pz, px, nz)) {
       state.lord.pos.z = nz // 벽면 슬라이드 (z축만)
     } else {
+      state.lord.path = []
       state.lord.target = null // 완전 봉착 — 명령 취소
     }
     if (dist > step) state.lord.facing = Math.atan2(dx / dist, dz / dist)
-    if (
-      Math.hypot(state.lord.target ? state.lord.target.x - state.lord.pos.x : 0,
-        state.lord.target ? state.lord.target.z - state.lord.pos.z : 0) <= step
-    ) {
-      state.lord.target = null
+    const t2 = state.lord.target
+    if (t2 && Math.hypot(t2.x - state.lord.pos.x, t2.z - state.lord.pos.z) <= step * 1.2) {
+      // 웨이포인트 도달 → 다음
+      if (state.lord.path.length > 0) state.lord.path.shift()
+      state.lord.target = state.lord.path.length > 0 ? state.lord.path[0]! : null
     }
   }
 
