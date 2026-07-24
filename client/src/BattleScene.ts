@@ -106,6 +106,10 @@ export class BattleScene extends Phaser.Scene {
   // 픽셀 스프라이트 풀 (entityId → Image). scene.restart 시 오브젝트는 파괴되므로 맵만 비운다
   private unitSprites = new Map<number, Phaser.GameObjects.Image>()
   private enemySprites = new Map<number, Phaser.GameObjects.Image>()
+  /** 웨이브 접근 배너 중복 방지 */
+  private lastWaveSeen = 0
+  /** 동시 데미지 팝업 상한 (연출 과부하 방지) */
+  private popupCount = 0
   /** scene.restart() 후에도 유지 — 선택한 스테이지 */
   private stageIndex = 0
   /** 스테이지 크기에 맞춘 타일 픽셀 (create에서 계산) */
@@ -170,6 +174,8 @@ export class BattleScene extends Phaser.Scene {
     this.unitMenuFor = null
     this.unitSprites.clear()
     this.enemySprites.clear()
+    this.lastWaveSeen = 0
+    this.popupCount = 0
 
     registerPixelTextures(this)
     this.drawStaticGrid()
@@ -313,11 +319,24 @@ export class BattleScene extends Phaser.Scene {
         case 'unitAttacked':
           Sfx.play((this.sim.ctx.unitDefs[e.unitDefId]?.range ?? 0) > 0 ? 'shoot' : 'slash')
           this.attackEffect(e.unitId, e.unitDefId, e.targetIds, now)
+          e.targetIds.forEach((tid, i) => {
+            const pos = this.enemyPosMap.get(tid)
+            if (pos && e.damages[i] !== undefined) {
+              const { px, py } = this.cellPx(pos.x, pos.y)
+              this.damagePopup(px, py - 14, `${e.damages[i]}`, '#ffe8a0')
+            }
+          })
           break
-        case 'enemyAttacked':
+        case 'enemyAttacked': {
           Sfx.play('thud')
           this.unitFlash.set(e.targetUnitId, now + 120)
+          const u = this.unitPosMap.get(e.targetUnitId)
+          if (u && e.damage > 0) {
+            const { px, py } = this.cellPx(u.x, u.y)
+            this.damagePopup(px, py - 16, `-${e.damage}`, '#ff8a7a')
+          }
           break
+        }
         case 'unitHealed':
           Sfx.play('heal')
           this.healBeam(e.healerId, e.targetId)
@@ -337,14 +356,21 @@ export class BattleScene extends Phaser.Scene {
           this.cameras.main.shake(120, 0.003)
           break
         }
+        case 'enemySpawned':
+          if (e.wave > this.lastWaveSeen) {
+            this.lastWaveSeen = e.wave
+            if (e.wave > 1) this.waveBanner(e.wave)
+          }
+          break
         case 'wallHit':
           Sfx.play('wallHit')
           this.wallFlashUntil = now + 160
           this.cameras.main.shake(90, 0.002)
+          this.damagePopup(GRID_X + 400, 44, `-${e.damage}`, '#ff5a4a')
           break
         case 'wallRepaired':
           Sfx.play('repair')
-          this.toast(`성벽 수리 +${e.amount}`)
+          this.damagePopup(GRID_X + 400, 44, `+${e.amount}`, '#8ae08a')
           break
         case 'wallActionRejected':
           this.toast(`${e.action === 'repair' ? '수리' : '낙석'}: ${WALL_REJECT_LABELS[e.reason]}`)
@@ -420,7 +446,7 @@ export class BattleScene extends Phaser.Scene {
     this.tweens.add({ targets: g, alpha: 0, duration: 300, onComplete: () => g.destroy() })
   }
 
-  /** 사망 버스트: 커지며 사라지는 링 */
+  /** 사망 버스트: 확장 링 + 픽셀 파편 */
   private deathBurst(x: number, y: number, color: number): void {
     const { px, py } = this.cellPx(x, y)
     const g = this.add.graphics({ x: px, y: py }).setDepth(15)
@@ -435,6 +461,7 @@ export class BattleScene extends Phaser.Scene {
       duration: 320,
       onComplete: () => g.destroy(),
     })
+    this.debris(px, py, color, 6)
   }
 
   private deployRing(x: number, y: number, color: number): void {
@@ -451,17 +478,107 @@ export class BattleScene extends Phaser.Scene {
     })
   }
 
-  /** 낙석 착탄 연출: 반경 원이 잠깐 번쩍이고 사라진다 */
+  /** 데미지 팝업 — 위로 떠오르며 사라지는 숫자 (동시 40개 상한) */
+  private damagePopup(px: number, py: number, text: string, color: string): void {
+    if (this.popupCount > 40) return
+    this.popupCount++
+    const t = this.add
+      .text(px + ((py * 7) % 9) - 4, py, text, {
+        fontFamily: 'monospace',
+        fontSize: '13px',
+        fontStyle: 'bold',
+        color,
+        stroke: '#000000',
+        strokeThickness: 3,
+      })
+      .setOrigin(0.5)
+      .setDepth(32)
+    this.tweens.add({
+      targets: t,
+      y: py - 22,
+      alpha: 0,
+      duration: 550,
+      ease: 'Cubic.out',
+      onComplete: () => {
+        t.destroy()
+        this.popupCount--
+      },
+    })
+  }
+
+  /** 웨이브 접근 배너 — 좌측에서 슬라이드 인 */
+  private waveBanner(wave: number): void {
+    Sfx.play('click')
+    const t = this.add
+      .text(-160, 210, `제${wave}파도 접근!`, {
+        fontFamily: 'monospace',
+        fontSize: '22px',
+        fontStyle: 'bold',
+        color: '#ffb050',
+        backgroundColor: '#000000bb',
+        padding: { x: 16, y: 8 },
+      })
+      .setOrigin(0.5)
+      .setDepth(35)
+    this.tweens.chain({
+      targets: t,
+      tweens: [
+        { x: 330, duration: 260, ease: 'Back.out' },
+        { x: 330, duration: 900 },
+        { alpha: 0, x: 380, duration: 300, onComplete: () => t.destroy() },
+      ],
+    })
+  }
+
+  /** 낙석 연출: 바위 낙하 → 착탄 섬광 + 먼지 파편 */
   private blastAt(x: number, y: number): void {
-    const g = this.add.graphics().setDepth(15)
     const px = GRID_X + x * this.tile + this.tile / 2
     const py = GRID_Y + y * this.tile + this.tile / 2
     const r = this.sim.ctx.wallActions.skill.radius * this.tile
-    g.fillStyle(0xffd870, 0.45)
-    g.fillCircle(px, py, r)
-    g.lineStyle(3, 0xffb050, 1)
-    g.strokeCircle(px, py, r)
-    this.tweens.add({ targets: g, alpha: 0, duration: 500, onComplete: () => g.destroy() })
+
+    // 낙하하는 바위 (진한 사각 덩어리)
+    const rock = this.add
+      .rectangle(px + 6, py - 220, 16, 14, 0x6e5a44)
+      .setStrokeStyle(2, 0x171720)
+      .setDepth(34)
+      .setAngle(20)
+    this.tweens.add({
+      targets: rock,
+      y: py,
+      x: px,
+      angle: 65,
+      duration: 200,
+      ease: 'Quad.in',
+      onComplete: () => {
+        rock.destroy()
+        const g = this.add.graphics().setDepth(15)
+        g.fillStyle(0xffd870, 0.45)
+        g.fillCircle(px, py, r)
+        g.lineStyle(3, 0xffb050, 1)
+        g.strokeCircle(px, py, r)
+        this.tweens.add({ targets: g, alpha: 0, duration: 480, onComplete: () => g.destroy() })
+        this.debris(px, py, 0x8a7050, 10)
+      },
+    })
+  }
+
+  /** 픽셀 파편 — 사망·착탄의 잔해 (각도는 인덱스 기반, 결정론 무관 연출) */
+  private debris(px: number, py: number, color: number, count: number): void {
+    for (let i = 0; i < count; i++) {
+      const ang = (Math.PI * 2 * i) / count + (i % 2) * 0.4
+      const dist = 22 + (i % 3) * 9
+      const p = this.add.rectangle(px, py, 4, 4, color).setDepth(16)
+      this.tweens.add({
+        targets: p,
+        x: px + Math.cos(ang) * dist,
+        y: py + Math.sin(ang) * dist - 8,
+        alpha: 0,
+        angle: 90 + i * 40,
+        duration: 380 + (i % 4) * 60,
+        ease: 'Cubic.out',
+        onComplete: () => p.destroy(),
+      })
+    }
   }
 
   // ---------------------------------------------------------------- 렌더링
@@ -768,6 +885,16 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.renderHud()
+
+    // 성벽 위기 비네트: 33% 미만이면 화면 가장자리가 붉게 고동친다
+    if (state.wallHp < ctx.stage.wallHp * 0.33 && state.status === 'playing') {
+      const pulse = 0.10 + 0.08 * Math.sin(this.time.now / 260)
+      g.fillStyle(0xff2a1a, pulse)
+      g.fillRect(0, 0, 960, 8)
+      g.fillRect(0, 532, 960, 8)
+      g.fillRect(0, 0, 8, 540)
+      g.fillRect(952, 0, 8, 540)
+    }
   }
 
   private bar(x: number, y: number, w: number, ratio: number): void {

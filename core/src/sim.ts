@@ -483,8 +483,11 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
           })
         : [target]
     let kills = 0
+    const damages: number[] = []
     for (const victim of victims) {
-      victim.hp -= damageVsEnemy(ctx, unit, def.atk, ctx.enemyDefs[victim.defId]!.def)
+      const dmg = damageVsEnemy(ctx, unit, def.atk, ctx.enemyDefs[victim.defId]!.def)
+      victim.hp -= dmg
+      damages.push(dmg)
       if (victim.hp <= 0) {
         killEnemy(state, victim, unit.id)
         kills++
@@ -519,6 +522,7 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
       unitId: unit.id,
       unitDefId: def.id,
       targetIds: victims.map((v) => v.id),
+      damages,
     })
 
     // 액티브 버프(frenzy): 지속 중이면 공격 간격 단축
@@ -546,7 +550,12 @@ function enemiesAttack(ctx: SimContext, state: GameState): void {
       unit.shield -= absorbed
       unit.hp -= dmg - absorbed
       enemy.cooldown = def.atkIntervalTicks
-      state.events.push({ type: 'enemyAttacked', enemyId: enemy.id, targetUnitId: unit.id })
+      state.events.push({
+        type: 'enemyAttacked',
+        enemyId: enemy.id,
+        targetUnitId: unit.id,
+        damage: dmg - absorbed,
+      })
       if (unit.hp <= 0) {
         state.events.push({ type: 'unitDied', unitId: unit.id, unitDefId: unit.defId })
         releaseBlocked(state, unit)
