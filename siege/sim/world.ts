@@ -12,6 +12,92 @@ export const FIELD = { minX: -34, maxX: 42, minZ: -22, maxZ: 22 }
 /** 성벽 평면 x — 이 서쪽이 성 내부 */
 export const WALL_X = -6
 export const WALL_HP = 2000
+
+/** 성 배치 — sim이 단일 진실 원천 (렌더러·충돌·높이가 공유) */
+export const CASTLE = {
+  east: WALL_X,
+  west: WALL_X - 24,
+  north: -18,
+  south: 18,
+  wallH: 11,
+  wallT: 3.4,
+  gateHalf: 3.2,
+}
+
+// ---------------------------------------------------------------- 충돌·높이 지형
+interface RectC {
+  x0: number
+  x1: number
+  z0: number
+  z1: number
+}
+const C = CASTLE
+const halfT = C.wallT / 2
+/** 지상 통행 불가 사각 (동벽은 높이 규칙이 담당, 성문 측면 스트립만 예외 추가) */
+const RECT_COLLIDERS: RectC[] = [
+  { x0: C.west - halfT, x1: C.west + halfT, z0: C.north, z1: C.south }, // 서벽
+  { x0: C.west, x1: C.east, z0: C.north - halfT, z1: C.north + halfT }, // 북벽
+  { x0: C.west, x1: C.east, z0: C.south - halfT, z1: C.south + halfT }, // 남벽
+  { x0: C.west + 1.5, x1: C.west + 10.5, z0: -6.5, z1: 6.5 }, // 내성
+  // 동벽 성문 측면 (성문 개구부와 성벽 보도 배제 구간 사이의 지상 통과 차단)
+  { x0: C.east - halfT, x1: C.east + halfT, z0: -C.gateHalf - 2.4, z1: -C.gateHalf },
+  { x0: C.east - halfT, x1: C.east + halfT, z0: C.gateHalf, z1: C.gateHalf + 2.4 },
+]
+/** 망루 (원형) */
+const TOWER_COLLIDERS: { x: number; z: number; r: number }[] = [
+  { x: C.east, z: C.north, r: 4.0 },
+  { x: C.east, z: C.south, r: 4.0 },
+  { x: C.west, z: C.north, r: 4.0 },
+  { x: C.west, z: C.south, r: 4.0 },
+  { x: C.east, z: -C.gateHalf - 2.4, r: 2.8 },
+  { x: C.east, z: C.gateHalf + 2.4, r: 2.8 },
+]
+
+const inRect = (x: number, z: number, r: RectC): boolean =>
+  x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1
+
+function blockedGround(x: number, z: number): boolean {
+  for (const r of RECT_COLLIDERS) if (inRect(x, z, r)) return true
+  for (const t of TOWER_COLLIDERS) if (Math.hypot(x - t.x, z - t.z) < t.r) return true
+  return false
+}
+
+/** 성벽 보도·계단 높이. 계단 2기(성문 남북 안쪽 벽면), 보도는 동벽 상단(성문 구간 제외) */
+export function heightAt(x: number, z: number): number {
+  const stairX0 = C.east - halfT - 1.6
+  const stairX1 = C.east - halfT
+  // 남측 계단: z 4.5(바닥) → 15(정상)
+  if (x >= stairX0 && x <= stairX1 && z >= 4.5 && z <= 15) {
+    return (C.wallH * (z - 4.5)) / 10.5
+  }
+  // 북측 계단: z -4.5(바닥) → -15(정상)
+  if (x >= stairX0 && x <= stairX1 && z <= -4.5 && z >= -15) {
+    return (C.wallH * (-z - 4.5)) / 10.5
+  }
+  // 동벽 보도 (성문 상부 구간 제외)
+  if (
+    x >= C.east - halfT &&
+    x <= C.east + halfT &&
+    Math.abs(z) >= C.gateHalf + 2.4 &&
+    z >= C.north + 0.5 &&
+    z <= C.south - 0.5
+  ) {
+    return C.wallH
+  }
+  return 0
+}
+
+/**
+ * 이동 가능성 판정: 절벽(높이 차 1.5+)과 지상 충돌체를 막는다.
+ * 성벽 위 보행·계단·성문 통과는 높이 연속성으로 자연히 허용된다.
+ */
+export function canStand(fromX: number, fromZ: number, toX: number, toZ: number): boolean {
+  const h0 = heightAt(fromX, fromZ)
+  const h1 = heightAt(toX, toZ)
+  if (Math.abs(h1 - h0) > 1.5) return false
+  if (h1 < 1 && blockedGround(toX, toZ)) return false
+  return true
+}
 export const LORD_SPEED = 7.5 // 유닛/초
 export const HERO_SPEED = 5.5
 
@@ -156,13 +242,26 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     const dz = state.lord.target.z - state.lord.pos.z
     const dist = Math.hypot(dx, dz)
     const step = LORD_SPEED * DT
-    if (dist <= step) {
-      state.lord.pos = { ...state.lord.target }
-      state.lord.target = null
+    const { x: px, z: pz } = state.lord.pos
+    const nx = dist <= step ? state.lord.target.x : px + (dx / dist) * step
+    const nz = dist <= step ? state.lord.target.z : pz + (dz / dist) * step
+
+    if (canStand(px, pz, nx, nz)) {
+      state.lord.pos.x = nx
+      state.lord.pos.z = nz
+    } else if (canStand(px, pz, nx, pz)) {
+      state.lord.pos.x = nx // 벽면 슬라이드 (x축만)
+    } else if (canStand(px, pz, px, nz)) {
+      state.lord.pos.z = nz // 벽면 슬라이드 (z축만)
     } else {
-      state.lord.pos.x += (dx / dist) * step
-      state.lord.pos.z += (dz / dist) * step
-      state.lord.facing = Math.atan2(dx / dist, dz / dist)
+      state.lord.target = null // 완전 봉착 — 명령 취소
+    }
+    if (dist > step) state.lord.facing = Math.atan2(dx / dist, dz / dist)
+    if (
+      Math.hypot(state.lord.target ? state.lord.target.x - state.lord.pos.x : 0,
+        state.lord.target ? state.lord.target.z - state.lord.pos.z : 0) <= step
+    ) {
+      state.lord.target = null
     }
   }
 

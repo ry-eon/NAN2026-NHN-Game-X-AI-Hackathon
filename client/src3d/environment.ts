@@ -5,21 +5,14 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'
-import { FIELD, WALL_X } from '../../siege/sim/world'
+import { CASTLE, FIELD } from '../../siege/sim/world'
 
 const rand01 = (i: number, salt: number): number =>
   (((i * 73856093) ^ (salt * 19349663)) % 1000) / 1000
 
-// 성곽 평면 배치: 동벽 = WALL_X (전장 정면), 서·남·북벽으로 폐곡
-export const CASTLE = {
-  east: WALL_X,
-  west: WALL_X - 24,
-  north: -18,
-  south: 18,
-  wallH: 11, // 전장 정면은 카메라 시선을 넘지 않는 높이 — 웅장함은 후방 첨탑군이 담당
-  wallT: 3.4,
-  gateHalf: 3.2,
-}
+// 성곽 평면 배치는 sim(siege/sim/world.ts CASTLE)이 단일 진실 원천 —
+// 충돌·높이 지형과 렌더 지오메트리가 반드시 일치해야 하기 때문.
+export { CASTLE }
 
 // ---------------------------------------------------------------- PBR 재질
 
@@ -259,7 +252,7 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
       cross.position.set(0, y, 0)
       grille.add(cross)
     }
-    grille.position.set(east - 0.9, 4.2, 0) // 반쯤 올라간 상태
+    grille.position.set(east - 0.9, 5.4, 0) // 반쯤 올라간 상태 (성주 키를 넘긴다)
     grille.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = true
     })
@@ -455,6 +448,34 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     g.position.set(east + 3.4, 0, side * (gateHalf + 4.6))
     g.rotation.y = Math.PI / 2
     scene.add(g)
+  }
+
+  // 성벽 계단 2기 (성문 남·북 안쪽 벽면) — sim heightAt와 동일 기울기
+  {
+    const stepMat = pbr('stone', 1.4, 0.5, { color: 0x9aa0b0 })
+    const halfT2 = CASTLE.wallT / 2
+    const sx = east - halfT2 - 0.8 // 계단 중심 x
+    const STEPS = 14
+    for (const dir of [1, -1]) {
+      for (let i = 0; i < STEPS; i++) {
+        const z0 = dir * (4.5 + (10.5 * i) / STEPS)
+        const h = (wallH * (i + 1)) / STEPS
+        const tread = new THREE.Mesh(new THREE.BoxGeometry(1.6, h, (10.5 / STEPS) * 1.05), stepMat)
+        tread.position.set(sx, h / 2, z0 + (dir * (10.5 / STEPS)) / 2)
+        tread.castShadow = true
+        tread.receiveShadow = true
+        scene.add(tread)
+      }
+      // 난간 (바깥쪽)
+      const rail = new THREE.Mesh(
+        new THREE.BoxGeometry(0.18, 0.9, 10.8),
+        new THREE.MeshStandardMaterial({ color: 0x3e3e50, roughness: 0.9 }),
+      )
+      rail.position.set(sx - 0.85, wallH / 2 + 0.45, dir * 9.75)
+      rail.rotation.x = dir * -Math.atan2(wallH, 10.5)
+      rail.castShadow = true
+      scene.add(rail)
+    }
   }
 
   // 길가 화톳불 2기 — 어둠을 견디는 전초의 불빛

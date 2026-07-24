@@ -9,6 +9,7 @@ import {
   stepSiege,
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
+import { heightAt } from '../../siege/sim/world'
 import type { SiegeInput } from '../../siege/sim/world'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
@@ -28,19 +29,19 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 1.12
+renderer.toneMappingExposure = 1.3
 document.getElementById('game')!.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-scene.fog = new THREE.Fog(0x0a0c16, 46, 150) // 밤안개 — 시야 끝이 어둠에 잠긴다
+scene.fog = new THREE.Fog(0x0c0e1a, 55, 170) // 밤안개 — 시야 끝이 어둠에 잠긴다
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200)
 
 loadSky(scene, renderer)
-const hemi = new THREE.HemisphereLight(0x55608a, 0x20222c, 1.1)
+const hemi = new THREE.HemisphereLight(0x5d6a98, 0x262832, 1.35)
 scene.add(hemi)
 // 달빛 — 차갑고 낮은 키 라이트 (동쪽에서 길게 드리우는 그림자)
-const sun = new THREE.DirectionalLight(0x9fb0dd, 2.6)
+const sun = new THREE.DirectionalLight(0xa8b8e4, 3.1)
 sun.position.set(40, 34, -18)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
@@ -131,10 +132,10 @@ window.addEventListener('keydown', (e) => {
 })
 
 // 고정 부감 카메라: 남쪽에서 북쪽을 내려다봄 (서=성벽=왼쪽, 동=적=오른쪽). 휠 줌만.
-let camDist = 17
+let camDist = 26
 window.addEventListener('contextmenu', (e) => e.preventDefault())
 window.addEventListener('wheel', (e) => {
-  camDist = Math.max(8, Math.min(34, camDist + e.deltaY * 0.02))
+  camDist = Math.max(9, Math.min(42, camDist + e.deltaY * 0.02))
 })
 
 // 우클릭 → 지면 좌표로 이동 명령
@@ -148,6 +149,14 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     -(e.clientY / window.innerHeight) * 2 + 1,
   )
   raycaster.setFromCamera(ndc, camera)
+  // 구조물 상면(법선이 위) 클릭 → 성벽 보도·계단 위 좌표 사용
+  const structHits = raycaster.intersectObjects(decor.occluders, false)
+  const topHit = structHits.find((h) => h.face && h.face.normal.y > 0.55)
+  if (topHit) {
+    pendingMove = { x: topHit.point.x, z: topHit.point.z }
+    showMoveMarker(topHit.point.x, topHit.point.z)
+    return
+  }
   const hit = new THREE.Vector3()
   if (raycaster.ray.intersectPlane(groundPlane, hit)) {
     pendingMove = { x: hit.x, z: hit.z }
@@ -234,9 +243,14 @@ function fadeOccluders(): void {
   }
 }
 
+let renderAlpha = 1
+
 function syncScene(): void {
   fadeOccluders()
-  lordMesh.position.set(state.lord.pos.x, 0, state.lord.pos.z)
+  const lx = THREE.MathUtils.lerp(prevLord.x, state.lord.pos.x, renderAlpha)
+  const lz = THREE.MathUtils.lerp(prevLord.z, state.lord.pos.z, renderAlpha)
+  const ly = heightAt(lx, lz)
+  lordMesh.position.set(lx, ly, lz)
   lordMesh.rotation.y = state.lord.facing
 
   for (const e of state.enemies) {
@@ -254,7 +268,10 @@ function syncScene(): void {
     }
     const def = ENEMY_KINDS[e.kind]!
     const bob = e.atWall ? 0 : Math.sin(state.tick * 0.3 + e.id) * 0.08
-    mesh.position.set(e.pos.x, def.radius * 1.2 + bob, e.pos.z)
+    const prev = prevEnemies.get(e.id)
+    const ex = prev ? THREE.MathUtils.lerp(prev.x, e.pos.x, renderAlpha) : e.pos.x
+    const ez = prev ? THREE.MathUtils.lerp(prev.z, e.pos.z, renderAlpha) : e.pos.z
+    mesh.position.set(ex, def.radius * 1.2 + bob, ez)
   }
   for (const [id, mesh] of enemyMeshes) {
     if (!state.enemies.some((e) => e.id === id)) {
@@ -264,10 +281,10 @@ function syncScene(): void {
   }
 
   // 카메라: LoL식 고정 부감 — 성주 남쪽 상공에서 내려다보며 추적
-  const target = new THREE.Vector3(state.lord.pos.x, 0, state.lord.pos.z)
+  const target = new THREE.Vector3(lx, ly, lz)
   // 비스듬한 앵글(약 43°) — 성벽·인물·바위의 수직면이 화면에 실린다
-  camera.position.set(target.x, camDist * 0.82, target.z + camDist * 0.68)
-  camera.lookAt(target.x, 1.0, target.z - 1.5)
+  camera.position.set(target.x, target.y + camDist * 0.82, target.z + camDist * 0.68)
+  camera.lookAt(target.x, target.y + 1.0, target.z - 1.5)
 
   // HUD
   document.getElementById('wall')!.textContent = `${state.wallHp}/${WALL_HP}`
@@ -284,10 +301,21 @@ function syncScene(): void {
           : '성이 함락됐다'
 }
 
+// 렌더 보간용 이전 틱 위치 (30Hz 시뮬 ↔ 60fps+ 렌더의 버벅임 제거)
+const prevLord = new THREE.Vector3()
+const prevEnemies = new Map<number, { x: number; z: number }>()
+
+function snapshotPrev(): void {
+  prevLord.set(state.lord.pos.x, 0, state.lord.pos.z)
+  prevEnemies.clear()
+  for (const e of state.enemies) prevEnemies.set(e.id, { x: e.pos.x, z: e.pos.z })
+}
+
 function frame(now: number): void {
   acc = Math.min(acc + (now - last), STEP_MS * 6)
   last = now
   while (acc >= STEP_MS) {
+    snapshotPrev()
     acc -= STEP_MS
     // 래치는 실제로 도는 스텝에서만 소비 — 0스텝 프레임에서 입력이 유실되지 않게
     const input: SiegeInput = {}
@@ -321,6 +349,7 @@ function frame(now: number): void {
   }
   ap.needsUpdate = true
 
+  renderAlpha = Math.min(1, acc / STEP_MS)
   syncScene()
   composer.render()
   requestAnimationFrame(frame)
