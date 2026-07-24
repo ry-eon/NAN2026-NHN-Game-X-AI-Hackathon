@@ -4,14 +4,13 @@
 import * as THREE from 'three'
 import {
   ENEMY_KINDS,
-  FIELD,
   WALL_HP,
-  WALL_X,
   createSiege,
   stepSiege,
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
 import type { SiegeInput } from '../../siege/sim/world'
+import { buildCastle, buildEnvironment } from './environment'
 
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
@@ -23,7 +22,6 @@ renderer.shadowMap.enabled = true
 document.getElementById('game')!.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-scene.background = new THREE.Color(0x0d0d17)
 scene.fog = new THREE.Fog(0x12121e, 55, 110)
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200)
@@ -40,50 +38,9 @@ sun.shadow.camera.top = 50
 sun.shadow.camera.bottom = -50
 scene.add(sun)
 
-// 들판
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(FIELD.maxX - FIELD.minX + 30, FIELD.maxZ - FIELD.minZ + 20),
-  new THREE.MeshStandardMaterial({ color: 0x2a3328, roughness: 1 }),
-)
-ground.rotation.x = -Math.PI / 2
-ground.position.set((FIELD.minX + FIELD.maxX) / 2, 0, 0)
-ground.receiveShadow = true
-scene.add(ground)
-
-// 성벽: WALL_X 평면, z 스팬 — 흉벽 있는 돌벽
-const wallGroup = new THREE.Group()
-const stone = new THREE.MeshStandardMaterial({ color: 0x5a5a72, roughness: 0.9 })
-const stoneDark = new THREE.MeshStandardMaterial({ color: 0x46465a, roughness: 0.95 })
-const span = FIELD.maxZ - FIELD.minZ
-const wallBody = new THREE.Mesh(new THREE.BoxGeometry(2.4, 5, span + 4), stone)
-wallBody.position.set(WALL_X - 1.2, 2.5, 0)
-wallBody.castShadow = true
-wallBody.receiveShadow = true
-wallGroup.add(wallBody)
-for (let z = FIELD.minZ - 1; z <= FIELD.maxZ + 1; z += 2.2) {
-  const merlon = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.1, 1.2), stoneDark)
-  merlon.position.set(WALL_X - 1.2, 5.55, z)
-  merlon.castShadow = true
-  wallGroup.add(merlon)
-}
-// 망루 2개
-for (const tz of [FIELD.minZ - 1, FIELD.maxZ + 1]) {
-  const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.6, 9, 8), stone)
-  tower.position.set(WALL_X - 1.2, 4.5, tz)
-  tower.castShadow = true
-  wallGroup.add(tower)
-}
-scene.add(wallGroup)
-
-// 성 내부 바닥 (돌)
-const courtyard = new THREE.Mesh(
-  new THREE.PlaneGeometry(Math.abs(FIELD.minX - WALL_X) + 6, span + 6),
-  new THREE.MeshStandardMaterial({ color: 0x3a3a48, roughness: 1 }),
-)
-courtyard.rotation.x = -Math.PI / 2
-courtyard.position.set((FIELD.minX + WALL_X) / 2 - 1, 0.02, 0)
-courtyard.receiveShadow = true
-scene.add(courtyard)
+// 성채·배경 (M2a-1: 절차 생성 비주얼)
+const decor = buildCastle(scene)
+buildEnvironment(scene)
 
 // 성주 (복셀풍 임시 모델: 몸+머리+망토)
 function makeLord(): THREE.Group {
@@ -263,6 +220,15 @@ function frame(now: number): void {
     }
     stepSiege(state, spawns, input)
   }
+  // 장식 애니메이션 (연출 전용 — sim 무관)
+  const t = now / 1000
+  decor.torchLights.forEach((l, i) => {
+    l.intensity = 12 + Math.sin(t * 9 + i * 1.7) * 2.5 + Math.sin(t * 23 + i) * 1.5
+  })
+  decor.flags.forEach((f, i) => {
+    f.rotation.y = Math.sin(t * 2.2 + i) * 0.35
+  })
+
   syncScene()
   renderer.render(scene, camera)
   requestAnimationFrame(frame)
