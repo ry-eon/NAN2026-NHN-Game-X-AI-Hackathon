@@ -3,6 +3,7 @@
 
 import Phaser from 'phaser'
 import { CAMPAIGN_LENGTH } from '@core'
+import { Sfx } from './audio'
 import { loadCampaign } from './meta/save'
 import { ENEMY_SCALE, registerPixelTextures } from './pixel'
 
@@ -133,7 +134,11 @@ export class TitleScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true })
     btn.on('pointerover', () => btn.setBackgroundColor(primary ? '#3f3f5e' : '#2b2b44'))
     btn.on('pointerout', () => btn.setBackgroundColor(primary ? '#33334e' : '#232338'))
-    btn.on('pointerdown', onClick)
+    btn.on('pointerdown', () => {
+      Sfx.unlock()
+      Sfx.play('click')
+      onClick()
+    })
     if (primary) {
       this.tweens.add({ targets: btn, alpha: 0.82, duration: 900, yoyo: true, repeat: -1 })
     }

@@ -31,6 +31,7 @@ import type {
   TimedAction,
   UnitDef,
 } from '@core'
+import { Sfx } from './audio'
 import { clearCampaign, loadCampaign, saveCampaign } from './meta/save'
 import { ENEMY_SCALE, registerPixelTextures } from './pixel'
 
@@ -188,6 +189,7 @@ export class BattleScene extends Phaser.Scene {
   // ---------------------------------------------------------------- 입력
 
   private bindInput(): void {
+    this.input.once('pointerdown', () => Sfx.unlock())
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       this.hoverCell = this.cellAt(p.x, p.y)
     })
@@ -221,6 +223,7 @@ export class BattleScene extends Phaser.Scene {
       })
       kb.on('keydown-R', () => this.queue({ type: 'repairWall' }))
       kb.on('keydown-Q', () => this.toggleSkillTargeting())
+      kb.on('keydown-M', () => this.toast(Sfx.toggleMute() ? '음소거' : '소리 켬'))
       kb.on('keydown-ESC', () => {
         this.selectedDefId = null
         this.targetingSkill = false
@@ -300,6 +303,7 @@ export class BattleScene extends Phaser.Scene {
           this.toast(REJECT_LABELS[e.reason])
           break
         case 'deployed': {
+          Sfx.play('deploy')
           this.deployRing(e.x, e.y, colorFor(e.unitDefId))
           this.deployedCharIds.add(e.unitDefId)
           const ch = CHAR_BY_ID.get(e.unitDefId)
@@ -307,42 +311,57 @@ export class BattleScene extends Phaser.Scene {
           break
         }
         case 'unitAttacked':
+          Sfx.play((this.sim.ctx.unitDefs[e.unitDefId]?.range ?? 0) > 0 ? 'shoot' : 'slash')
           this.attackEffect(e.unitId, e.unitDefId, e.targetIds, now)
           break
         case 'enemyAttacked':
+          Sfx.play('thud')
           this.unitFlash.set(e.targetUnitId, now + 120)
           break
         case 'unitHealed':
+          Sfx.play('heal')
           this.healBeam(e.healerId, e.targetId)
           break
         case 'enemyKilled': {
+          Sfx.play('enemyDie')
           const pos = this.enemyPosMap.get(e.enemyId)
           if (pos)
             this.deathBurst(pos.x, pos.y, ENEMY_STYLE[e.enemyDefId]?.color ?? 0xffffff)
           break
         }
         case 'unitDied': {
-          this.toast('유닛 격파당함!')
+          Sfx.play('unitDie')
+          this.toast('가신이 쓰러졌다!')
           const pos = this.unitPosMap.get(e.unitId)
           if (pos) this.deathBurst(pos.x, pos.y, 0x9999aa)
           this.cameras.main.shake(120, 0.003)
           break
         }
         case 'wallHit':
+          Sfx.play('wallHit')
           this.wallFlashUntil = now + 160
           this.cameras.main.shake(90, 0.002)
           break
         case 'wallRepaired':
+          Sfx.play('repair')
           this.toast(`성벽 수리 +${e.amount}`)
           break
         case 'wallActionRejected':
           this.toast(`${e.action === 'repair' ? '수리' : '낙석'}: ${WALL_REJECT_LABELS[e.reason]}`)
           break
         case 'wallSkillFired':
+          Sfx.play('rockfall')
           this.blastAt(e.x, e.y)
           this.cameras.main.shake(150, 0.004)
           break
+        case 'skillUsed':
+          Sfx.play('skill')
+          break
+        case 'won':
+          Sfx.play('victory')
+          break
         case 'lost':
+          Sfx.play('defeat')
           this.cameras.main.shake(400, 0.008)
           break
         default:
@@ -970,6 +989,7 @@ export class BattleScene extends Phaser.Scene {
         .setDepth(51)
         .setInteractive({ useHandCursor: true })
       bg.on('pointerdown', () => {
+        Sfx.play('recruit')
         this.campaign = recruit(this.campaign!, c.id)
         saveCampaign(this.campaign)
         this.scene.restart()
@@ -1039,7 +1059,10 @@ export class BattleScene extends Phaser.Scene {
       this.closeUnitMenu()
     })
     this.menuWithdrawBtn = makeMenuBtn('철수 (50%)', () => {
-      if (this.unitMenuFor !== null) this.queue({ type: 'withdraw', unitId: this.unitMenuFor })
+      if (this.unitMenuFor !== null) {
+        Sfx.play('withdraw')
+        this.queue({ type: 'withdraw', unitId: this.unitMenuFor })
+      }
       this.closeUnitMenu()
     })
   }
