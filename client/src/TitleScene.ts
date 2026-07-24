@@ -2,9 +2,7 @@
 // 목표 한 줄 + 시작 버튼 두 개(캠페인/자유 연습) + 픽셀 디오라마.
 
 import Phaser from 'phaser'
-import { CAMPAIGN_LENGTH } from '@core'
 import { Sfx } from './audio'
-import { loadCampaign } from './meta/save'
 import { ENEMY_SCALE, registerPixelTextures } from './pixel'
 
 /** 게임 제목 [가제 — 확정 시 여기만 교체] */
@@ -77,17 +75,9 @@ export class TitleScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
 
-    // 시작 버튼
-    const save = loadCampaign()
-    const canContinue = save !== null && save.status === 'active'
-    this.makeButton(
-      W / 2,
-      262,
-      canContinue
-        ? `침공 계속 (제${save!.stageIndex + 1}침공/${CAMPAIGN_LENGTH} · 가신 ${save!.roster.length}명)`
-        : '침공에 맞선다 — 캠페인 시작',
-      '#ffd870',
-      () => this.scene.start('battle', { mode: 'campaign' }),
+    // 시작 버튼 — v4: 단일 라운드 농성전이 본편
+    this.makeButton(W / 2, 262, '농성전 개시 — 성을 지켜라', '#ffd870', () =>
+      this.scene.start('battle', { mode: 'siege' }),
       true,
     )
     this.makeButton(W / 2, 312, '자유 연습 (스테이지 선택)', '#8888aa', () =>
@@ -99,7 +89,7 @@ export class TitleScene extends Phaser.Scene {
       .text(
         W / 2,
         360,
-        `${CAMPAIGN_LENGTH}번의 침공을 버티면 승리 · 가신을 배치해 괴수를 막고, 성벽이 무너지면 끝\n격퇴할 때마다 새 가신을 영입하고 가신은 전투로 성장한다 · 성벽 피해는 다음 침공으로 이어진다`,
+        `다섯 파도의 침공을 버티면 승리 · 영웅과 병사를 배치하고 공성 병기를 세워라\n성벽이 무너지면 끝 — 바리케이드로 길을 막으면 괴수는 돌아서 온다`,
         { fontFamily: 'monospace', fontSize: '12px', color: '#70708a', align: 'center', lineSpacing: 6 },
       )
       .setOrigin(0.5)

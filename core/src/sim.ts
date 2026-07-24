@@ -396,10 +396,13 @@ function spawnEnemies(ctx: SimContext, state: GameState): void {
   }
 }
 
-// v3 동적 길찾기: 다익스트라 (도로 선호 가중치). 결정론 — 고정 이웃 순서·인덱스 타이브레이크.
+// v3 동적 길찾기 → v4 공유 흐름장(flow field).
+// 목표(성벽 인접) 셀들에서 다중 소스 다익스트라로 거리장을 1회 계산하고 전 괴수가
+// 공유한다 — 대형 맵·대규모 침공에서도 장애물 변화당 O(n²) 두 번이 전부.
+// 결정론: 고정 이웃 순서 + 인덱스 타이브레이크.
 const COST_ROAD = 10
 const COST_GROUND = 14
-const COST_UNIT = 5000 // 봉쇄 돌파 모드에서 유닛 칸 통과 벌점
+const COST_UNIT = 5000 // 봉쇄 돌파장에서 유닛 칸 통과 벌점
 /** 근접 유닛이 저지 없이 직접 때릴 수 있는 거리 (자기 칸+인접) */
 const MELEE_REACH = 1.05
 
@@ -408,35 +411,33 @@ function isWalkable(ctx: SimContext, x: number, y: number): boolean {
   return t === 'ground' || t === 'road'
 }
 
-/**
- * from에서 가장 가까운 목표 셀까지의 경로.
- * 1차: 지상 유닛 칸 통행 불가. 실패 시(완전 봉쇄) 2차: 유닛 칸 고비용 통과 —
- * 경로상 유닛과 교전해 뚫는다. null = 지형적으로 도달 불가.
- */
-function computeRoute(
-  ctx: SimContext,
-  state: GameState,
-  from: CellPos,
-  penalizeUnits: boolean,
-): CellPos[] | null {
+interface FlowFields {
+  version: number
+  /** 유닛 칸 통행 불가 거리장 */
+  open: Float64Array
+  /** 유닛 칸 고비용 통과 거리장 (봉쇄 돌파용) */
+  sealed: Float64Array
+}
+const fieldCache = new WeakMap<SimContext, FlowFields>()
+
+/** 목표 셀 다중 소스 다익스트라 — dist[i] = i에서 가장 가까운 목표까지의 비용 */
+function buildField(ctx: SimContext, state: GameState, penalizeUnits: boolean): Float64Array {
   const W = ctx.width
   const H = ctx.height
+  const n = W * H
   const occupied = new Set<number>()
   for (const u of state.units) {
     if (ctx.unitDefs[u.defId]!.placement === 'wallTop') continue
     occupied.add(u.y * W + u.x)
   }
-  const dist = new Float64Array(W * H).fill(Infinity)
-  const prev = new Int32Array(W * H).fill(-1)
-  const done = new Uint8Array(W * H)
-  const start = from.y * W + from.x
-  dist[start] = 0
+  const dist = new Float64Array(n).fill(Infinity)
+  const done = new Uint8Array(n)
+  for (const g of ctx.goalCells) dist[g.y * W + g.x] = 0
 
   for (;;) {
-    // 최소 거리 미방문 노드 (인덱스 타이브레이크 → 결정론)
     let cur = -1
     let best = Infinity
-    for (let i = 0; i < W * H; i++) {
+    for (let i = 0; i < n; i++) {
       if (!done[i] && dist[i]! < best) {
         best = dist[i]!
         cur = i
@@ -446,7 +447,6 @@ function computeRoute(
     done[cur] = 1
     const cx = cur % W
     const cy = Math.floor(cur / W)
-    // 이웃: 상→우→하→좌 고정 순서
     const neighbors = [
       [cx, cy - 1],
       [cx + 1, cy],
@@ -456,36 +456,69 @@ function computeRoute(
     for (const [nx, ny] of neighbors) {
       if (!isWalkable(ctx, nx, ny)) continue
       const ni = ny * W + nx
-      let cost = ctx.tiles[ny]![nx] === 'road' ? COST_ROAD : COST_GROUND
-      if (occupied.has(ni)) {
+      // 괴수가 ni → cur 로 이동한다고 보고, 진입 셀(cur)의 비용을 부과
+      let cost = ctx.tiles[cy]![cx] === 'road' ? COST_ROAD : COST_GROUND
+      if (occupied.has(cur)) {
         if (!penalizeUnits) continue
         cost += COST_UNIT
       }
+      if (occupied.has(ni) && !penalizeUnits) continue
       if (dist[cur]! + cost < dist[ni]!) {
         dist[ni] = dist[cur]! + cost
-        prev[ni] = cur
       }
     }
   }
+  return dist
+}
 
-  // 가장 가까운 목표 셀 (거리 → 인덱스 순 타이브레이크)
-  let goal = -1
-  let goalDist = Infinity
-  for (const g of ctx.goalCells) {
-    const gi = g.y * W + g.x
-    if (dist[gi]! < goalDist) {
-      goalDist = dist[gi]!
-      goal = gi
+function getFields(ctx: SimContext, state: GameState): FlowFields {
+  const cached = fieldCache.get(ctx)
+  if (cached && cached.version === state.obstacleVersion) return cached
+  const fields: FlowFields = {
+    version: state.obstacleVersion,
+    open: buildField(ctx, state, false),
+    sealed: buildField(ctx, state, true),
+  }
+  fieldCache.set(ctx, fields)
+  return fields
+}
+
+/** 거리장 하강으로 경로 생성 (셀 시퀀스). 도달 불가면 null */
+function descend(
+  ctx: SimContext,
+  field: Float64Array,
+  from: CellPos,
+): CellPos[] | null {
+  const W = ctx.width
+  const start = from.y * W + from.x
+  if (field[start] === Infinity) return null
+  const route: CellPos[] = [from]
+  let cur = start
+  const maxLen = ctx.width * ctx.height + 2
+  while (field[cur]! > 0 && route.length < maxLen) {
+    const cx = cur % W
+    const cy = Math.floor(cur / W)
+    const neighbors = [
+      [cx, cy - 1],
+      [cx + 1, cy],
+      [cx, cy + 1],
+      [cx - 1, cy],
+    ] as const
+    let next = -1
+    let best = field[cur]!
+    for (const [nx, ny] of neighbors) {
+      if (!isWalkable(ctx, nx, ny)) continue
+      const ni = ny * W + nx
+      if (field[ni]! < best) {
+        best = field[ni]!
+        next = ni
+      }
     }
+    if (next < 0) break // 국소 정체 (양쪽 장 모두에서 드묾)
+    route.push({ x: next % W, y: Math.floor(next / W) })
+    cur = next
   }
-  if (goal < 0 || goalDist === Infinity) return null
-
-  const route: CellPos[] = []
-  for (let i = goal; i >= 0; i = prev[i]!) {
-    route.unshift({ x: i % W, y: Math.floor(i / W) })
-    if (i === start) break
-  }
-  return route[0]?.x === from.x && route[0]?.y === from.y ? route : null
+  return route.length > 1 || field[start] === 0 ? route : null
 }
 
 /** 경로 확보 (장애물 변화 시 현재 셀에서 재계산) */
@@ -493,8 +526,8 @@ function ensureRoute(ctx: SimContext, state: GameState, enemy: ActiveEnemy): voi
   if (enemy.routeVersion === state.obstacleVersion && enemy.route.length > 0) return
   const pos = enemyWorldPos(ctx, enemy)
   const cur = { x: Math.round(pos.x), y: Math.round(pos.y) }
-  const route =
-    computeRoute(ctx, state, cur, false) ?? computeRoute(ctx, state, cur, true)
+  const fields = getFields(ctx, state)
+  const route = descend(ctx, fields.open, cur) ?? descend(ctx, fields.sealed, cur)
   enemy.route = route ?? [cur]
   enemy.pathPos = 0
   enemy.routeVersion = state.obstacleVersion

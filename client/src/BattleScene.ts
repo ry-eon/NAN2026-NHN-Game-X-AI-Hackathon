@@ -9,8 +9,12 @@ import {
   CHARACTERS,
   CHARACTER_POOL,
   ENEMY_DEFS,
+  SIEGE_DEFS,
+  SOLDIER_DEFS,
   STAGES,
+  STAGE_SIEGE,
   STRUCTURE_DEFS,
+  applyLevel,
   Simulation,
   TICKS_PER_SECOND,
   UNIT_DEFS,
@@ -40,7 +44,7 @@ const GRID_X = 20
 const GRID_Y = 64
 /** 그리드가 차지할 수 있는 최대 픽셀 영역 (우측 HUD·하단 카드와 겹치지 않게) */
 const GRID_MAX_W = 620
-const GRID_MAX_H = 415
+const GRID_MAX_H = 356
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
 // 색상은 역할(원형) 기준 — 캐릭터가 늘어나도 역할이 같으면 같은 계열
@@ -92,6 +96,8 @@ export class BattleScene extends Phaser.Scene {
   private hoverCell: { x: number; y: number } | null = null
   private gfx!: Phaser.GameObjects.Graphics
   private hud!: Record<'time' | 'wall' | 'wave' | 'cost' | 'status', Phaser.GameObjects.Text>
+  /** 스탯창 (유닛 클릭 시 우측 패널) */
+  private statusPanel!: Phaser.GameObjects.Text
   private cards: UnitCard[] = []
   private overlayShown = false
   /** 낙석 조준 모드 (버튼/Q 후 타일 클릭 대기) */
@@ -116,8 +122,8 @@ export class BattleScene extends Phaser.Scene {
   /** 스테이지 크기에 맞춘 타일 픽셀 (create에서 계산) */
   private tile = 60
   // ---- 캠페인 메타 (scene.restart() 후에도 유지) ----
-  /** campaign: 연전 진행 / free: 자유 연습 (스테이지 선택) */
-  private mode: 'campaign' | 'free' = 'campaign'
+  /** siege: 농성전(기본, v4 단일 라운드) / campaign: 연전(보류) / free: 자유 연습 */
+  private mode: 'siege' | 'campaign' | 'free' = 'siege'
   private campaign: CampaignState | null = null
   /** 이번 전투의 배틀 def 목록 (캠페인: 레벨 적용 로스터 / 자유: 수제 6인) */
   private battleDefs: CharacterDef[] = CHARACTERS
@@ -137,14 +143,17 @@ export class BattleScene extends Phaser.Scene {
     super('battle')
   }
 
-  init(data: { mode?: 'campaign' | 'free' }): void {
+  init(data: { mode?: 'siege' | 'campaign' | 'free' }): void {
     if (data.mode) this.mode = data.mode
   }
 
   create(): void {
     let stage
     let startWallHp: number | undefined
-    if (this.mode === 'campaign') {
+    if (this.mode === 'siege') {
+      stage = STAGE_SIEGE
+      this.battleDefs = CHARACTERS.map((c) => applyLevel(c, 5)) // 영웅 전원 풀기술
+    } else if (this.mode === 'campaign') {
       this.campaign ??= loadCampaign() ?? newCampaign(Date.now() % 100_000)
       if (this.campaign.status !== 'active') this.campaign = newCampaign(Date.now() % 100_000)
       stage = currentStage(this.campaign)
@@ -156,7 +165,7 @@ export class BattleScene extends Phaser.Scene {
     }
     this.sim = new Simulation(
       stage,
-      [...this.battleDefs, ...STRUCTURE_DEFS],
+      [...this.battleDefs, ...SOLDIER_DEFS, ...STRUCTURE_DEFS, ...SIEGE_DEFS],
       ENEMY_DEFS,
       undefined,
       startWallHp,
@@ -242,7 +251,7 @@ export class BattleScene extends Phaser.Scene {
       const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'] as const
       keys.forEach((key, i) => {
         kb.on(`keydown-${key}`, () => {
-          const all = [...this.battleDefs, ...STRUCTURE_DEFS]
+          const all = [...this.battleDefs, ...SOLDIER_DEFS, ...STRUCTURE_DEFS, ...SIEGE_DEFS]
           this.selectCard(all[i]?.id ?? null)
         })
       })
@@ -265,7 +274,9 @@ export class BattleScene extends Phaser.Scene {
 
   private selectCard(defId: string | null): void {
     // 캐릭터 유일성: 이미 전장에 있는 가신은 다시 배치할 수 없다 (시설은 복수 건설 가능)
-    const isStructure = STRUCTURE_DEFS.some((d) => d.id === defId)
+    const isStructure = [...SOLDIER_DEFS, ...STRUCTURE_DEFS, ...SIEGE_DEFS].some(
+      (d) => d.id === defId,
+    )
     if (defId && !isStructure && this.sim.state.units.some((u) => u.defId === defId)) {
       this.toast('이미 전장에 있는 가신입니다')
       return
@@ -627,7 +638,7 @@ export class BattleScene extends Phaser.Scene {
       .setStrokeStyle(1, 0x33334e)
       .setDepth(1)
     this.add
-      .rectangle(480, 516, 952, 46, 0x1c1c2e)
+      .rectangle(480, 493, 952, 94, 0x1c1c2e)
       .setStrokeStyle(1, 0x33334e)
       .setDepth(1)
     this.add
@@ -675,9 +686,11 @@ export class BattleScene extends Phaser.Scene {
 
     const stage = this.sim.ctx.stage
     const title =
-      this.mode === 'campaign' && this.campaign
-        ? `제${this.campaign.stageIndex + 1}침공/5 — ${stage.name}`
-        : `${stage.name} (${stage.id})`
+      this.mode === 'siege'
+        ? stage.name
+        : this.mode === 'campaign' && this.campaign
+          ? `제${this.campaign.stageIndex + 1}침공/5 — ${stage.name}`
+          : `${stage.name} (${stage.id})`
     this.add
       .text(GRID_X, 10, title, {
         fontFamily: 'monospace',
@@ -714,8 +727,8 @@ export class BattleScene extends Phaser.Scene {
       status: text(660, 126),
     }
 
-    // 스테이지 선택 버튼 (자유 연습 전용) — 캠페인은 정해진 침공 순서를 따른다
-    if (this.mode !== 'campaign') {
+    // 스테이지 선택 버튼 (자유 연습 전용)
+    if (this.mode === 'free') {
       STAGES.forEach((s, i) => {
         const current = i === this.stageIndex
         const col = i % 8
@@ -772,6 +785,16 @@ export class BattleScene extends Phaser.Scene {
     this.repairBtn = makeBtn(660, () => this.queue({ type: 'repairWall' }))
     this.skillBtn = makeBtn(790, () => this.toggleSkillTargeting())
 
+    this.statusPanel = this.add
+      .text(660, 196, '', {
+        fontFamily: 'monospace',
+        fontSize: '12px',
+        color: '#c8c8dc',
+        lineSpacing: 5,
+        wordWrap: { width: 288 },
+      })
+      .setDepth(20)
+
     this.add
       .text(
         660,
@@ -783,11 +806,14 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createCards(): void {
-    // 로스터(가신) + 시설이 한 줄에 — 시설은 황토 테두리로 구분
-    const all = [...this.battleDefs, ...STRUCTURE_DEFS]
+    // 2단 카드: 위 = 영웅(가신), 아래 = 병사·시설·공성 병기 (복수 배치)
+    const troops = [...SOLDIER_DEFS, ...STRUCTURE_DEFS, ...SIEGE_DEFS]
+    const all = [...this.battleDefs, ...troops]
     all.forEach((def, i) => {
-      const x = GRID_X + i * 102
-      const y = 494
+      const hero = i < this.battleDefs.length
+      const col = hero ? i : i - this.battleDefs.length
+      const x = GRID_X + col * 102
+      const y = hero ? 448 : 494
       const bg = this.add
         .rectangle(x, y, 96, 42, def.structure ? 0x2c2618 : 0x26263c)
         .setOrigin(0, 0)
@@ -1030,6 +1056,17 @@ export class BattleScene extends Phaser.Scene {
     this.overlayShown = true
     const won = this.sim.state.status === 'won'
 
+    if (this.mode === 'siege') {
+      if (won) {
+        this.fullscreenNotice('성을 지켜냈다', '다섯 파도를 모두 격퇴했다 — 클릭하면 다시', () =>
+          this.scene.restart(),
+        )
+      } else {
+        this.fullscreenNotice('성이 함락됐다', '클릭하면 다시 농성전', () => this.scene.restart())
+      }
+      return
+    }
+
     if (this.mode === 'campaign' && this.campaign) {
       if (won) {
         const stage = this.sim.ctx.stage
@@ -1097,9 +1134,11 @@ export class BattleScene extends Phaser.Scene {
       .text(
         480,
         230,
-        this.mode === 'campaign' && this.campaign
-          ? `제${this.campaign.stageIndex + 1}침공 — 괴수들로부터 성벽을 지켜라`
-          : '괴수들로부터 성벽을 지켜라',
+        this.mode === 'siege'
+          ? '다섯 파도의 침공 — 성벽을 지켜라'
+          : this.mode === 'campaign' && this.campaign
+            ? `제${this.campaign.stageIndex + 1}침공 — 괴수들로부터 성벽을 지켜라`
+            : '괴수들로부터 성벽을 지켜라',
         {
           fontFamily: 'monospace',
           fontSize: '24px',
@@ -1113,8 +1152,8 @@ export class BattleScene extends Phaser.Scene {
       .setDepth(35)
     this.tweens.add({ targets: banner, alpha: 0, delay: 2600, duration: 700, onComplete: () => banner.destroy() })
 
-    // 첫 침공에서만: 배치가 없으면 카드로 유도하는 힌트
-    if (this.mode === 'campaign' && this.campaign?.stageIndex === 0) {
+    // 첫 배치 유도 힌트 (농성전·캠페인 1판)
+    if (this.mode === 'siege' || (this.mode === 'campaign' && this.campaign?.stageIndex === 0)) {
       const hint = this.add
         .text(GRID_X + 150, 470, '▼ 가신을 선택해 흙길(진입로)에 배치하세요', {
           fontFamily: 'monospace',
@@ -1280,6 +1319,29 @@ export class BattleScene extends Phaser.Scene {
     this.menuSkillBtn.setVisible(hasActive).setPosition(mx, py - 40)
     this.menuMoveBtn.setVisible(true).setPosition(mx, py - 12)
     this.menuWithdrawBtn.setVisible(true).setPosition(mx, py + 16)
+    this.showStatusPanel(unit.id)
+  }
+
+  /** 스탯창: 선택 유닛의 정보 (영웅은 서사·기술 포함) */
+  private showStatusPanel(unitId: number): void {
+    const unit = this.sim.state.units.find((u) => u.id === unitId)
+    if (!unit) return
+    const def = this.sim.ctx.unitDefs[unit.defId]!
+    const ch = CHAR_BY_ID.get(unit.defId)
+    const lines: string[] = []
+    lines.push(ch ? `[${ch.epithet} ${ch.name}]` : `[${def.name}]`)
+    if (ch) lines.push(ch.lore)
+    lines.push(
+      `체력 ${unit.hp}/${def.hp}${unit.shield > 0 ? ` (+막 ${unit.shield})` : ''}  공격 ${def.atk}  방어 ${def.def}`,
+    )
+    lines.push(
+      `사거리 ${def.range > 0 ? def.range : '근접'}  저지 ${def.blockCount}${def.aoeRadius ? `  광역 ${def.aoeRadius}` : ''}`,
+    )
+    for (const sk of def.skills ?? []) {
+      const tag = sk.slot === 'passive' ? '지속' : sk.slot === 'auto' ? '자동' : '발동'
+      lines.push(`· [${tag}] ${sk.name} — ${sk.desc}`)
+    }
+    this.statusPanel.setText(lines.join('\n'))
   }
 
   private closeUnitMenu(): void {
@@ -1287,5 +1349,6 @@ export class BattleScene extends Phaser.Scene {
     this.menuSkillBtn.setVisible(false)
     this.menuMoveBtn.setVisible(false)
     this.menuWithdrawBtn.setVisible(false)
+    this.statusPanel.setText('')
   }
 }
