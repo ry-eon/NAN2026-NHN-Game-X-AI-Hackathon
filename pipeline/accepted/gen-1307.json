@@ -1,0 +1,164 @@
+{
+  "id": "gen-1307",
+  "name": "자동 생성 #1307",
+  "tilesRows": [
+    "XXXXXXXXXXXX",
+    "XXXXXXGRRRRR",
+    "WRRRRRRRXXXX",
+    "WXRXXXXRXXXX",
+    "XXRRRRRRXXXX",
+    "XXXXXXXXXXXX",
+    "XXXXXXXXXXXX",
+    "XXXXXXXXXXXX"
+  ],
+  "paths": [
+    [
+      {
+        "x": 11,
+        "y": 1
+      },
+      {
+        "x": 10,
+        "y": 1
+      },
+      {
+        "x": 9,
+        "y": 1
+      },
+      {
+        "x": 8,
+        "y": 1
+      },
+      {
+        "x": 7,
+        "y": 1
+      },
+      {
+        "x": 7,
+        "y": 2
+      },
+      {
+        "x": 6,
+        "y": 2
+      },
+      {
+        "x": 5,
+        "y": 2
+      },
+      {
+        "x": 4,
+        "y": 2
+      },
+      {
+        "x": 3,
+        "y": 2
+      },
+      {
+        "x": 2,
+        "y": 2
+      },
+      {
+        "x": 1,
+        "y": 2
+      }
+    ]
+  ],
+  "wallHp": 350,
+  "initialCost": 11,
+  "costRegenPerSec": 0.9,
+  "costMax": 30,
+  "spawns": [
+    {
+      "tick": 150,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 1
+    },
+    {
+      "tick": 270,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 1
+    },
+    {
+      "tick": 390,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 1
+    },
+    {
+      "tick": 450,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 1
+    },
+    {
+      "tick": 570,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 1
+    },
+    {
+      "tick": 780,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 780,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 900,
+      "enemyDefId": "runner",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 930,
+      "enemyDefId": "runner",
+      "pathIndex": 0,
+      "wave": 2
+    },
+    {
+      "tick": 1200,
+      "enemyDefId": "tank",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1290,
+      "enemyDefId": "siege",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1320,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1320,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1440,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 3
+    },
+    {
+      "tick": 1500,
+      "enemyDefId": "grunt",
+      "pathIndex": 0,
+      "wave": 3
+    }
+  ],
+  "seed": 1307,
+  "tier": "HARD"
+}

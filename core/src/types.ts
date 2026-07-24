@@ -44,8 +44,8 @@ export interface StageDef {
   /** 행 단위 타일 문자열 (y=0이 첫 행). 모든 행 길이 동일해야 함. */
   tilesRows: string[]
   /**
-   * 적 이동 경로. 스폰 지점 → 성벽 방향, 인접 셀의 연속.
-   * 모든 셀은 road 타일이어야 하며, 마지막 셀 도달 시 적이 성벽을 타격한다.
+   * v3: 괴수는 스스로 길을 찾는다 — paths[i][0]만 스폰 지점으로 사용한다.
+   * 나머지 셀은 "권장 진격로" 참고 데이터 (봇 휴리스틱·검증 호환용, road 필수).
    */
   paths: CellPos[][]
   wallHp: number
@@ -56,6 +56,8 @@ export interface StageDef {
   spawns: SpawnDef[]
   /** 기본 시뮬레이션 시드 (봇 검증·리플레이 재현용) */
   seed: number
+  /** 파이프라인 판정 티어 (출고 시 기록) — 캠페인 램프·검증 셋 구성에 사용 */
+  tier?: 'EASY' | 'NORMAL' | 'HARD'
 }
 
 // ---------------------------------------------------------------- 유닛/적 정의
@@ -189,8 +191,16 @@ export interface ActiveUnit {
 export interface ActiveEnemy {
   id: number
   defId: string
+  /** 스폰 지점 인덱스 (stage.paths[i][0] = 스폰 셀) */
   pathIndex: number
-  /** 경로 진행도. path[floor(pathPos)]~path[ceil(pathPos)] 사이를 보간 */
+  /**
+   * v3 동적 경로: 이 괴수가 스스로 계산한 현재 경로 (셀 시퀀스).
+   * 장애물 변화(obstacleVersion)마다 재계산된다. 결정론: 같은 상태 = 같은 경로.
+   */
+  route: CellPos[]
+  /** route 계산 시점의 obstacleVersion */
+  routeVersion: number
+  /** route 위 진행도. route[floor]~route[ceil] 보간 */
   pathPos: number
   hp: number
   cooldown: number
@@ -220,6 +230,8 @@ export interface GameState {
   repairReadyAt: number
   /** 성벽 스킬 재사용 가능 틱 */
   wallSkillReadyAt: number
+  /** 지상 유닛 점유 변화 카운터 — 괴수 경로 재계산 트리거 (v3) */
+  obstacleVersion: number
   nextEntityId: number
   /** 이번 틱에 발생한 이벤트 (틱 시작 시 초기화). 렌더링·리포트용 */
   events: SimEvent[]

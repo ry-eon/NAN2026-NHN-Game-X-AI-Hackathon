@@ -16,11 +16,14 @@ export const CHAR_CRITERIA_V0 = {
    * 기준 스테이지 셋: EASY/분리 검증/HARD.
    * HARD가 있어야 기준선에 천장이 생겨 OP(상승 폭) 판정이 작동한다 —
    * 기준선이 전부 만점이면 "게임을 하찮게 만드는" 후보를 못 거른다.
+   * HARD는 출고 티어 기록에서 동적으로 선택 (재출고에 강건).
    */
   stages: [
     STAGE_001,
     STAGE_002,
-    ...GENERATED_STAGES.filter((s) => s.id === 'gen-0902'),
+    ...(GENERATED_STAGES.find((s) => s.tier === 'HARD')
+      ? [GENERATED_STAGES.find((s) => s.tier === 'HARD')!]
+      : GENERATED_STAGES.slice(-1)),
   ] as StageDef[],
 }
 

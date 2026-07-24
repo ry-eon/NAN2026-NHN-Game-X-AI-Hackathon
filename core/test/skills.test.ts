@@ -23,7 +23,7 @@ function lineStage(overrides: Partial<StageDef> = {}): StageDef {
   return {
     id: 'test-line',
     name: '외길',
-    tilesRows: ['XXXXXXXX', 'WRRRRRRR', 'XGGGGGGX', 'XXXXXXXX'],
+    tilesRows: ['XXXXXXXX', 'WRRRRRRR', 'XXXXXXXX', 'XXXXXXXX'],
     paths: [[7, 6, 5, 4, 3, 2, 1].map((x) => ({ x, y: 1 }))],
     wallHp: 500,
     initialCost: 99,
@@ -129,7 +129,12 @@ describe('기술 전투 실행', () => {
     const sim = new Simulation(stage, [withSkills('blocker', ['x-repel'], 'b1')], ENEMY_DEFS)
     sim.step([{ type: 'deploy', unitDefId: 'b1', x: 2, y: 1 }])
     // 야귀가 (2,1)에 저지될 때까지
-    while (sim.state.enemies[0]?.blockedBy == null && sim.state.tick < 3000) sim.step()
+    while (
+      sim.state.status === 'playing' &&
+      sim.state.enemies[0]?.blockedBy == null &&
+      sim.state.tick < 3000
+    )
+      sim.step()
     const before = sim.state.enemies[0]!.pathPos
 
     sim.step([{ type: 'useSkill', unitId: sim.state.units[0]!.id }])

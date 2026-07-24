@@ -1,6 +1,8 @@
-// [1] 생성 — 절차적 스테이지 생성기 (템플릿 + 시드 변형).
-// W2 경보 폴백 원칙(docs/04-milestones.md)에 따라 절차적 생성을 기본으로 두고,
-// LLM 생성은 같은 StageDef 스키마로 후일 교체/병행 가능하게 한다.
+// [1] 생성 — 절차적 스테이지 생성기 v3 (회랑 조각 방식).
+// v3 동적 길찾기 전제: 맵은 "전부 벽(X)"에서 시작해 도로망을 판다.
+//   - 레인 1~2개 (동쪽 스폰 → 연결로 → 서쪽 회랑 → 성벽)
+//   - 세로 연결로: 레인 간 우회를 만든다 (한쪽을 봉쇄하면 돌아간다)
+//   - 알코브(막다른 지상칸): 근접 측면 니치 / 다리(회랑 사이 지상칸): 소프트 우회
 // 같은 시드 = 같은 스테이지 (mulberry32, core와 동일 RNG).
 
 import { TICKS_PER_SECOND, rngFloat, rngInt } from '@core'
@@ -13,64 +15,103 @@ export function generateStage(seed: number): StageDef {
   const rng: RngState = { rngState: seed | 0 }
 
   const width = 11 + rngInt(rng, 3) // 11~13
-  const height = 8 + rngInt(rng, 2) // 8~9
+  const height = 7 + rngInt(rng, 3) // 7~9
   const twoLanes = rngFloat(rng) < 0.65
+  const connX = 5 + rngInt(rng, Math.max(1, width - 8)) // 연결로 x (5..width-4)
 
-  // 레인 행: 위/아래 절반에서 하나씩 (단일 레인이면 중앙 부근)
-  const laneRows = twoLanes
-    ? [1 + rngInt(rng, 2), height - 2 - rngInt(rng, 2)]
-    : [2 + rngInt(rng, height - 4)]
-
-  // 경로 생성: 오른쪽 끝에서 서진, 확률적으로 한 번 꺾여 행 이동 후 x=1까지
-  const paths: CellPos[][] = laneRows.map((row, li) => {
-    const cells: CellPos[] = []
-    let y = row
-    for (let x = width - 1; x >= 1; x--) {
-      cells.push({ x, y })
-      if (x > 3 && x < width - 3 && rngFloat(rng) < 0.18) {
-        // 꺾임: 위 레인은 아래로, 아래 레인은 위로 1~2행 (중앙 침범 금지)
-        const dir = li === 0 ? 1 : -1
-        const shift = 1 + rngInt(rng, 2)
-        for (let s = 0; s < shift; s++) {
-          const ny = y + dir
-          const limit = li === 0 ? Math.floor(height / 2) - 1 : Math.ceil(height / 2)
-          if (twoLanes && (li === 0 ? ny > limit : ny < limit)) break
-          if (ny < 1 || ny > height - 2) break
-          y = ny
-          cells.push({ x, y })
-        }
-      }
-    }
-    return cells
-  })
-
-  // 타일: 기본 G, 경로는 R, 테두리·성벽열은 X, 성벽 위 슬롯만 W
-  const grid: string[][] = Array.from({ length: height }, (_, y) =>
-    Array.from({ length: width }, (_, x) =>
-      y === 0 || y === height - 1 || x === 0 ? 'X' : 'G',
-    ),
+  // 전부 벽에서 시작
+  const grid: string[][] = Array.from({ length: height }, () =>
+    Array.from({ length: width }, () => 'X'),
   )
-  for (const path of paths) for (const c of path) grid[c.y]![c.x] = 'R'
-
-  // 성벽 위 슬롯 2~4칸: 각 레인 종점을 커버하는 행을 반드시 포함
-  const slotCount = 2 + rngInt(rng, 3)
-  const slots = new Set<number>()
-  for (const path of paths) slots.add(path[path.length - 1]!.y)
-  while (slots.size < slotCount) {
-    const y = 1 + rngInt(rng, height - 2)
-    slots.add(y)
+  const carve = (x: number, y: number, ch = 'R'): void => {
+    if (y >= 1 && y <= height - 2 && x >= 1 && x <= width - 1) grid[y]![x] = ch
   }
-  for (const y of slots) grid[y]![0] = 'W'
+
+  // 서쪽 회랑 행(성벽 접점)과 동쪽 레인 행
+  const corrA = 2
+  const corrB = twoLanes ? height - 3 : corrA
+  const laneA = 1
+  const laneB = twoLanes ? height - 2 : laneA
+
+  // 동쪽 레인: connX..width-1, 서쪽 회랑: 1..connX
+  for (let x = connX; x <= width - 1; x++) carve(x, laneA)
+  for (let x = 1; x <= connX; x++) carve(x, corrA)
+  if (twoLanes) {
+    for (let x = connX; x <= width - 1; x++) carve(x, laneB)
+    for (let x = 1; x <= connX; x++) carve(x, corrB)
+  }
+  // 세로 연결로: 레인·회랑을 전부 잇는다 (우회의 핵심)
+  for (let y = Math.min(laneA, corrA); y <= Math.max(laneB, corrB); y++) carve(connX, y)
+
+  // 단일 레인이면 고리형 우회로를 하나 더 판다 (봉쇄 시 돌아갈 길)
+  if (!twoLanes && corrA + 2 <= height - 2) {
+    const loopY = corrA + 2
+    const loopStart = 2
+    for (let x = loopStart; x <= connX; x++) carve(x, loopY)
+    carve(loopStart, corrA + 1)
+    // connX 세로줄이 이미 corrA..loopY를 관통하도록
+    for (let y = corrA; y <= loopY; y++) carve(connX, y)
+  }
+
+  // 알코브(막다른 G): 회랑 위/아래 X칸 중 일부
+  const alcoveRoll = 0.3 + rngFloat(rng) * 0.2
+  for (const cy of twoLanes ? [corrA, corrB] : [corrA]) {
+    for (let x = 2; x < connX; x += 2) {
+      if (rngFloat(rng) > alcoveRoll) continue
+      const dy = cy === corrA ? 1 : -1
+      const ay = cy + (cy === corrA ? -1 : 1)
+      const ay2 = cy + dy
+      const target = grid[ay]?.[x] === 'X' ? ay : grid[ay2]?.[x] === 'X' ? ay2 : -1
+      if (target > 0) grid[target]![x] = 'G'
+    }
+  }
+  // 두 회랑 사이 다리(지상): 소프트 우회 1개 (두 레인일 때만, 낮은 확률)
+  if (twoLanes && corrB - corrA === 2 && rngFloat(rng) < 0.5) {
+    const bx = 2 + rngInt(rng, Math.max(1, connX - 3))
+    grid[corrA + 1]![bx] = 'G'
+  }
+
+  // 성벽: x0, 회랑 행에 W (goal = (1, corr))
+  grid[corrA]![0] = 'W'
+  if (twoLanes) grid[corrB]![0] = 'W'
+  // 추가 원거리 슬롯: 회랑 사이/인접 x0 (배치 여유, goal은 안 늘어남 — 인접 칸이 X)
+  const extraW = corrA + 1
+  if (extraW <= height - 2 && grid[extraW]![0] === 'X' && grid[extraW]![1] === 'X') {
+    grid[extraW]![0] = 'W'
+  }
+
+  // 권장 진격로 (paths[i][0]이 스폰 지점)
+  const west = (fromX: number, toX: number, y: number): CellPos[] => {
+    const cells: CellPos[] = []
+    for (let x = fromX; x >= toX; x--) cells.push({ x, y })
+    return cells
+  }
+  const vert = (x: number, fromY: number, toY: number): CellPos[] => {
+    const cells: CellPos[] = []
+    const step = fromY < toY ? 1 : -1
+    for (let y = fromY + step; step > 0 ? y <= toY : y >= toY; y += step) cells.push({ x, y })
+    return cells
+  }
+  const pathA: CellPos[] = [
+    ...west(width - 1, connX, laneA),
+    ...vert(connX, laneA, corrA),
+    ...west(connX - 1, 1, corrA),
+  ]
+  const paths: CellPos[][] = [pathA]
+  if (twoLanes) {
+    paths.push([
+      ...west(width - 1, connX, laneB),
+      ...vert(connX, laneB, corrB),
+      ...west(connX - 1, 1, corrB),
+    ])
+  }
 
   // 경제
   const wallHp = [350, 450, 550][rngInt(rng, 3)]!
   const initialCost = 8 + rngInt(rng, 5) // 8~12
   const costRegenPerSec = 0.7 + rngInt(rng, 4) * 0.1 // 0.7~1.0
 
-  // 웨이브: 완만한 시작 → 페어 → 총공세(중장병 + 동시 클럼프) 램프.
-  // 물량은 경제에 연동 — 수입(재생률)이 낮으면 감당 가능한 총 HP도 낮다.
-  // 공격성(aggro 0~2): 티어 분포 확보용 — 높을수록 NORMAL/HARD 후보
-  //   (과압박이면 판정이 UNSOLVABLE로 거른다)
+  // 웨이브: 완만한 시작 → 페어 → 총공세 램프. 물량은 경제·공격성 연동
   const rich = costRegenPerSec >= 0.9 ? 1 : 0
   const aggro = rngInt(rng, 3)
   const spawns: SpawnDef[] = []
@@ -97,18 +138,15 @@ export function generateStage(seed: number): StageDef {
   for (let li = 0; li < paths.length; li++) {
     spawns.push({ tick: sec(t + li * 2), enemyDefId: 'tank', pathIndex: li, wave: 3 })
   }
-  // 35% 확률로 공성차 투입 — 경로 안쪽 커버가 없는 맵이면 봇이 못 잡고
-  // 판정에서 UNSOLVABLE로 자동 반려된다 (검증기가 맵 결함을 거른다)
   if (rngFloat(rng) < 0.35) {
     spawns.push({ tick: sec(t + 3), enemyDefId: 'siege', pathIndex: lane(), wave: 3 })
   }
   const clumpLane = lane()
-  const clumpSize = 2 + rngInt(rng, 2) + rich + (aggro >= 1 ? 1 : 0) // 경제·공격성 연동
+  const clumpSize = 2 + rngInt(rng, 2) + rich + (aggro >= 1 ? 1 : 0)
   const clumpT = t + 4 + rngInt(rng, 3)
   for (let i = 0; i < clumpSize; i++) {
     spawns.push({ tick: sec(clumpT), enemyDefId: 'grunt', pathIndex: clumpLane, wave: 3 })
   }
-  // 최고 공격성: 두 번째 갑주귀 파도
   if (aggro >= 2) {
     spawns.push({ tick: sec(clumpT + 6), enemyDefId: 'tank', pathIndex: lane(), wave: 3 })
   }
@@ -124,9 +162,8 @@ export function generateStage(seed: number): StageDef {
 
   spawns.sort((a, b) => a.tick - b.tick)
 
-  const id = `gen-${String(seed).padStart(4, '0')}`
   return {
-    id,
+    id: `gen-${String(seed).padStart(4, '0')}`,
     name: `자동 생성 #${seed}`,
     tilesRows: grid.map((row) => row.join('')),
     paths,

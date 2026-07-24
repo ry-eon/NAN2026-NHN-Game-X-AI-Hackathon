@@ -2,14 +2,11 @@
 // "사람이 브라우저에서, 봇이 헤드리스에서 각각 클리어 가능"을 이 스테이지로 검증한다.
 // 파이프라인 생성 스테이지도 이 스키마(StageDef)를 그대로 따른다.
 //
-// 지형: 왼쪽 성벽(W열), 오른쪽 끝(9,3)에서 스폰해 직선 진입로(y=3)로 진격.
-//   y0  XXXXXXXXXX
-//   y1  WGGGGGGGGG
-//   y2  WGGGGGGGGG
-//   y3  WRRRRRRRRR   ← 적 경로: (9,3) → (1,3), 끝에서 성벽 타격
-//   y4  WGGGGGGGGG
-//   y5  WGGGGGGGGG
-//   y6  XXXXXXXXXX
+// v3 지형 (동적 길찾기): 외길 회랑 + 알코브.
+//   y2  WXGXGXGXXX   ← 알코브(막다른 지상칸): 브루저 측면 타격·감속사 니치
+//   y3  WRRRRRRRRR   ← 회랑: (9,3) 스폰 → (1,3) 성벽 접점. 봉쇄하면 괴수가 교전
+//   y4  WXGXGXGXXX
+// 첫 스테이지 = 봉쇄의 기본기를 배우는 판. 우회 분기는 stage-002부터.
 
 import { TICKS_PER_SECOND } from '../../types'
 import type { SpawnDef, StageDef } from '../../types'
@@ -28,11 +25,11 @@ export const STAGE_001: StageDef = {
   name: '첫 번째 성벽',
   tilesRows: [
     'XXXXXXXXXX',
-    'WGGGGGGGGG',
-    'WGGGGGGGGG',
+    'XXXXXXXXXX',
+    'WXGXGXGXXX',
     'WRRRRRRRRR',
-    'WGGGGGGGGG',
-    'WGGGGGGGGG',
+    'WXGXGXGXXX',
+    'XXXXXXXXXX',
     'XXXXXXXXXX',
   ],
   paths: [

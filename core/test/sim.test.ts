@@ -119,21 +119,20 @@ describe('배치 규칙', () => {
   })
 })
 
-describe('블로킹', () => {
-  // 전투 변수를 제거한 마이크로 스테이지: 외길에 저지 1짜리 더미를 세워
-  // "저지 수를 넘는 적은 통과해 성벽을 때린다"만 관찰한다.
-  it('저지 수를 넘는 적은 통과해 성벽을 타격한다', () => {
+describe('블로킹 (v3: 봉쇄와 대기 행렬)', () => {
+  // 회랑을 저지 1짜리 더미로 봉쇄: 첫 적만 교전, 나머지는 물리적으로 막혀
+  // 뒤에서 대기한다 (구버전 '초과 통과'는 v3에서 폐기 — 길이 막히면 못 지나간다).
+  it('봉쇄된 회랑: 저지 초과분은 통과하지 못하고 대기한다', () => {
     const stage = {
       id: 'test-block',
-      name: '블로킹 검증',
-      tilesRows: ['XXXXX', 'RRRRR', 'XXXXX'],
+      name: '봉쇄 검증',
+      tilesRows: ['XXXXX', 'WRRRR', 'XXXXX'],
       paths: [
         [
           { x: 4, y: 1 },
           { x: 3, y: 1 },
           { x: 2, y: 1 },
           { x: 1, y: 1 },
-          { x: 0, y: 1 },
         ],
       ],
       wallHp: 500,
@@ -148,7 +147,6 @@ describe('블로킹', () => {
       })),
       seed: 1,
     }
-    // 공격을 사실상 하지 않는 저지 1 더미 (저지 상태를 유지시키기 위함)
     const dummy = {
       id: 'dummy',
       name: '더미',
@@ -168,8 +166,57 @@ describe('블로킹', () => {
 
     const blocked = sim.state.enemies.filter((e) => e.blockedBy !== null)
     const atWall = sim.state.enemies.filter((e) => e.atWall)
-    expect(blocked).toHaveLength(1) // 첫 번째 적만 저지됨
-    expect(atWall).toHaveLength(2) // 나머지는 통과해 성벽 타격
-    expect(sim.state.wallHp).toBeLessThan(stage.wallHp)
+    expect(blocked).toHaveLength(1) // 첫 번째 적만 교전
+    expect(atWall).toHaveLength(0) // 나머지는 뒤에서 대기 — 성벽 무손상
+    expect(sim.state.wallHp).toBe(stage.wallHp)
+    expect(sim.state.enemies).toHaveLength(3)
+  })
+
+  it('우회로가 있으면 봉쇄를 돌아서 간다 — 배치가 경로를 바꾼다', () => {
+    // 두 갈래 길: 위쪽을 막으면 아래로 우회
+    const stage = {
+      id: 'test-detour',
+      name: '우회 검증',
+      tilesRows: ['XXXXXX', 'WRRRRR', 'XRXXRX', 'XRRRRX', 'XXXXXX'],
+      paths: [
+        [
+          { x: 4, y: 1 },
+          { x: 3, y: 1 },
+          { x: 2, y: 1 },
+          { x: 1, y: 1 },
+        ],
+      ],
+      wallHp: 500,
+      initialCost: 99,
+      costRegenPerSec: 0,
+      costMax: 99,
+      spawns: [{ tick: 30, enemyDefId: 'runner', pathIndex: 0, wave: 1 }],
+      seed: 1,
+    }
+    const dummy = {
+      id: 'dummy',
+      name: '더미',
+      placement: 'ground' as const,
+      cost: 1,
+      hp: 99999,
+      atk: 1,
+      def: 0,
+      atkIntervalTicks: 9999 * TICKS_PER_SECOND,
+      range: 0,
+      blockCount: 3,
+      redeployTicks: 1,
+    }
+    const sim = new Simulation(stage, [dummy], ENEMY_DEFS)
+    sim.step([{ type: 'deploy', unitDefId: 'dummy', x: 3, y: 1 }]) // 윗길 봉쇄
+    for (let i = 0; i < 10 * TICKS_PER_SECOND; i++) sim.step()
+
+    const e = sim.state.enemies[0]
+    // 질주귀는 저지당하지 않고 아랫길(y2~y3)로 우회했거나 이미 성벽에 도달했다
+    if (e) {
+      expect(e.blockedBy).toBeNull()
+      const detoured = e.route.some((c) => c.y >= 2)
+      expect(detoured || e.atWall).toBe(true)
+    }
+    expect(sim.state.enemies.filter((en) => en.blockedBy !== null)).toHaveLength(0)
   })
 })

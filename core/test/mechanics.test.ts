@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ENEMY_DEFS, Simulation, TICKS_PER_SECOND, UNIT_DEFS } from '../src/index'
+import { ENEMY_DEFS, Simulation, TICKS_PER_SECOND, UNIT_DEFS, enemyWorldPos } from '../src/index'
 import type { StageDef } from '../src/index'
 
 // W2 신규 메커니즘(광역/치유/감속/공성)을 전투 변수 없이 관찰하는 마이크로 스테이지들
@@ -8,7 +8,7 @@ function lineStage(overrides: Partial<StageDef> = {}): StageDef {
   return {
     id: 'test-line',
     name: '외길',
-    tilesRows: ['XXXXXXXX', 'WRRRRRRR', 'XGGGGGGX', 'XXXXXXXX'],
+    tilesRows: ['XXXXXXXX', 'WRRRRRRR', 'XXXXGXXX', 'XXXXXXXX'],
     paths: [[7, 6, 5, 4, 3, 2, 1].map((x) => ({ x, y: 1 }))],
     wallHp: 500,
     initialCost: 99,
@@ -60,7 +60,7 @@ describe('W2 신규 메커니즘', () => {
     const spawns = [{ tick: 1, enemyDefId: 'grunt' as const, pathIndex: 0, wave: 1 }]
     const plain = new Simulation(lineStage({ spawns }), UNIT_DEFS, ENEMY_DEFS)
     const slowed = new Simulation(lineStage({ spawns }), UNIT_DEFS, ENEMY_DEFS)
-    slowed.step([{ type: 'deploy', unitDefId: 'slower', x: 4, y: 2 }]) // 진입로 옆 지상
+    slowed.step([{ type: 'deploy', unitDefId: 'slower', x: 4, y: 2 }]) // 알코브 (막다른 지상칸)
     run(plain, 8)
     run(slowed, 8)
     // 감속사는 지상 칸이라 저지하지 않는다 — 순수하게 이동만 느려져야 한다
@@ -76,7 +76,10 @@ describe('W2 신규 메커니즘', () => {
     run(sim, 20)
     const siege = sim.state.enemies[0]!
     expect(siege.atWall).toBe(true)
-    expect(siege.pathPos).toBeLessThanOrEqual(6 - 2.4) // 경로 끝(6)에서 2.5타일 앞 정지
+    // v3: 성벽(wallTop)까지 직선거리 2.5 이내에서 정지 — 접점보다 앞
+    const pos = enemyWorldPos(sim.ctx, siege)
+    expect(Math.hypot(pos.x - 0, pos.y - 1)).toBeLessThanOrEqual(2.6)
+    expect(pos.x).toBeGreaterThan(1.2)
     expect(sim.state.wallHp).toBeLessThan(stage.wallHp)
   })
 
@@ -149,7 +152,12 @@ describe('W2 신규 메커니즘', () => {
     const sim = new Simulation(stage, UNIT_DEFS, ENEMY_DEFS)
     sim.step([{ type: 'deploy', unitDefId: 'blocker', x: 3, y: 1 }])
     const unitId = sim.state.units[0]!.id
-    while (sim.state.enemies[0]?.blockedBy == null && sim.state.tick < 3000) sim.step()
+    while (
+      sim.state.status === 'playing' &&
+      sim.state.enemies[0]?.blockedBy == null &&
+      sim.state.tick < 3000
+    )
+      sim.step()
 
     sim.step([{ type: 'moveUnit', unitId, x: 1, y: 1 }]) // 저지 중 이동 → 저지 해제
     const unit = sim.state.units[0]!
@@ -185,9 +193,9 @@ describe('W2 신규 메커니즘', () => {
       seed: 1,
     }
     const sim = new Simulation(stage, UNIT_DEFS, ENEMY_DEFS)
-    run(sim, 17) // 공성차가 정지 지점(pathPos 5.5, x=3.5)에 도달할 때까지
+    run(sim, 25) // 공성차가 정지 지점(성벽 직선거리 2.5, x≈2.3)에 도달할 때까지
     expect(sim.state.enemies[0]!.atWall).toBe(true)
-    sim.step([{ type: 'deploy', unitDefId: 'bruiser', x: 4, y: 1 }]) // 0.5타일 거리
+    sim.step([{ type: 'deploy', unitDefId: 'bruiser', x: 3, y: 1 }]) // 인접 (근접 사거리 내)
     run(sim, 10)
     expect(sim.state.enemies).toHaveLength(0) // 저지 불가여도 자기 칸 공격으로 처치
     expect(sim.state.status).toBe('won')

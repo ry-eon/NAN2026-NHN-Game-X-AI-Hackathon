@@ -22,8 +22,7 @@ export const CAMPAIGN_LENGTH = 5
 export const RECOVERY_RATE = 0.4
 /** 시작 가신 (D1 확정) */
 export const STARTING_IDS = ['doha', 'sea', 'danbi']
-/** 침공 순서: 쉬움 → 변별 → 어려움 램프 [초안]. 없는 id는 건너뛰고 STAGES에서 보충 */
-const CAMPAIGN_STAGE_IDS = ['stage-001', 'gen-0100', 'stage-002', 'gen-0904', 'gen-0902']
+// 침공 램프: 수제 2 + 생성 스테이지를 티어(EASY→NORMAL→HARD)로 배열 [초안]
 /** 클리어 시 제시되는 영입 후보 수 (A3 확정: 3택1) */
 export const RECRUIT_CHOICES = 3
 
@@ -54,11 +53,18 @@ export function characterById(id: string): CharacterDef {
 }
 
 export function campaignStages(): StageDef[] {
-  const byId = new Map(STAGES.map((s) => [s.id, s]))
-  const picked = CAMPAIGN_STAGE_IDS.map((id) => byId.get(id)).filter(
-    (s): s is StageDef => s !== undefined,
-  )
-  // 램프 id가 빠져 있으면(재출고 등) 수록 순서대로 보충
+  const gens = STAGES.filter((s) => s.id.startsWith('gen-'))
+  const byTier = (t: string) => gens.filter((s) => s.tier === t)
+  const ramp: StageDef[] = [
+    STAGES.find((s) => s.id === 'stage-001')!,
+    byTier('EASY')[0] ?? gens[0]!,
+    STAGES.find((s) => s.id === 'stage-002')!,
+    byTier('NORMAL')[0] ?? byTier('EASY')[1] ?? gens[1] ?? gens[0]!,
+    byTier('HARD')[0] ?? byTier('NORMAL')[1] ?? gens[gens.length - 1] ?? gens[0]!,
+  ]
+  // 중복 제거하며 부족분은 수록 순서로 보충
+  const picked: StageDef[] = []
+  for (const s of ramp) if (s && !picked.includes(s)) picked.push(s)
   for (const s of STAGES) {
     if (picked.length >= CAMPAIGN_LENGTH) break
     if (!picked.includes(s)) picked.push(s)

@@ -139,7 +139,9 @@ if (rejudge) {
   console.log(`[pipeline] 리포트: ${mdPath}`)
 
   if (!dry && accepted.length > 0) {
-    const { total } = shipStages(acceptedDir, generatedTs, accepted.map((c) => c.stage))
+    const tiers: Record<string, 'EASY' | 'NORMAL' | 'HARD'> = {}
+    for (const c of accepted) if (c.verdict.accepted) tiers[c.stage.id] = c.verdict.tier
+    const { total } = shipStages(acceptedDir, generatedTs, accepted.map((c) => c.stage), tiers)
     console.log(`[pipeline] 출고 ${accepted.length}개 → generated.ts 재생성 (누적 ${total}개)`)
   } else if (dry) {
     console.log('[pipeline] --dry: 출고 생략')

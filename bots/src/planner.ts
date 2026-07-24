@@ -301,23 +301,23 @@ function pathBlockCapacity(ctx: SimContext, state: GameState, pathIndex: number)
   }, 0)
 }
 
-function threatImminent(ctx: SimContext, state: GameState): boolean {
+function threatImminent(_ctx: SimContext, state: GameState): boolean {
   return state.enemies.some(
     (e) =>
       e.blockedBy === null &&
       !e.atWall &&
-      ctx.stage.paths[e.pathIndex]!.length - 1 - e.pathPos <= IMMINENT_TILES,
+      e.route.length > 0 &&
+      e.route.length - 1 - e.pathPos <= IMMINENT_TILES,
   )
 }
 
-/** 누수 적의 전방(성벽 쪽) 빈 진입로 셀 중 성벽에 가장 가까운 곳 */
-function findLeakCell(ctx: SimContext, state: GameState): CellPos | null {
+/** 누수 적의 전방(성벽 쪽) 빈 경로 셀 — v3: 그 적의 실제 route 위를 막는다 */
+function findLeakCell(_ctx: SimContext, state: GameState): CellPos | null {
   for (const e of state.enemies) {
-    if (e.blockedBy !== null || e.atWall) continue
-    const path = ctx.stage.paths[e.pathIndex]!
-    if (path.length - 1 - e.pathPos >= LEAK_TILES) continue
-    for (let i = path.length - 2; i > Math.round(e.pathPos); i--) {
-      const cell = path[i]!
+    if (e.blockedBy !== null || e.atWall || e.route.length === 0) continue
+    if (e.route.length - 1 - e.pathPos >= LEAK_TILES) continue
+    for (let i = e.route.length - 1; i > Math.round(e.pathPos); i--) {
+      const cell = e.route[i]!
       if (!state.units.some((u) => u.x === cell.x && u.y === cell.y)) return cell
     }
   }
@@ -341,9 +341,15 @@ function uncoveredWallCamper(ctx: SimContext, state: GameState): CellPos | null 
   return null
 }
 
-/** 성벽 도달까지 남은 틱 */
-function etaTicks(ctx: SimContext, e: { pathIndex: number; pathPos: number; defId: string }): number {
-  const remaining = ctx.stage.paths[e.pathIndex]!.length - 1 - e.pathPos
+/** 성벽 도달까지 남은 틱 (v3: 개별 route 기반, 미계산 시 권장 진격로로 추정) */
+function etaTicks(
+  ctx: SimContext,
+  e: { pathIndex: number; pathPos: number; defId: string; route: { x: number; y: number }[] },
+): number {
+  const remaining =
+    e.route.length > 0
+      ? Math.max(0, e.route.length - 1 - e.pathPos)
+      : ctx.stage.paths[e.pathIndex]!.length - 1
   return (remaining / ctx.enemyDefs[e.defId]!.speedTilesPerSec) * TICKS_PER_SECOND
 }
 

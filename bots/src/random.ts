@@ -3,7 +3,7 @@
 // "Random도 깨는 스테이지 = 너무 쉬움" 신호를 만들기 위해 존재한다.
 // 모든 무작위성은 core의 시드 RNG 경유 — 같은 시드면 같은 플레이.
 
-import { TICKS_PER_SECOND, rngFloat, rngInt } from '@core'
+import { TICKS_PER_SECOND, enemyWorldPos, rngFloat, rngInt } from '@core'
 import type { CellPos, PlayerAction, RngState, SimContext, UnitDef } from '@core'
 import type { BotPolicy } from './runner'
 
@@ -22,9 +22,8 @@ export function createRandomPolicy(seed: number): BotPolicy {
       rngFloat(rng) < 0.25
     ) {
       const e = state.enemies[rngInt(rng, state.enemies.length)]!
-      const path = ctx.stage.paths[e.pathIndex]!
-      const cell = path[Math.min(path.length - 1, Math.round(e.pathPos))]!
-      actions.push({ type: 'wallSkill', x: cell.x, y: cell.y })
+      const pos = enemyWorldPos(ctx, e)
+      actions.push({ type: 'wallSkill', x: Math.round(pos.x), y: Math.round(pos.y) })
     }
     if (
       state.repairReadyAt <= state.tick &&

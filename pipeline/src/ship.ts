@@ -10,10 +10,12 @@ export function shipStages(
   acceptedDir: string,
   generatedTsPath: string,
   newlyAccepted: StageDef[],
+  tiers: Record<string, 'EASY' | 'NORMAL' | 'HARD'> = {},
 ): { total: number } {
   mkdirSync(acceptedDir, { recursive: true })
   for (const stage of newlyAccepted) {
-    writeFileSync(join(acceptedDir, `${stage.id}.json`), JSON.stringify(stage, null, 2))
+    const withTier = { ...stage, tier: tiers[stage.id] ?? stage.tier }
+    writeFileSync(join(acceptedDir, `${stage.id}.json`), JSON.stringify(withTier, null, 2))
   }
 
   const all = readdirSync(acceptedDir)

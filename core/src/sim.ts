@@ -37,6 +37,10 @@ export interface SimContext {
   unitDefs: Record<string, UnitDef>
   enemyDefs: Record<string, EnemyDef>
   wallActions: WallActionDefs
+  /** v3: 성벽(wallTop) 타일 목록 — 공성 사거리 판정용 */
+  wallCells: CellPos[]
+  /** v3: 목표 셀(성벽에 4방 인접한 통행 가능 셀) — 도달 시 성벽 타격 */
+  goalCells: CellPos[]
 }
 
 export function createContext(
@@ -73,7 +77,29 @@ export function createContext(
       throw new Error(`spawns는 tick 오름차순이어야 함 (index ${si})`)
   }
 
-  return { stage, tiles, width, height, unitDefs: unitMap, enemyDefs: enemyMap, wallActions }
+  const wallCells: CellPos[] = []
+  const goalCells: CellPos[] = []
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (tiles[y]![x] === 'wallTop') wallCells.push({ x, y })
+    }
+  }
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const t = tiles[y]![x]
+      if (t !== 'ground' && t !== 'road') continue
+      const adjWall = [
+        [x - 1, y],
+        [x + 1, y],
+        [x, y - 1],
+        [x, y + 1],
+      ].some(([ax, ay]) => tiles[ay!]?.[ax!] === 'wallTop')
+      if (adjWall) goalCells.push({ x, y })
+    }
+  }
+  if (goalCells.length === 0) throw new Error('목표 셀 없음: 성벽(wallTop)에 인접한 통행 가능 셀이 필요')
+
+  return { stage, tiles, width, height, unitDefs: unitMap, enemyDefs: enemyMap, wallActions, wallCells, goalCells }
 }
 
 export function parseTiles(rows: string[]): TileType[][] {
@@ -114,6 +140,7 @@ export function createInitialState(
     redeployReadyAt: {},
     repairReadyAt: 0,
     wallSkillReadyAt: 0,
+    obstacleVersion: 0,
     nextEntityId: 1,
     events: [],
   }
@@ -186,6 +213,7 @@ function applyDeploy(
     activeUntil: 0,
   }
   state.units.push(unit)
+  if (def.placement !== 'wallTop') state.obstacleVersion++
   state.events.push({ type: 'deployed', unitId: unit.id, unitDefId: def.id, x: a.x, y: a.y })
 }
 
@@ -199,6 +227,7 @@ function applyWithdraw(ctx: SimContext, state: GameState, unitId: number): void 
   const refund = Math.floor(def.cost / 2)
   state.cost = Math.min(ctx.stage.costMax, state.cost + refund)
   state.redeployReadyAt[def.id] = state.tick + def.redeployTicks
+  if (def.placement !== 'wallTop') state.obstacleVersion++
   state.events.push({ type: 'withdrawn', unitId, unitDefId: def.id, refund })
 }
 
@@ -227,6 +256,7 @@ function applyMove(
   unit.y = a.y
   unit.cooldown = Math.max(unit.cooldown, MOVE_SETTLE_TICKS)
   unit.moveReadyAt = state.tick + MOVE_COOLDOWN_TICKS
+  if (def.placement !== 'wallTop') state.obstacleVersion++
   state.events.push({ type: 'unitMoved', unitId: unit.id, x: a.x, y: a.y })
 }
 
@@ -352,6 +382,8 @@ function spawnEnemies(ctx: SimContext, state: GameState): void {
       id: state.nextEntityId++,
       defId: def.id,
       pathIndex: s.pathIndex,
+      route: [],
+      routeVersion: -1, // 첫 이동 틱에 계산
       pathPos: 0,
       hp: def.hp,
       cooldown: 0,
@@ -362,6 +394,110 @@ function spawnEnemies(ctx: SimContext, state: GameState): void {
     state.enemies.push(enemy)
     state.events.push({ type: 'enemySpawned', enemyId: enemy.id, enemyDefId: def.id, wave: s.wave })
   }
+}
+
+// v3 동적 길찾기: 다익스트라 (도로 선호 가중치). 결정론 — 고정 이웃 순서·인덱스 타이브레이크.
+const COST_ROAD = 10
+const COST_GROUND = 14
+const COST_UNIT = 5000 // 봉쇄 돌파 모드에서 유닛 칸 통과 벌점
+/** 근접 유닛이 저지 없이 직접 때릴 수 있는 거리 (자기 칸+인접) */
+const MELEE_REACH = 1.05
+
+function isWalkable(ctx: SimContext, x: number, y: number): boolean {
+  const t = ctx.tiles[y]?.[x]
+  return t === 'ground' || t === 'road'
+}
+
+/**
+ * from에서 가장 가까운 목표 셀까지의 경로.
+ * 1차: 지상 유닛 칸 통행 불가. 실패 시(완전 봉쇄) 2차: 유닛 칸 고비용 통과 —
+ * 경로상 유닛과 교전해 뚫는다. null = 지형적으로 도달 불가.
+ */
+function computeRoute(
+  ctx: SimContext,
+  state: GameState,
+  from: CellPos,
+  penalizeUnits: boolean,
+): CellPos[] | null {
+  const W = ctx.width
+  const H = ctx.height
+  const occupied = new Set<number>()
+  for (const u of state.units) {
+    if (ctx.unitDefs[u.defId]!.placement === 'wallTop') continue
+    occupied.add(u.y * W + u.x)
+  }
+  const dist = new Float64Array(W * H).fill(Infinity)
+  const prev = new Int32Array(W * H).fill(-1)
+  const done = new Uint8Array(W * H)
+  const start = from.y * W + from.x
+  dist[start] = 0
+
+  for (;;) {
+    // 최소 거리 미방문 노드 (인덱스 타이브레이크 → 결정론)
+    let cur = -1
+    let best = Infinity
+    for (let i = 0; i < W * H; i++) {
+      if (!done[i] && dist[i]! < best) {
+        best = dist[i]!
+        cur = i
+      }
+    }
+    if (cur < 0) break
+    done[cur] = 1
+    const cx = cur % W
+    const cy = Math.floor(cur / W)
+    // 이웃: 상→우→하→좌 고정 순서
+    const neighbors = [
+      [cx, cy - 1],
+      [cx + 1, cy],
+      [cx, cy + 1],
+      [cx - 1, cy],
+    ] as const
+    for (const [nx, ny] of neighbors) {
+      if (!isWalkable(ctx, nx, ny)) continue
+      const ni = ny * W + nx
+      let cost = ctx.tiles[ny]![nx] === 'road' ? COST_ROAD : COST_GROUND
+      if (occupied.has(ni)) {
+        if (!penalizeUnits) continue
+        cost += COST_UNIT
+      }
+      if (dist[cur]! + cost < dist[ni]!) {
+        dist[ni] = dist[cur]! + cost
+        prev[ni] = cur
+      }
+    }
+  }
+
+  // 가장 가까운 목표 셀 (거리 → 인덱스 순 타이브레이크)
+  let goal = -1
+  let goalDist = Infinity
+  for (const g of ctx.goalCells) {
+    const gi = g.y * W + g.x
+    if (dist[gi]! < goalDist) {
+      goalDist = dist[gi]!
+      goal = gi
+    }
+  }
+  if (goal < 0 || goalDist === Infinity) return null
+
+  const route: CellPos[] = []
+  for (let i = goal; i >= 0; i = prev[i]!) {
+    route.unshift({ x: i % W, y: Math.floor(i / W) })
+    if (i === start) break
+  }
+  return route[0]?.x === from.x && route[0]?.y === from.y ? route : null
+}
+
+/** 경로 확보 (장애물 변화 시 현재 셀에서 재계산) */
+function ensureRoute(ctx: SimContext, state: GameState, enemy: ActiveEnemy): void {
+  if (enemy.routeVersion === state.obstacleVersion && enemy.route.length > 0) return
+  const pos = enemyWorldPos(ctx, enemy)
+  const cur = { x: Math.round(pos.x), y: Math.round(pos.y) }
+  const route =
+    computeRoute(ctx, state, cur, false) ?? computeRoute(ctx, state, cur, true)
+  enemy.route = route ?? [cur]
+  enemy.pathPos = 0
+  enemy.routeVersion = state.obstacleVersion
 }
 
 /** 감속 오라 적용 후의 이동 배율 (여러 오라가 겹치면 가장 강한 것 하나) */
@@ -377,57 +513,74 @@ function slowFactorAt(ctx: SimContext, state: GameState, pos: CellPos): number {
   return factor
 }
 
+function nearestWallDistance(ctx: SimContext, pos: CellPos): number {
+  let best = Infinity
+  for (const w of ctx.wallCells) {
+    const d = Math.hypot(w.x - pos.x, w.y - pos.y)
+    if (d < best) best = d
+  }
+  return best
+}
+
 function moveAndBlock(ctx: SimContext, state: GameState): void {
   for (const enemy of state.enemies) {
     if (enemy.blockedBy !== null || enemy.atWall) continue
     const def = ctx.enemyDefs[enemy.defId]!
-    const path = ctx.stage.paths[enemy.pathIndex]!
-    const last = path.length - 1
+    ensureRoute(ctx, state, enemy)
+    const route = enemy.route
+    const last = route.length - 1
 
-    const speed =
-      (def.speedTilesPerSec / TICKS_PER_SECOND) *
-      slowFactorAt(ctx, state, enemyWorldPos(ctx, enemy))
-    enemy.pathPos = Math.min(last, enemy.pathPos + speed)
+    const pos = enemyWorldPos(ctx, enemy)
 
-    // 공성류: 사거리 안에 들면 멈춰서 성벽 포격 개시 (저지 체크보다 먼저 —
-    // 정지 지점에 도달한 순간부터는 이동하지 않으므로 새로 저지되지 않는다)
-    if (def.wallAttackRange !== undefined && last - enemy.pathPos <= def.wallAttackRange) {
+    // 공성류: 성벽 직선 사거리 안이면 정지·포격
+    if (def.wallAttackRange !== undefined && nearestWallDistance(ctx, pos) <= def.wallAttackRange) {
       enemy.atWall = true
       continue
     }
 
-    // 현재 셀(반올림 = 셀 중심 반타일 이내)에 여유 있는 블로커가 있으면 저지.
-    // 여유가 없으면 그대로 통과한다 (저지 수 초과).
-    const cellIdx = Math.round(enemy.pathPos)
-    const cell = path[cellIdx]!
-    const blocker = state.units.find((u) => {
-      if (u.x !== cell.x || u.y !== cell.y) return false
-      const bdef = ctx.unitDefs[u.defId]!
-      return bdef.blockCount > u.blockedEnemyIds.length
-    })
-    if (blocker) {
-      enemy.blockedBy = blocker.id
-      enemy.pathPos = cellIdx
-      blocker.blockedEnemyIds.push(enemy.id)
-    } else if (enemy.pathPos >= last) {
-      enemy.atWall = true
+    // 다음 노드가 유닛 칸이면(봉쇄 돌파 경로) 그 앞에서 교전
+    const nextIdx = Math.min(last, Math.floor(enemy.pathPos + 1e-6) + 1)
+    const nextCell = route[nextIdx]!
+    const blockingUnit = state.units.find(
+      (u) =>
+        u.x === nextCell.x &&
+        u.y === nextCell.y &&
+        ctx.unitDefs[u.defId]!.placement !== 'wallTop',
+    )
+    if (blockingUnit && enemy.pathPos >= nextIdx - 0.55) {
+      const bdef = ctx.unitDefs[blockingUnit.defId]!
+      if (bdef.blockCount > blockingUnit.blockedEnemyIds.length) {
+        enemy.blockedBy = blockingUnit.id
+        blockingUnit.blockedEnemyIds.push(enemy.id)
+      }
+      // 저지 슬롯이 없으면 그 자리에서 대기 (물리적으로 막혀 있다)
+      continue
     }
+
+    const cellHere = route[Math.min(last, Math.round(enemy.pathPos))]!
+    const tileMul = ctx.tiles[cellHere.y]?.[cellHere.x] === 'road' ? 1 : 0.72
+    const speed =
+      (def.speedTilesPerSec / TICKS_PER_SECOND) * tileMul * slowFactorAt(ctx, state, pos)
+    const cap = blockingUnit ? nextIdx - 0.55 : last
+    enemy.pathPos = Math.min(cap, enemy.pathPos + speed)
+
+    if (enemy.pathPos >= last) enemy.atWall = true
   }
 }
 
 // ---------------------------------------------------------------- 전투
 
-/** 경로 진행도를 남은 거리로 환산 — 성벽에 가까운 적이 우선 표적. */
-function distanceToWall(ctx: SimContext, e: ActiveEnemy): number {
-  return ctx.stage.paths[e.pathIndex]!.length - 1 - e.pathPos
+/** 남은 경로 길이 — 성벽에 가까운 적이 우선 표적. */
+function distanceToWall(_ctx: SimContext, e: ActiveEnemy): number {
+  return Math.max(0, e.route.length - 1 - e.pathPos)
 }
 
 /** 경로 진행도를 셀 좌표로 보간. 렌더러·봇이 적의 화면/공간 위치를 얻는 유일한 통로. */
 export function enemyWorldPos(ctx: SimContext, e: ActiveEnemy): CellPos {
-  const path = ctx.stage.paths[e.pathIndex]!
+  const route = e.route.length > 0 ? e.route : ctx.stage.paths[e.pathIndex]!.slice(0, 1)
   const i = Math.floor(e.pathPos)
-  const a = path[Math.min(i, path.length - 1)]!
-  const b = path[Math.min(i + 1, path.length - 1)]!
+  const a = route[Math.min(i, route.length - 1)]!
+  const b = route[Math.min(i + 1, route.length - 1)]!
   const t = e.pathPos - i
   return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
 }
@@ -484,7 +637,7 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
           if (e.hp <= 0) continue
           const p = enemyWorldPos(ctx, e)
           const d = Math.hypot(p.x - unit.x, p.y - unit.y)
-          if (d <= 0.7 && d < best) {
+          if (d <= MELEE_REACH && d < best) {
             best = d
             target = e
           }
@@ -577,6 +730,44 @@ function enemiesAttack(ctx: SimContext, state: GameState): void {
     if (enemy.cooldown > 0) continue
     const def = ctx.enemyDefs[enemy.defId]!
 
+    // v3: 저지 슬롯이 없어 대기 중인 괴수도 앞을 막은 지상 유닛을 공격한다
+    // (봉쇄는 공짜가 아니다 — 행렬 전체가 방벽을 두들긴다)
+    if (enemy.blockedBy === null && !enemy.atWall) {
+      const pos = enemyWorldPos(ctx, enemy)
+      let target: ActiveUnit | undefined
+      let best = Infinity
+      for (const u of state.units) {
+        if (ctx.unitDefs[u.defId]!.placement === 'wallTop') continue
+        const d = Math.hypot(u.x - pos.x, u.y - pos.y)
+        if (d <= 1.05 && d < best) {
+          best = d
+          target = u
+        }
+      }
+      if (target) {
+        const dmg = damage(def.atk, ctx.unitDefs[target.defId]!.def)
+        const absorbed = Math.min(target.shield, dmg)
+        target.shield -= absorbed
+        target.hp -= dmg - absorbed
+        enemy.cooldown = def.atkIntervalTicks
+        state.events.push({
+          type: 'enemyAttacked',
+          enemyId: enemy.id,
+          targetUnitId: target.id,
+          damage: dmg - absorbed,
+        })
+        if (target.hp <= 0) {
+          state.events.push({ type: 'unitDied', unitId: target.id, unitDefId: target.defId })
+          releaseBlocked(state, target)
+          state.units = state.units.filter((u) => u.id !== target!.id)
+          state.redeployReadyAt[target.defId] =
+            state.tick + ctx.unitDefs[target.defId]!.redeployTicks
+          if (ctx.unitDefs[target.defId]!.placement !== 'wallTop') state.obstacleVersion++
+        }
+        continue
+      }
+    }
+
     if (enemy.blockedBy !== null) {
       const unit = state.units.find((u) => u.id === enemy.blockedBy)
       if (!unit) continue
@@ -595,6 +786,7 @@ function enemiesAttack(ctx: SimContext, state: GameState): void {
         state.events.push({ type: 'unitDied', unitId: unit.id, unitDefId: unit.defId })
         releaseBlocked(state, unit)
         state.units = state.units.filter((u) => u.id !== unit.id)
+        if (ctx.unitDefs[unit.defId]!.placement !== 'wallTop') state.obstacleVersion++
         state.redeployReadyAt[unit.defId] =
           state.tick + ctx.unitDefs[unit.defId]!.redeployTicks
       }

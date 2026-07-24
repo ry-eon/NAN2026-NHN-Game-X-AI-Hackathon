@@ -23,7 +23,10 @@ export function createGreedyPolicy(): BotPolicy {
       let target = state.enemies[0]!
       let best = Infinity
       for (const e of state.enemies) {
-        const remaining = ctx.stage.paths[e.pathIndex]!.length - 1 - e.pathPos
+        const remaining =
+          e.route.length > 0
+            ? e.route.length - 1 - e.pathPos
+            : ctx.stage.paths[e.pathIndex]!.length - 1
         if (remaining < best) {
           best = remaining
           target = e

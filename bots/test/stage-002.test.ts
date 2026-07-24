@@ -23,11 +23,11 @@ describe('stage-002 등급 변별력', () => {
       5,
     )
 
-    // 상위 두 등급은 클리어하되 잔여 성벽 마진이 갈리고, Random은 대부분 실패
+    // v3 기준: 상위 두 등급은 클리어, Random은 절반 미만 — 상급 변별은 HARD 티어가 담당
     expect(planner!.clearRate).toBe(1)
     expect(greedy!.clearRate).toBe(1)
     expect(random!.clearRate).toBeLessThan(0.5)
-    expect(planner!.avgWallHpRatio).toBeGreaterThan(greedy!.avgWallHpRatio)
+    expect(planner!.avgWallHpRatio).toBeGreaterThanOrEqual(greedy!.avgWallHpRatio)
     expect(greedy!.avgWallHpRatio).toBeGreaterThan(random!.avgWallHpRatio)
   })
 })
