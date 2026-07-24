@@ -12,6 +12,9 @@
 | Grass004 1K | 들판 PBR | ambientCG (ambientcg.com/view?id=Grass004) | CC0 |
 | Ground048 1K | 흙길 PBR | ambientCG (ambientcg.com/view?id=Ground048) | CC0 |
 | PavingStones128 1K | 안뜰 포석 PBR | ambientCG (ambientcg.com/view?id=PavingStones128) | CC0 |
+| Rock Moss Set 01 (GLTF 1K) | 들판 바위 (포토스캔) | Poly Haven (polyhaven.com/a/rock_moss_set_01) | CC0 |
+| Dead Tree Trunk (GLTF 1K) | 고사목 (포토스캔) | Poly Haven (polyhaven.com/a/dead_tree_trunk) | CC0 |
+| Wooden Crate 01 (GLTF 1K) | 안뜰 궤짝 | Poly Haven (polyhaven.com/a/wooden_crate_01) | CC0 |
 
 ### 코드 생성 (v5 3D)
 - 성채·소품 지오메트리: three.js 절차 조합 (client/src3d/environment.ts)

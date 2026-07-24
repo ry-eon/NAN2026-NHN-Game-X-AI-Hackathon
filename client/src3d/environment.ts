@@ -3,6 +3,7 @@
 // 전체 성: 4면 성곽 + 모서리 망루 4 + 동면 성문루 + 내성. 동면이 전장 정면.
 
 import * as THREE from 'three'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'
 import { FIELD, WALL_X } from '../../siege/sim/world'
 
@@ -38,12 +39,32 @@ function pbr(
     if (srgb) t.colorSpace = THREE.SRGBColorSpace
     return t
   }
-  return new THREE.MeshStandardMaterial({
+  const mat = new THREE.MeshStandardMaterial({
     map: load('color', true),
     normalMap: load('normal'),
     roughnessMap: load('rough'),
     ...extra,
   })
+  return mat
+}
+
+/** 변위(요철) 버전 — 세분화된 지오메트리와 함께 사용 */
+function pbrDisplaced(
+  name: string,
+  repeatX: number,
+  repeatY: number,
+  scale: number,
+  extra: Partial<THREE.MeshStandardMaterialParameters> = {},
+): THREE.MeshStandardMaterial {
+  const mat = pbr(name, repeatX, repeatY, extra)
+  const t = texLoader.load(`/assets/tex/${name}/disp.jpg`)
+  t.wrapS = THREE.RepeatWrapping
+  t.wrapT = THREE.RepeatWrapping
+  t.repeat.set(repeatX, repeatY)
+  mat.displacementMap = t
+  mat.displacementScale = scale
+  mat.displacementBias = -scale / 2
+  return mat
 }
 
 // ---------------------------------------------------------------- 환경광 (HDRI)
@@ -112,10 +133,11 @@ function wallSegment(
   const len = Math.abs(to - from)
   const mid = (from + to) / 2
   const { wallH, wallT } = CASTLE
+  // 변위 맵이 실제 요철을 만들도록 세분화
   const geo =
     axis === 'z'
-      ? new THREE.BoxGeometry(wallT, wallH, len)
-      : new THREE.BoxGeometry(len, wallH, wallT)
+      ? new THREE.BoxGeometry(wallT, wallH, len, 4, 24, Math.max(24, Math.floor(len * 2)))
+      : new THREE.BoxGeometry(len, wallH, wallT, Math.max(24, Math.floor(len * 2)), 24, 4)
   const seg = new THREE.Mesh(geo, mat)
   seg.position.set(axis === 'z' ? fixed : mid, wallH / 2, axis === 'z' ? mid : fixed)
   seg.castShadow = true
@@ -141,7 +163,7 @@ function wallSegment(
 
 export function buildCastle(scene: THREE.Scene): WorldDecor {
   const decor: WorldDecor = { torchLights: [], flags: [] }
-  const stone = pbr('bricks', 2.5, 1, { color: 0x9aa0b0 })
+  const stone = pbrDisplaced('bricks', 2.5, 1, 0.22, { color: 0x9aa0b0 })
   const stoneDark = pbr('bricks', 1.2, 0.6, { color: 0x9a9aa8 })
   const wood = new THREE.MeshStandardMaterial({ color: 0x4a3826, roughness: 0.85 })
   const roofMat = new THREE.MeshStandardMaterial({ color: 0x22232e, roughness: 0.75 })
@@ -154,17 +176,53 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   wallSegment(scene, stone, stoneDark, 'x', north, west, east)
   wallSegment(scene, stone, stoneDark, 'x', south, west, east)
 
-  // 성문루: 상판 + 반개방 목재 성문
-  const lintel = new THREE.Mesh(new THREE.BoxGeometry(3.2, 3, gateHalf * 2 + 2.6), stone)
-  lintel.position.set(east, wallH - 0.4, 0)
-  lintel.castShadow = true
-  scene.add(lintel)
+  // 성문루: 아치형 개구 (Shape에 구멍) + 상부 총안
+  const arch = new THREE.Shape()
+  const gw = gateHalf + 1.4
+  arch.moveTo(-gw, 0)
+  arch.lineTo(-gw, wallH + 1.6)
+  arch.lineTo(gw, wallH + 1.6)
+  arch.lineTo(gw, 0)
+  arch.lineTo(gateHalf * 0.9, 0)
+  arch.lineTo(gateHalf * 0.9, 3.4)
+  arch.absarc(0, 3.4, gateHalf * 0.9, 0, Math.PI, false)
+  arch.lineTo(-gateHalf * 0.9, 0)
+  arch.lineTo(-gw, 0)
+  const gateGeo = new THREE.ExtrudeGeometry(arch, { depth: CASTLE.wallT + 1, bevelEnabled: false })
+  const gatehouse = new THREE.Mesh(gateGeo, pbr('bricks', 0.5, 0.35, { color: 0x9aa0b0 }))
+  gatehouse.rotation.y = -Math.PI / 2
+  gatehouse.position.set(east + (CASTLE.wallT + 1) / 2, 0, -gw)
+  // ExtrudeGeometry 좌표계 보정: shape의 x가 -z가 되도록 회전했으므로 z 오프셋
+  gatehouse.position.z = gw
+  gatehouse.castShadow = true
+  gatehouse.receiveShadow = true
+  scene.add(gatehouse)
+  // 아치 위 머시콜레이션(내밀린 총안 돌기)
+  for (let z = -gw + 0.6; z < gw; z += 1.2) {
+    const cor = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), stone)
+    cor.position.set(east + 1.6, wallH + 1.2, z)
+    cor.castShadow = true
+    scene.add(cor)
+  }
   for (const side of [-1, 1]) {
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.35, 5.2, gateHalf * 0.95), wood)
     door.position.set(east + 0.5, 2.6, side * gateHalf * 0.6)
     door.rotation.y = side * 0.55
     door.castShadow = true
     scene.add(door)
+  }
+
+  // 버트레스: 동벽 바깥 경사 지지벽 — 성벽 실루엣을 풍부하게
+  for (const bz of [-14, -8.5, 8.5, 14]) {
+    const but = new THREE.Mesh(new THREE.BoxGeometry(1.6, wallH * 0.75, 1.4), stone)
+    but.position.set(east + 0.9, (wallH * 0.75) / 2, bz)
+    but.rotation.z = -0.06
+    but.castShadow = true
+    scene.add(but)
+    const cap = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.5, 1.7), stoneDark)
+    cap.position.set(east + 0.85, wallH * 0.75, bz)
+    cap.castShadow = true
+    scene.add(cap)
   }
 
   // 망루: 모서리 4 + 성문 좌우 2 (원통 + 원뿔 지붕 + 깃발)
@@ -179,7 +237,7 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   for (const [ti, [tx, tz, big]] of towers.entries()) {
     const r = big ? 3.0 : 2.0
     const h = big ? 12 : 10
-    const tower = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r, h, 12), stone)
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.9, r, h, 24, 16), stone)
     tower.position.set(tx, h / 2, tz)
     tower.castShadow = true
     tower.receiveShadow = true
@@ -252,16 +310,22 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   const wellRoof = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1, 6), roofMat)
   wellRoof.position.set(west + 14, 2.4, -6)
   scene.add(wellRoof)
-  for (let i = 0; i < 5; i++) {
-    const crate = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), wood)
-    crate.position.set(
-      west + 4 + rand01(i, 61) * 6,
-      0.5 + (i === 4 ? 1 : 0),
-      6 + rand01(i, 62) * 5,
-    )
-    crate.rotation.y = rand01(i, 63)
-    crate.castShadow = true
-    scene.add(crate)
+  {
+    const crateLoader = new GLTFLoader()
+    crateLoader.load('/assets/models/wooden_crate_01/wooden_crate_01.gltf', (g) => {
+      g.scene.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.castShadow = true
+          o.receiveShadow = true
+        }
+      })
+      for (let i = 0; i < 5; i++) {
+        const inst = g.scene.clone(true)
+        inst.position.set(west + 4 + rand01(i, 61) * 6, i === 4 ? 0.95 : 0, 6 + rand01(i, 62) * 5)
+        inst.rotation.y = rand01(i, 63) * Math.PI
+        scene.add(inst)
+      }
+    })
   }
 
   // 길가 화톳불 2기 — 어둠을 견디는 전초의 불빛
@@ -321,50 +385,49 @@ export function buildEnvironment(scene: THREE.Scene): void {
   courtyard.receiveShadow = true
   scene.add(courtyard)
 
-  // 바위 (PBR 아님 — 원경 소품)
-  const rockGeo = new THREE.DodecahedronGeometry(1, 1)
-  const rockMat = new THREE.MeshStandardMaterial({ color: 0x33333c, roughness: 1, envMapIntensity: 0.25 })
-  const rocks = new THREE.InstancedMesh(rockGeo, rockMat, 24)
-  const m = new THREE.Matrix4()
-  let placed = 0
-  for (let i = 0; i < 40 && placed < 24; i++) {
+  // 포토스캔 소품 (Poly Haven CC0): 이끼 바위 세트·고사목 — 실사 디테일 담당
+  const gltf = new GLTFLoader()
+  const scatter = (
+    url: string,
+    placements: { x: number; z: number; s: number; ry: number }[],
+    tint?: number,
+  ): void => {
+    gltf.load(url, (g) => {
+      g.scene.traverse((o) => {
+        if (o instanceof THREE.Mesh) {
+          o.castShadow = true
+          o.receiveShadow = true
+          if (tint) {
+            const m = o.material as THREE.MeshStandardMaterial
+            m.color.multiplyScalar(1)
+            m.color.setHex(tint).multiply(new THREE.Color(1, 1, 1))
+          }
+        }
+      })
+      for (const p of placements) {
+        const inst = g.scene.clone(true)
+        inst.position.set(p.x, 0, p.z)
+        inst.scale.setScalar(p.s)
+        inst.rotation.y = p.ry
+        scene.add(inst)
+      }
+    })
+  }
+  const rockPlaces = []
+  for (let i = 0; i < 9; i++) {
     const x = CASTLE.east + 8 + rand01(i, 31) * (FIELD.maxX - CASTLE.east - 8)
     const z = FIELD.minZ + rand01(i, 32) * (FIELD.maxZ - FIELD.minZ)
-    if (Math.abs(z) < 4) continue
-    const s = 0.5 + rand01(i, 33) * 1.2
-    m.makeRotationY(rand01(i, 34) * Math.PI * 2)
-    m.setPosition(x, s * 0.35, z)
-    m.scale(new THREE.Vector3(s, s * 0.65, s))
-    rocks.setMatrixAt(placed++, m)
-  }
-  rocks.count = placed
-  rocks.castShadow = true
-  rocks.receiveShadow = true
-  scene.add(rocks)
-
-  // 고사목
-  const trunkMat = new THREE.MeshStandardMaterial({ color: 0x30281f, roughness: 1 })
-  for (let i = 0; i < 9; i++) {
-    const x = CASTLE.east + 12 + rand01(i, 41) * (FIELD.maxX - CASTLE.east - 12)
-    const z = FIELD.minZ + rand01(i, 42) * (FIELD.maxZ - FIELD.minZ)
     if (Math.abs(z) < 4.5) continue
-    const h = 2.6 + rand01(i, 43) * 2.2
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.22, h, 6), trunkMat)
-    trunk.position.set(x, h / 2, z)
-    trunk.rotation.z = (rand01(i, 44) - 0.5) * 0.3
-    trunk.castShadow = true
-    scene.add(trunk)
-    for (let b = 0; b < 3; b++) {
-      const bl = 0.9 + rand01(i * 3 + b, 45) * 0.9
-      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.08, bl, 4), trunkMat)
-      branch.position.set(
-        x + (rand01(i * 3 + b, 46) - 0.5) * 1.3,
-        h * (0.55 + b * 0.16),
-        z + (rand01(i * 3 + b, 47) - 0.5) * 1.3,
-      )
-      branch.rotation.z = (rand01(i * 3 + b, 48) - 0.5) * 2.1
-      branch.castShadow = true
-      scene.add(branch)
-    }
+    rockPlaces.push({ x, z, s: 0.35 + rand01(i, 33) * 0.55, ry: rand01(i, 34) * Math.PI * 2 })
   }
+  scatter('/assets/models/rock_moss_set_01/rock_moss_set_01.gltf', rockPlaces)
+
+  const treePlaces = []
+  for (let i = 0; i < 6; i++) {
+    const x = CASTLE.east + 13 + rand01(i, 41) * (FIELD.maxX - CASTLE.east - 13)
+    const z = FIELD.minZ + rand01(i, 42) * (FIELD.maxZ - FIELD.minZ)
+    if (Math.abs(z) < 5) continue
+    treePlaces.push({ x, z, s: 0.9 + rand01(i, 43) * 0.6, ry: rand01(i, 44) * Math.PI * 2 })
+  }
+  scatter('/assets/models/dead_tree_trunk/dead_tree_trunk.gltf', treePlaces)
 }

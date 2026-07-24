@@ -10,6 +10,12 @@ import {
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
 import type { SiegeInput } from '../../siege/sim/world'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js'
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { buildAsh, buildCastle, buildEnvironment, loadSky } from './environment'
 
 const STEP_MS = 1000 / TICKS_PER_SECOND
@@ -47,6 +53,36 @@ scene.add(sun)
 const decor = buildCastle(scene)
 buildEnvironment(scene)
 const ash = buildAsh(scene)
+
+// ---------------------------------------------------------------- 포스트프로세싱
+const composer = new EffectComposer(renderer)
+composer.addPass(new RenderPass(scene, camera))
+const ssao = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight)
+ssao.kernelRadius = 0.7
+ssao.minDistance = 0.002
+ssao.maxDistance = 0.09
+composer.addPass(ssao)
+const bloom = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.55, // strength — 횃불·달만 은은히
+  0.6,
+  0.82, // threshold
+)
+composer.addPass(bloom)
+// 비네트 (다크소울식 화면 가장자리 침잠)
+const vignette = new ShaderPass({
+  uniforms: { tDiffuse: { value: null }, strength: { value: 0.42 } },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      float d = distance(vUv, vec2(0.5));
+      c.rgb *= smoothstep(0.95, 0.42, d * (1.0 + strength));
+      gl_FragColor = c;
+    }`,
+})
+composer.addPass(vignette)
+composer.addPass(new OutputPass())
 
 // 성주 (임시 — M2a-2에서 캐릭터 퀄리티 확정 후 교체)
 function makeLord(): THREE.Group {
@@ -247,7 +283,7 @@ function frame(now: number): void {
   ap.needsUpdate = true
 
   syncScene()
-  renderer.render(scene, camera)
+  composer.render()
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
@@ -256,4 +292,5 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
   renderer.setSize(window.innerWidth, window.innerHeight)
+  composer.setSize(window.innerWidth, window.innerHeight)
 })
