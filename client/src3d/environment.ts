@@ -176,50 +176,50 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   wallSegment(scene, decor, stoneDark, 'x', north, west, east, -1)
   wallSegment(scene, decor, stoneDark, 'x', south, west, east, 1)
 
-  // 성문루: 아치형 개구 (Shape에 구멍) + 상부 총안
-  const arch = new THREE.Shape()
-  const gw = gateHalf + 2.2
-  const gh = gateHalf * 0.95
-  const archTop = 10.5 // 고딕 첨두 정점
-  arch.moveTo(-gw, 0)
-  arch.lineTo(-gw, wallH + 3)
-  arch.lineTo(gw, wallH + 3)
-  arch.lineTo(gw, 0)
-  arch.lineTo(gh, 0)
-  // 첨두 아치 (좌우 원호가 정점에서 만난다)
-  arch.lineTo(gh, 6)
-  arch.quadraticCurveTo(gh * 0.9, archTop * 0.92, 0, archTop)
-  arch.quadraticCurveTo(-gh * 0.9, archTop * 0.92, -gh, 6)
-  arch.lineTo(-gh, 0)
-  arch.lineTo(-gw, 0)
-  const gateGeo = new THREE.ExtrudeGeometry(arch, { depth: CASTLE.wallT + 1, bevelEnabled: false })
-  const gatehouse = new THREE.Mesh(gateGeo, pbr('bricks', 0.28, 0.2, { color: 0x9aa0b0 }))
-  gatehouse.rotation.y = -Math.PI / 2
-  gatehouse.position.set(east + (CASTLE.wallT + 1) / 2, 0, -gw)
-  // ExtrudeGeometry 좌표계 보정: shape의 x가 -z가 되도록 회전했으므로 z 오프셋
-  gatehouse.position.z = gw
-  gatehouse.castShadow = true
-  gatehouse.receiveShadow = true
-  decor.occluders.push(gatehouse)
-  scene.add(gatehouse)
-  // 아치 위 머시콜레이션(내밀린 총안 돌기)
-  for (let z = -gw + 0.8; z < gw; z += 1.6) {
-    const cor = new THREE.Mesh(new THREE.BoxGeometry(1, 1.2, 1), stone)
-    cor.position.set(east + 2, wallH + 2.4, z)
-    cor.castShadow = true
-    scene.add(cor)
+  // 성문루: 성벽과 같은 높이·두께의 플러시 벽 — 정면이 한 장으로 평평하다.
+  // 첨두 아치가 아래를 관통 (보도는 sim상 성문 상부 6.4 구간만 비워둠)
+  {
+    const arch = new THREE.Shape()
+    const gw = gateHalf + 0.05 // 벽 구간과 이음새 없이
+    const gh = gateHalf * 0.95
+    const archTop = 8.4
+    arch.moveTo(-gw, 0)
+    arch.lineTo(-gw, wallH)
+    arch.lineTo(gw, wallH)
+    arch.lineTo(gw, 0)
+    arch.lineTo(gh, 0)
+    arch.lineTo(gh, 5.4)
+    arch.quadraticCurveTo(gh * 0.9, archTop * 0.94, 0, archTop)
+    arch.quadraticCurveTo(-gh * 0.9, archTop * 0.94, -gh, 5.4)
+    arch.lineTo(-gh, 0)
+    arch.lineTo(-gw, 0)
+    const gateGeo = new THREE.ExtrudeGeometry(arch, { depth: CASTLE.wallT, bevelEnabled: false })
+    const gatehouse = new THREE.Mesh(gateGeo, pbr('bricks', 0.32, 0.55, { color: 0x9aa0b0 }))
+    gatehouse.rotation.y = -Math.PI / 2
+    gatehouse.position.set(east + CASTLE.wallT / 2, 0, 0)
+    gatehouse.castShadow = true
+    gatehouse.receiveShadow = true
+    decor.occluders.push(gatehouse)
+    scene.add(gatehouse)
+    // 성문 상부 흉벽 (연속 실루엣)
+    const lip2 = CASTLE.wallT / 2 - 0.55
+    for (let z = -gw + 0.9; z < gw; z += 2.1) {
+      const m2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 1.6), stoneDark)
+      m2.position.set(east + lip2, wallH + 1.1, z)
+      m2.castShadow = true
+      scene.add(m2)
+    }
   }
-
   // 홍예석(voussoir): 첨두 곡선을 따라 낱개 돌 — '조립된 석조'의 인상
   {
     const gh2 = gateHalf * 0.95
-    const top = 10.5
+    const top = 8.4
     const curvePts: THREE.Vector2[] = []
     for (let i = 0; i <= 7; i++) {
       const u = i / 7
       // 좌측 곡선 (quadratic: (−gh2,6) → 제어(−gh2*0.9, top*0.92) → (0, top))
       const x = (1 - u) * (1 - u) * -gh2 + 2 * (1 - u) * u * (-gh2 * 0.9) + u * u * 0
-      const y = (1 - u) * (1 - u) * 6 + 2 * (1 - u) * u * (top * 0.92) + u * u * top
+      const y = (1 - u) * (1 - u) * 5.4 + 2 * (1 - u) * u * (top * 0.94) + u * u * top
       curvePts.push(new THREE.Vector2(x, y))
     }
     const allPts = [...curvePts, ...curvePts.slice(0, -1).reverse().map((p2) => new THREE.Vector2(-p2.x, p2.y))]
@@ -254,41 +254,27 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
       cross.position.set(0, y, 0)
       grille.add(cross)
     }
-    grille.position.set(east - 0.9, 5.4, 0) // 반쯤 올라간 상태 (성주 키를 넘긴다)
+    grille.position.set(east, 5.4, 0) // 터널 중앙, 반쯤 올라간 상태
     grille.traverse((o) => {
       if (o instanceof THREE.Mesh) o.castShadow = true
     })
     scene.add(grille)
   }
   for (const side of [-1, 1]) {
-    const door = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9.5, gateHalf * 0.95), wood)
-    door.position.set(east + 0.5, 4.75, side * gateHalf * 0.6)
+    const door = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7.6, gateHalf * 0.95), wood)
+    door.position.set(east + 0.5, 3.8, side * gateHalf * 0.6)
     door.rotation.y = side * 0.55
     door.castShadow = true
     scene.add(door)
   }
 
-  // 버트레스: 동벽 바깥 경사 지지벽 — 성벽 실루엣을 풍부하게
-  for (const bz of [-14, -8.5, 8.5, 14]) {
-    const but = new THREE.Mesh(new THREE.BoxGeometry(2.4, wallH * 0.82, 2.2), stone)
-    but.position.set(east + 1.4, (wallH * 0.82) / 2, bz)
-    but.rotation.z = -0.05
-    but.castShadow = true
-    scene.add(but)
-    const cap = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.8, 2.6), stoneDark)
-    cap.position.set(east + 1.3, wallH * 0.82, bz)
-    cap.castShadow = true
-    scene.add(cap)
-  }
-
   // 망루: 모서리 4 + 성문 좌우 2 (원통 + 원뿔 지붕 + 깃발)
+  // 성문탑(원통 2기)은 보도 시야를 막아 제거 — 모서리 망루는 성곽 바깥 능보로
   const towers: [number, number, boolean][] = [
-    [east, north, true],
-    [east, south, true],
-    [west, north, true],
-    [west, south, true],
-    [east, -gateHalf - 2.4, false],
-    [east, gateHalf + 2.4, false],
+    [east + 2.5, north - 1.5, true],
+    [east + 2.5, south + 1.5, true],
+    [west - 2.5, north - 1.5, true],
+    [west - 2.5, south + 1.5, true],
   ]
   for (const [ti, [tx, tz, big]] of towers.entries()) {
     const r = big ? 3.6 : 2.4
@@ -326,7 +312,7 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   // 횃불 (성문 양옆 + 동벽) — 포인트 라이트 4개 제한
   for (const tz of [-gateHalf - 1, gateHalf + 1, -12, 12]) {
     const light = new THREE.PointLight(0xff8838, 20, 14, 1.9)
-    light.position.set(east + 2.1, 6.4, tz)
+    light.position.set(east + CASTLE.wallT / 2 + 0.6, 6.4, tz)
     decor.torchLights.push(light)
     scene.add(light)
   }
@@ -447,7 +433,7 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
       mm.castShadow = true
       g.add(mm)
     }
-    g.position.set(east + 3.4, 0, side * (gateHalf + 4.6))
+    g.position.set(east + CASTLE.wallT / 2 + 2.2, 0, side * (gateHalf + 4.6))
     g.rotation.y = Math.PI / 2
     scene.add(g)
   }

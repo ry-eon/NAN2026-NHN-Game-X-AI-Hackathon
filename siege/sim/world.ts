@@ -20,7 +20,7 @@ export const CASTLE = {
   north: -18,
   south: 18,
   wallH: 11,
-  wallT: 5.2, // 성벽 보도 폭 — 병사·공성 병기 배치 공간
+  wallT: 8.0, // 성벽 보도 폭 — 대포 + 병사 2열이 서는 넓이
   gateHalf: 3.2,
 }
 
@@ -39,18 +39,14 @@ const RECT_COLLIDERS: RectC[] = [
   { x0: C.west, x1: C.east, z0: C.north - halfT, z1: C.north + halfT }, // 북벽
   { x0: C.west, x1: C.east, z0: C.south - halfT, z1: C.south + halfT }, // 남벽
   { x0: C.west + 1.5, x1: C.west + 10.5, z0: -6.5, z1: 6.5 }, // 내성
-  // 동벽 성문 측면 (성문 개구부와 성벽 보도 배제 구간 사이의 지상 통과 차단)
-  { x0: C.east - halfT, x1: C.east + halfT, z0: -C.gateHalf - 2.4, z1: -C.gateHalf },
-  { x0: C.east - halfT, x1: C.east + halfT, z0: C.gateHalf, z1: C.gateHalf + 2.4 },
 ]
 /** 망루 (원형) */
 const TOWER_COLLIDERS: { x: number; z: number; r: number }[] = [
-  { x: C.east, z: C.north, r: 4.0 },
-  { x: C.east, z: C.south, r: 4.0 },
-  { x: C.west, z: C.north, r: 4.0 },
-  { x: C.west, z: C.south, r: 4.0 },
-  { x: C.east, z: -C.gateHalf - 2.4, r: 2.8 },
-  { x: C.east, z: C.gateHalf + 2.4, r: 2.8 },
+  // 모서리 망루는 성곽 바깥으로 돌출 (보도·시야를 막지 않는 능보 배치)
+  { x: C.east + 2.5, z: C.north - 1.5, r: 4.0 },
+  { x: C.east + 2.5, z: C.south + 1.5, r: 4.0 },
+  { x: C.west - 2.5, z: C.north - 1.5, r: 4.0 },
+  { x: C.west - 2.5, z: C.south + 1.5, r: 4.0 },
 ]
 
 const inRect = (x: number, z: number, r: RectC): boolean =>
@@ -78,7 +74,7 @@ export function heightAt(x: number, z: number): number {
   if (
     x >= C.east - halfT &&
     x <= C.east + halfT &&
-    Math.abs(z) >= C.gateHalf + 2.4 &&
+    Math.abs(z) >= C.gateHalf &&
     z >= C.north + 0.5 &&
     z <= C.south - 0.5
   ) {
