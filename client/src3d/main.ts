@@ -17,6 +17,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { buildAsh, buildCastle, buildEnvironment, loadSky } from './environment'
+import { animateRig, makeFire, makeKnight } from './models'
 
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
@@ -53,6 +54,14 @@ scene.add(sun)
 const decor = buildCastle(scene)
 buildEnvironment(scene)
 const ash = buildAsh(scene)
+
+// 화염 FX — 횃불·화톳불 광원 위치에 부착
+const fires = decor.torchLights.map((l) => {
+  const f = makeFire(l.position.y > 3 ? 0.7 : 1.4)
+  f.group.position.copy(l.position).add(new THREE.Vector3(-0.25, -0.85, 0))
+  scene.add(f.group)
+  return f
+})
 
 // 달빛 광선 (가짜 볼류메트릭) — 어둠을 가르는 빛줄기
 for (let i = 0; i < 3; i++) {
@@ -102,35 +111,9 @@ const vignette = new ShaderPass({
 composer.addPass(vignette)
 composer.addPass(new OutputPass())
 
-// 성주 (임시 — M2a-2에서 캐릭터 퀄리티 확정 후 교체)
-function makeLord(): THREE.Group {
-  const g = new THREE.Group()
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.34, 0.85, 6, 12),
-    new THREE.MeshStandardMaterial({ color: 0x3a5a80, roughness: 0.6, metalness: 0.25 }),
-  )
-  body.position.y = 0.95
-  const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.26, 12, 10),
-    new THREE.MeshStandardMaterial({ color: 0xd8b090, roughness: 0.7 }),
-  )
-  head.position.y = 1.75
-  const crown = new THREE.Mesh(
-    new THREE.TorusGeometry(0.2, 0.05, 6, 12),
-    new THREE.MeshStandardMaterial({ color: 0xd4a838, roughness: 0.35, metalness: 0.8 }),
-  )
-  crown.rotation.x = Math.PI / 2
-  crown.position.y = 1.95
-  const cape = new THREE.Mesh(
-    new THREE.BoxGeometry(0.6, 1.05, 0.1),
-    new THREE.MeshStandardMaterial({ color: 0x6a1e1e, roughness: 0.85 }),
-  )
-  cape.position.set(0, 0.95, -0.32)
-  for (const m of [body, head, crown, cape]) m.castShadow = true
-  g.add(body, head, crown, cape)
-  return g
-}
-const lordMesh = makeLord()
+// 성주 — 절차 조형 풀아머 기사 (금장, 검증 슬라이스 v2)
+const lordRig = makeKnight(0x4a1414, true)
+const lordMesh = lordRig.root
 scene.add(lordMesh)
 
 // 괴수 메시 풀
@@ -320,6 +303,8 @@ function frame(now: number): void {
   }
   // 장식 애니메이션 (연출 전용 — sim 무관)
   const t = now / 1000
+  animateRig(lordRig, t, state.lord.target !== null)
+  for (const f of fires) f.update(t)
   decor.torchLights.forEach((l, i) => {
     l.intensity = 12 + Math.sin(t * 9 + i * 1.7) * 2.5 + Math.sin(t * 23 + i) * 1.5
   })

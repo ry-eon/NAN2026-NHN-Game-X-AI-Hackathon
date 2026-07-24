@@ -214,6 +214,57 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     cor.castShadow = true
     scene.add(cor)
   }
+
+  // 홍예석(voussoir): 첨두 곡선을 따라 낱개 돌 — '조립된 석조'의 인상
+  {
+    const gh2 = gateHalf * 0.95
+    const top = 10.5
+    const curvePts: THREE.Vector2[] = []
+    for (let i = 0; i <= 7; i++) {
+      const u = i / 7
+      // 좌측 곡선 (quadratic: (−gh2,6) → 제어(−gh2*0.9, top*0.92) → (0, top))
+      const x = (1 - u) * (1 - u) * -gh2 + 2 * (1 - u) * u * (-gh2 * 0.9) + u * u * 0
+      const y = (1 - u) * (1 - u) * 6 + 2 * (1 - u) * u * (top * 0.92) + u * u * top
+      curvePts.push(new THREE.Vector2(x, y))
+    }
+    const allPts = [...curvePts, ...curvePts.slice(0, -1).reverse().map((p2) => new THREE.Vector2(-p2.x, p2.y))]
+    for (let i = 0; i < allPts.length - 1; i++) {
+      const a = allPts[i]!
+      const b = allPts[i + 1]!
+      const mid = a.clone().add(b).multiplyScalar(0.5)
+      const ang = Math.atan2(b.y - a.y, b.x - a.x)
+      const vous = new THREE.Mesh(new THREE.BoxGeometry(a.distanceTo(b) * 1.15, 0.75, CASTLE.wallT + 1.3), stoneDark)
+      vous.position.set(east + 0.2, 0, 0)
+      vous.position.z = -mid.x // shape x → 월드 -z (성문루 회전과 일치)
+      vous.position.y = mid.y
+      vous.rotation.x = ang // z축 곡선이므로 x축 회전
+      vous.castShadow = true
+      scene.add(vous)
+    }
+    // 쇠창살 (반쯤 내려온 포트컬리스)
+    const ironMat = new THREE.MeshStandardMaterial({ color: 0x2c2e36, metalness: 0.75, roughness: 0.5 })
+    const grille = new THREE.Group()
+    for (let z = -gh2 + 0.35; z <= gh2 - 0.3; z += 0.55) {
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 6.2, 6), ironMat)
+      bar.position.set(0, 3.1, z)
+      // 창끝
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.3, 6), ironMat)
+      tip.position.set(0, -0.1, z)
+      tip.rotation.x = Math.PI
+      grille.add(bar, tip)
+    }
+    for (let y = 1.2; y <= 5.6; y += 1.4) {
+      const cross = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, gh2 * 2 - 0.4, 6), ironMat)
+      cross.rotation.x = Math.PI / 2
+      cross.position.set(0, y, 0)
+      grille.add(cross)
+    }
+    grille.position.set(east - 0.9, 4.2, 0) // 반쯤 올라간 상태
+    grille.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.castShadow = true
+    })
+    scene.add(grille)
+  }
   for (const side of [-1, 1]) {
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.4, 9.5, gateHalf * 0.95), wood)
     door.position.set(east + 0.5, 4.75, side * gateHalf * 0.6)
@@ -279,12 +330,6 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
 
   // 횃불 (성문 양옆 + 동벽) — 포인트 라이트 4개 제한
   for (const tz of [-gateHalf - 1, gateHalf + 1, -12, 12]) {
-    const flame = new THREE.Mesh(
-      new THREE.ConeGeometry(0.2, 0.5, 6),
-      new THREE.MeshBasicMaterial({ color: 0xffb050 }),
-    )
-    flame.position.set(east + 1.85, 6.2, tz)
-    scene.add(flame)
     const light = new THREE.PointLight(0xff8838, 20, 14, 1.9)
     light.position.set(east + 2.1, 6.4, tz)
     decor.torchLights.push(light)
@@ -421,12 +466,6 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     pit.position.set(bx, 0.22, bz)
     pit.castShadow = true
     scene.add(pit)
-    const fire = new THREE.Mesh(
-      new THREE.ConeGeometry(0.4, 0.9, 7),
-      new THREE.MeshBasicMaterial({ color: 0xff9a40 }),
-    )
-    fire.position.set(bx, 0.85, bz)
-    scene.add(fire)
     const light = new THREE.PointLight(0xff7a30, 26, 16, 1.9)
     light.position.set(bx, 1.6, bz)
     decor.torchLights.push(light)
