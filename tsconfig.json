@@ -18,5 +18,5 @@
       "@core/*": ["./core/src/*"]
     }
   },
-  "include": ["core", "client", "bots", "pipeline", "vite.config.ts"]
+  "include": ["core", "client", "bots", "pipeline", "siege", "vite.config.ts"]
 }
