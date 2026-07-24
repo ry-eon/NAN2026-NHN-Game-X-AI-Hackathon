@@ -89,6 +89,10 @@ export interface UnitDef {
   aura?: { radius: number; speedFactor: number }
   /** 해금된 기술 목록 (applyLevel이 채운다). statMod 패시브는 이미 스탯에 구워져 있음 */
   skills?: SkillDef[]
+  /** 시설(구조물): 가신이 아니다 — 복수 건설 가능, 레벨·기술 없음 (docs/02 성채 시설) */
+  structure?: boolean
+  /** 광역 맥동: 단일 표적 대신 사거리 내 모든 적을 주기 타격 (기름 가마) */
+  areaPulse?: boolean
 }
 
 // ---------------------------------------------------------------- 기술 (docs/07 v2)

@@ -183,12 +183,69 @@ const GEAR: Record<string, string[]> = {
 }
 
 const ROLE_COLORS: Record<string, number> = {
+  barricade: 0x8a6a42,
+  watchtower: 0x9aa0ae,
+  cauldron: 0x6e5232,
   blocker: 0x4e9a5a,
   bruiser: 0xc4644a,
   archer: 0x5aa0d0,
   mage: 0x8a5ad0,
   healer: 0x5ad0a0,
   slower: 0xd0c05a,
+}
+
+/** 시설 스프라이트 (신체 템플릿 미사용 — 구조물) */
+const STRUCTURE_SPRITES: Record<string, string[]> = {
+  barricade: [
+    '........................',
+    '........................',
+    '........................',
+    '....k..........k........',
+    '...kwk...k....kwk.......',
+    '...kwwk.kwk..kwwk.......',
+    '..kwWwkkwwwkkwWwk.......',
+    '..kwwWwwwWwwwwwwk.......',
+    '..kwWwwwwwwWwwWwk.......',
+    '..kwwwWwwwwwwwwwk.......',
+    '.kwwWwwwwWwwwWwwwk......',
+    '.kwwwwwWwwwwwwwWwk......',
+    '.kwWwwwwwwwWwwwwwk......',
+    '.kkkkkkkkkkkkkkkkk......',
+    '........................',
+  ],
+  watchtower: [
+    '........................',
+    '....m.m.m.m.............',
+    '....mmmmmmm.............',
+    '....mMMMMMm.............',
+    '....mMkkkMm.............',
+    '....mMkekMm.............',
+    '....mMkkkMm.............',
+    '....mMMMMMm.............',
+    '.....mMMMm..............',
+    '.....mMMMm..............',
+    '.....mMMMm..............',
+    '.....mMMMm..............',
+    '....mMMMMMm.............',
+    '....kkkkkkk.............',
+    '........................',
+  ],
+  cauldron: [
+    '........................',
+    '......e..e..............',
+    '.....e.ee.e.............',
+    '......eeee..............',
+    '....kkkkkkkk............',
+    '...kWWWWWWWWk...........',
+    '...kWwwwwwWWk...........',
+    '...kWwwwwwWWk...........',
+    '....kWwwwWWk............',
+    '.....kkkkkk.............',
+    '....kw....wk............',
+    '....kw....wk............',
+    '...kkk....kkk...........',
+    '........................',
+  ],
 }
 
 // ---------------------------------------------------------------- 괴수 (좌향)
@@ -386,6 +443,9 @@ export function registerPixelTextures(scene: Phaser.Scene): void {
       c: color,
       d: darken(color, 0.6),
     })
+  }
+  for (const [id, rows] of Object.entries(STRUCTURE_SPRITES)) {
+    make(`unit-${id}`, rows, { ...BASE, c: ROLE_COLORS[id]!, d: darken(ROLE_COLORS[id]!, 0.6) })
   }
   for (const [id, def] of Object.entries(ENEMY_SPRITES)) {
     make(`enemy-${id}`, def.rows, {

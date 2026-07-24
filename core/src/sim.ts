@@ -624,6 +624,36 @@ function unitsAttack(ctx: SimContext, state: GameState): void {
       continue
     }
 
+    // 비무장 구조물(바리케이드): 공격 없음
+    if (def.atk <= 0) continue
+
+    // 광역 맥동(기름 가마): 사거리 내 모든 적을 동시 타격
+    if (def.areaPulse) {
+      const victims = state.enemies.filter((e) => {
+        if (e.hp <= 0) return false
+        const p = enemyWorldPos(ctx, e)
+        return Math.hypot(p.x - unit.x, p.y - unit.y) <= def.range
+      })
+      if (victims.length === 0) continue
+      const damages: number[] = []
+      for (const v of victims) {
+        const dmg = damageVsEnemy(ctx, unit, def.atk, ctx.enemyDefs[v.defId]!.def)
+        v.hp -= dmg
+        damages.push(dmg)
+        if (v.hp <= 0) killEnemy(state, v, unit.id)
+      }
+      state.events.push({
+        type: 'unitAttacked',
+        unitId: unit.id,
+        unitDefId: def.id,
+        targetIds: victims.map((v) => v.id),
+        damages,
+      })
+      unit.cooldown = def.atkIntervalTicks
+      state.enemies = state.enemies.filter((e) => e.hp > 0)
+      continue
+    }
+
     let target: ActiveEnemy | undefined
     if (def.range <= 0) {
       // 근접: 저지 중인 적 중 첫 번째(저지 시작 순)
@@ -730,20 +760,21 @@ function enemiesAttack(ctx: SimContext, state: GameState): void {
     if (enemy.cooldown > 0) continue
     const def = ctx.enemyDefs[enemy.defId]!
 
-    // v3: 저지 슬롯이 없어 대기 중인 괴수도 앞을 막은 지상 유닛을 공격한다
-    // (봉쇄는 공짜가 아니다 — 행렬 전체가 방벽을 두들긴다)
-    if (enemy.blockedBy === null && !enemy.atWall) {
-      const pos = enemyWorldPos(ctx, enemy)
-      let target: ActiveUnit | undefined
-      let best = Infinity
-      for (const u of state.units) {
-        if (ctx.unitDefs[u.defId]!.placement === 'wallTop') continue
-        const d = Math.hypot(u.x - pos.x, u.y - pos.y)
-        if (d <= 1.05 && d < best) {
-          best = d
-          target = u
-        }
-      }
+    // v3: 앞길이 유닛으로 막혀 대기 중인 괴수는 그 유닛을 공격한다
+    // (봉쇄는 공짜가 아니다 — 행렬 전체가 방벽을 두들긴다).
+    // 우회 중에 스쳐 지나가는 괴수는 공격하지 않는다 (다음 칸이 막힌 경우만).
+    if (enemy.blockedBy === null && !enemy.atWall && enemy.route.length > 0) {
+      const nextIdx = Math.min(enemy.route.length - 1, Math.floor(enemy.pathPos + 1e-6) + 1)
+      const nextCell = enemy.route[nextIdx]!
+      const stalled = enemy.pathPos >= nextIdx - 0.6
+      const target = stalled
+        ? state.units.find(
+            (u) =>
+              u.x === nextCell.x &&
+              u.y === nextCell.y &&
+              ctx.unitDefs[u.defId]!.placement !== 'wallTop',
+          )
+        : undefined
       if (target) {
         const dmg = damage(def.atk, ctx.unitDefs[target.defId]!.def)
         const absorbed = Math.min(target.shield, dmg)

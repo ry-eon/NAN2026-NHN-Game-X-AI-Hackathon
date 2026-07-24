@@ -10,6 +10,7 @@ import {
   CHARACTER_POOL,
   ENEMY_DEFS,
   STAGES,
+  STRUCTURE_DEFS,
   Simulation,
   TICKS_PER_SECOND,
   UNIT_DEFS,
@@ -153,7 +154,13 @@ export class BattleScene extends Phaser.Scene {
       stage = STAGES[this.stageIndex] ?? STAGES[0]!
       this.battleDefs = CHARACTERS
     }
-    this.sim = new Simulation(stage, this.battleDefs, ENEMY_DEFS, undefined, startWallHp)
+    this.sim = new Simulation(
+      stage,
+      [...this.battleDefs, ...STRUCTURE_DEFS],
+      ENEMY_DEFS,
+      undefined,
+      startWallHp,
+    )
     this.tile = Math.min(
       60,
       Math.floor(GRID_MAX_W / this.sim.ctx.width),
@@ -232,9 +239,12 @@ export class BattleScene extends Phaser.Scene {
     })
     const kb = this.input.keyboard
     if (kb) {
-      const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT'] as const
+      const keys = ['ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'] as const
       keys.forEach((key, i) => {
-        kb.on(`keydown-${key}`, () => this.selectCard(this.battleDefs[i]?.id ?? null))
+        kb.on(`keydown-${key}`, () => {
+          const all = [...this.battleDefs, ...STRUCTURE_DEFS]
+          this.selectCard(all[i]?.id ?? null)
+        })
       })
       kb.on('keydown-R', () => this.queue({ type: 'repairWall' }))
       kb.on('keydown-Q', () => this.toggleSkillTargeting())
@@ -254,8 +264,9 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private selectCard(defId: string | null): void {
-    // 캐릭터 유일성: 이미 전장에 있는 가신은 다시 배치할 수 없다 (메타 규칙)
-    if (defId && this.sim.state.units.some((u) => u.defId === defId)) {
+    // 캐릭터 유일성: 이미 전장에 있는 가신은 다시 배치할 수 없다 (시설은 복수 건설 가능)
+    const isStructure = STRUCTURE_DEFS.some((d) => d.id === defId)
+    if (defId && !isStructure && this.sim.state.units.some((u) => u.defId === defId)) {
       this.toast('이미 전장에 있는 가신입니다')
       return
     }
@@ -772,14 +783,15 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private createCards(): void {
-    // 로스터(최대 8)가 한 줄에 들어가는 콤팩트 카드
-    this.battleDefs.forEach((def, i) => {
+    // 로스터(가신) + 시설이 한 줄에 — 시설은 황토 테두리로 구분
+    const all = [...this.battleDefs, ...STRUCTURE_DEFS]
+    all.forEach((def, i) => {
       const x = GRID_X + i * 102
       const y = 494
       const bg = this.add
-        .rectangle(x, y, 96, 42, 0x26263c)
+        .rectangle(x, y, 96, 42, def.structure ? 0x2c2618 : 0x26263c)
         .setOrigin(0, 0)
-        .setStrokeStyle(2, 0x44445f)
+        .setStrokeStyle(2, def.structure ? 0x8a6a42 : 0x44445f)
         .setDepth(20)
         .setInteractive({ useHandCursor: true })
       bg.on(
@@ -981,7 +993,8 @@ export class BattleScene extends Phaser.Scene {
     for (const card of this.cards) {
       const cdLeft = (state.redeployReadyAt[card.def.id] ?? 0) - state.tick
       const affordable = state.cost >= card.def.cost
-      const fielded = state.units.some((u) => u.defId === card.def.id) // 캐릭터 유일성
+      const fielded =
+        !card.def.structure && state.units.some((u) => u.defId === card.def.id) // 캐릭터 유일성 (시설 제외)
       const selected = this.selectedDefId === card.def.id
       card.bg.setStrokeStyle(2, selected ? 0xffd870 : 0x44445f)
       card.bg.setFillStyle(selected ? 0x3a3a58 : 0x26263c)
