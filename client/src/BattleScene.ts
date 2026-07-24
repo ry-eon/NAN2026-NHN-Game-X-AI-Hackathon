@@ -128,6 +128,10 @@ export class BattleScene extends Phaser.Scene {
     super('battle')
   }
 
+  init(data: { mode?: 'campaign' | 'free' }): void {
+    if (data.mode) this.mode = data.mode
+  }
+
   create(): void {
     let stage
     let startWallHp: number | undefined
@@ -173,6 +177,7 @@ export class BattleScene extends Phaser.Scene {
     this.createUnitMenu()
     this.gfx = this.add.graphics().setDepth(10)
     this.bindInput()
+    this.showOnboarding()
 
     // 재로드 시 영입 선택이 남아 있으면 전투 전에 먼저 처리
     if (this.mode === 'campaign' && this.campaign?.pendingCandidateIds) {
@@ -489,9 +494,9 @@ export class BattleScene extends Phaser.Scene {
       })
       .setDepth(20)
 
-    // 모드 전환 버튼
-    const modeBtn = this.add
-      .text(560, 10, this.mode === 'campaign' ? '자유 연습' : '캠페인으로', {
+    // 타이틀로 돌아가기
+    const titleBtn = this.add
+      .text(560, 10, '타이틀', {
         fontFamily: 'monospace',
         fontSize: '12px',
         color: '#8888aa',
@@ -500,12 +505,11 @@ export class BattleScene extends Phaser.Scene {
       })
       .setDepth(20)
       .setInteractive({ useHandCursor: true })
-    modeBtn.on(
+    titleBtn.on(
       'pointerdown',
       (_p: Phaser.Input.Pointer, _x: number, _y: number, ev: Phaser.Types.Input.EventData) => {
         ev.stopPropagation()
-        this.mode = this.mode === 'campaign' ? 'free' : 'campaign'
-        this.scene.restart()
+        this.scene.start('title')
       },
     )
 
@@ -873,6 +877,56 @@ export class BattleScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(41)
     this.input.once('pointerdown', () => this.scene.restart())
+  }
+
+  /** 온보딩: 목표 배너(항상) + 첫 침공 한정 배치 힌트 */
+  private showOnboarding(): void {
+    const banner = this.add
+      .text(
+        480,
+        230,
+        this.mode === 'campaign' && this.campaign
+          ? `제${this.campaign.stageIndex + 1}침공 — 괴수들로부터 성벽을 지켜라`
+          : '괴수들로부터 성벽을 지켜라',
+        {
+          fontFamily: 'monospace',
+          fontSize: '24px',
+          fontStyle: 'bold',
+          color: '#e8e8f0',
+          backgroundColor: '#000000aa',
+          padding: { x: 18, y: 10 },
+        },
+      )
+      .setOrigin(0.5)
+      .setDepth(35)
+    this.tweens.add({ targets: banner, alpha: 0, delay: 2600, duration: 700, onComplete: () => banner.destroy() })
+
+    // 첫 침공에서만: 배치가 없으면 카드로 유도하는 힌트
+    if (this.mode === 'campaign' && this.campaign?.stageIndex === 0) {
+      const hint = this.add
+        .text(GRID_X + 150, 470, '▼ 가신을 선택해 흙길(진입로)에 배치하세요', {
+          fontFamily: 'monospace',
+          fontSize: '14px',
+          color: '#ffd870',
+          backgroundColor: '#000000aa',
+          padding: { x: 10, y: 6 },
+        })
+        .setDepth(35)
+        .setVisible(false)
+      this.tweens.add({ targets: hint, alpha: 0.55, duration: 650, yoyo: true, repeat: -1 })
+      const timer = this.time.addEvent({
+        delay: 400,
+        loop: true,
+        callback: () => {
+          if (this.deployedCharIds.size > 0 || this.sim.state.status !== 'playing') {
+            hint.destroy()
+            timer.remove()
+          } else if (this.sim.state.tick > 2 * TICKS_PER_SECOND) {
+            hint.setVisible(true)
+          }
+        },
+      })
+    }
   }
 
   /** 전면 안내 오버레이 (캠페인 전환 화면) */

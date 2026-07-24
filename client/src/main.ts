@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { BattleScene } from './BattleScene'
+import { TitleScene } from './TitleScene'
 
 // client는 core의 상태를 그리기만 한다. 게임 룰 로직 금지 (docs/03-architecture.md).
 
@@ -14,5 +15,5 @@ new Phaser.Game({
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
   },
-  scene: [BattleScene],
+  scene: [TitleScene, BattleScene],
 })
