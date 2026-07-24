@@ -27,19 +27,19 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 0.88
+renderer.toneMappingExposure = 1.12
 document.getElementById('game')!.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-scene.fog = new THREE.Fog(0x05060c, 42, 115) // 밤안개 — 시야 끝이 어둠에 잠긴다
+scene.fog = new THREE.Fog(0x0a0c16, 50, 140) // 밤안개 — 시야 끝이 어둠에 잠긴다
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200)
 
 loadSky(scene, renderer)
-const hemi = new THREE.HemisphereLight(0x46506e, 0x181a22, 0.85)
+const hemi = new THREE.HemisphereLight(0x55608a, 0x20222c, 1.1)
 scene.add(hemi)
 // 달빛 — 차갑고 낮은 키 라이트 (동쪽에서 길게 드리우는 그림자)
-const sun = new THREE.DirectionalLight(0x93a4d2, 1.7)
+const sun = new THREE.DirectionalLight(0x9fb0dd, 2.6)
 sun.position.set(34, 22, -16)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
@@ -130,10 +130,10 @@ window.addEventListener('keydown', (e) => {
 })
 
 // 고정 부감 카메라: 남쪽에서 북쪽을 내려다봄 (서=성벽=왼쪽, 동=적=오른쪽). 휠 줌만.
-let camDist = 22
+let camDist = 17
 window.addEventListener('contextmenu', (e) => e.preventDefault())
 window.addEventListener('wheel', (e) => {
-  camDist = Math.max(10, Math.min(38, camDist + e.deltaY * 0.02))
+  camDist = Math.max(8, Math.min(34, camDist + e.deltaY * 0.02))
 })
 
 // 우클릭 → 지면 좌표로 이동 명령
@@ -229,8 +229,9 @@ function syncScene(): void {
 
   // 카메라: LoL식 고정 부감 — 성주 남쪽 상공에서 내려다보며 추적
   const target = new THREE.Vector3(state.lord.pos.x, 0, state.lord.pos.z)
-  camera.position.set(target.x, camDist * 0.95, target.z + camDist * 0.62)
-  camera.lookAt(target.x, 0, target.z - 2)
+  // 비스듬한 앵글(약 43°) — 성벽·인물·바위의 수직면이 화면에 실린다
+  camera.position.set(target.x, camDist * 0.7, target.z + camDist * 0.74)
+  camera.lookAt(target.x, 1.0, target.z - 1.5)
 
   // HUD
   document.getElementById('wall')!.textContent = `${state.wallHp}/${WALL_HP}`

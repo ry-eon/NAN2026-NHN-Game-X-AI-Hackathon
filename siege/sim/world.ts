@@ -126,7 +126,7 @@ export function createSiege(seed: number): { state: SiegeState; spawns: EnemySpa
       tick: 0,
       status: 'prep',
       wallHp: WALL_HP,
-      lord: { pos: { x: WALL_X - 4, z: 0 }, facing: 0, target: null },
+      lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null },
       enemies: [],
       spawnCursor: 0,
       nextId: 1,

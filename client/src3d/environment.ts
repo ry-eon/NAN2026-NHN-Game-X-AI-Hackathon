@@ -73,7 +73,7 @@ export function loadSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer): void
   new RGBELoader().load('/assets/hdr/dusk_1k.hdr', (hdr) => {
     hdr.mapping = THREE.EquirectangularReflectionMapping
     scene.environment = hdr // PBR 미세 간접광만 (반사 디테일용)
-    scene.environmentIntensity = 0.16
+    scene.environmentIntensity = 0.25
     void renderer
   })
   // 배경: 칠흑에 가까운 밤 — 다크소울 톤
@@ -356,7 +356,7 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
 
 export function buildEnvironment(scene: THREE.Scene): void {
   // 들판 (PBR 풀)
-  const grassMat = pbr('grass', 18, 12, { color: 0x60604f }) // 죽은 들판 — 잿빛 감쇠
+  const grassMat = pbr('grass', 44, 30, { color: 0x787866 }) // 죽은 들판 — 잿빛 감쇠
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(FIELD.maxX - FIELD.minX + 90, FIELD.maxZ - FIELD.minZ + 70),
     grassMat,
@@ -367,7 +367,7 @@ export function buildEnvironment(scene: THREE.Scene): void {
   scene.add(ground)
 
   // 흙길: 동쪽 지평 → 성문
-  const dirtMat = pbr('dirt', 7, 1, { color: 0x8a8078 })
+  const dirtMat = pbr('dirt', 14, 2, { color: 0x9a9088 })
   const road = new THREE.Mesh(new THREE.PlaneGeometry(FIELD.maxX - CASTLE.east + 20, 5.5), dirtMat)
   road.rotation.x = -Math.PI / 2
   road.position.set((CASTLE.east + FIELD.maxX) / 2 + 10, 0.02, 0)
@@ -375,7 +375,7 @@ export function buildEnvironment(scene: THREE.Scene): void {
   scene.add(road)
 
   // 안뜰 돌바닥 (PBR 포석)
-  const paveMat = pbr('stone', 8, 10, { color: 0x9098a8 })
+  const paveMat = pbr('stone', 14, 16, { color: 0xa0a8b8 })
   const courtyard = new THREE.Mesh(
     new THREE.PlaneGeometry(CASTLE.east - CASTLE.west - 1, CASTLE.south - CASTLE.north - 1),
     paveMat,
