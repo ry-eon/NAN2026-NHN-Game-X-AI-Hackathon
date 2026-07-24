@@ -58,14 +58,15 @@ export interface LordState {
   pos: Vec2
   /** 향하고 있는 방향 (렌더링용) */
   facing: number
+  /** 이동 목표 (우클릭 명령). null = 정지 */
+  target: Vec2 | null
 }
 
 export type SiegeStatus = 'prep' | 'assault' | 'won' | 'lost'
 
 export interface SiegeInput {
-  /** 성주 이동 (-1..1, 정규화는 sim이) */
-  moveX: number
-  moveZ: number
+  /** 성주 이동 명령 (우클릭 지점) — 명령형 입력이라 리플레이 기록에 적합 */
+  moveTo?: Vec2
   /** 준비 종료 → 침공 개시 */
   startAssault?: boolean
 }
@@ -125,7 +126,7 @@ export function createSiege(seed: number): { state: SiegeState; spawns: EnemySpa
       tick: 0,
       status: 'prep',
       wallHp: WALL_HP,
-      lord: { pos: { x: WALL_X - 4, z: 0 }, facing: 0 },
+      lord: { pos: { x: WALL_X - 4, z: 0 }, facing: 0, target: null },
       enemies: [],
       spawnCursor: 0,
       nextId: 1,
@@ -143,14 +144,26 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   if (state.status === 'won' || state.status === 'lost') return state
   state.tick++
 
-  // 성주 이동 (준비/침공 공통)
-  const len = Math.hypot(input.moveX, input.moveZ)
-  if (len > 0.01) {
-    const nx = input.moveX / Math.max(1, len)
-    const nz = input.moveZ / Math.max(1, len)
-    state.lord.pos.x = clamp(state.lord.pos.x + nx * LORD_SPEED * DT, FIELD.minX, FIELD.maxX)
-    state.lord.pos.z = clamp(state.lord.pos.z + nz * LORD_SPEED * DT, FIELD.minZ, FIELD.maxZ)
-    state.lord.facing = Math.atan2(nx, nz)
+  // 성주 이동 (우클릭 명령 → 목표 지점까지 걸어감. 준비/침공 공통)
+  if (input.moveTo) {
+    state.lord.target = {
+      x: clamp(input.moveTo.x, FIELD.minX, FIELD.maxX),
+      z: clamp(input.moveTo.z, FIELD.minZ, FIELD.maxZ),
+    }
+  }
+  if (state.lord.target) {
+    const dx = state.lord.target.x - state.lord.pos.x
+    const dz = state.lord.target.z - state.lord.pos.z
+    const dist = Math.hypot(dx, dz)
+    const step = LORD_SPEED * DT
+    if (dist <= step) {
+      state.lord.pos = { ...state.lord.target }
+      state.lord.target = null
+    } else {
+      state.lord.pos.x += (dx / dist) * step
+      state.lord.pos.z += (dz / dist) * step
+      state.lord.facing = Math.atan2(dx / dist, dz / dist)
+    }
   }
 
   if (state.status === 'prep') {

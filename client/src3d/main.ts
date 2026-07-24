@@ -24,13 +24,13 @@ document.getElementById('game')!.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
 scene.background = new THREE.Color(0x0d0d17)
-scene.fog = new THREE.Fog(0x0d0d17, 45, 90)
+scene.fog = new THREE.Fog(0x12121e, 55, 110)
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200)
 
-const hemi = new THREE.HemisphereLight(0x8899bb, 0x223322, 0.9)
+const hemi = new THREE.HemisphereLight(0xaabbdd, 0x334433, 1.35)
 scene.add(hemi)
-const sun = new THREE.DirectionalLight(0xffeecc, 1.1)
+const sun = new THREE.DirectionalLight(0xffeecc, 1.5)
 sun.position.set(-20, 30, 10)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
@@ -123,25 +123,59 @@ const enemyMats: Record<string, THREE.MeshStandardMaterial> = {
   tank: new THREE.MeshStandardMaterial({ color: 0x6a4a9a }),
 }
 
-// ---------------------------------------------------------------- 입력
-const keys = new Set<string>()
-window.addEventListener('keydown', (e) => keys.add(e.code))
-window.addEventListener('keyup', (e) => keys.delete(e.code))
+// ---------------------------------------------------------------- 입력 (LoL식)
+let spaceLatch = false
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') spaceLatch = true
+})
 
-// 카메라 궤도 (우클릭 드래그 회전, 휠 줌)
-let camYaw = -0.9
-let camPitch = 0.62
-let camDist = 16
+// 고정 부감 카메라: 남쪽에서 북쪽을 내려다봄 (서=성벽=왼쪽, 동=적=오른쪽). 휠 줌만.
+let camDist = 22
 window.addEventListener('contextmenu', (e) => e.preventDefault())
-window.addEventListener('mousemove', (e) => {
-  if (e.buttons & 2) {
-    camYaw -= e.movementX * 0.005
-    camPitch = Math.max(0.15, Math.min(1.3, camPitch + e.movementY * 0.004))
+window.addEventListener('wheel', (e) => {
+  camDist = Math.max(10, Math.min(38, camDist + e.deltaY * 0.02))
+})
+
+// 우클릭 → 지면 좌표로 이동 명령
+const raycaster = new THREE.Raycaster()
+const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
+let pendingMove: { x: number; z: number } | undefined
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (e.button !== 2) return
+  const ndc = new THREE.Vector2(
+    (e.clientX / window.innerWidth) * 2 - 1,
+    -(e.clientY / window.innerHeight) * 2 + 1,
+  )
+  raycaster.setFromCamera(ndc, camera)
+  const hit = new THREE.Vector3()
+  if (raycaster.ray.intersectPlane(groundPlane, hit)) {
+    pendingMove = { x: hit.x, z: hit.z }
+    showMoveMarker(hit.x, hit.z)
   }
 })
-window.addEventListener('wheel', (e) => {
-  camDist = Math.max(7, Math.min(40, camDist + e.deltaY * 0.02))
-})
+
+// 이동 마커 (LoL식 클릭 링)
+function showMoveMarker(x: number, z: number): void {
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.4, 0.6, 24),
+    new THREE.MeshBasicMaterial({ color: 0x62c462, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
+  )
+  ring.rotation.x = -Math.PI / 2
+  ring.position.set(x, 0.05, z)
+  scene.add(ring)
+  const t0 = performance.now()
+  const anim = (): void => {
+    const k = (performance.now() - t0) / 450
+    if (k >= 1) {
+      scene.remove(ring)
+      return
+    }
+    ring.scale.setScalar(1 - k * 0.6)
+    ;(ring.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - k)
+    requestAnimationFrame(anim)
+  }
+  anim()
+}
 
 // ---------------------------------------------------------------- HUD (DOM)
 const hud = document.createElement('div')
@@ -154,7 +188,7 @@ hud.innerHTML = `
   </div>
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    WASD 이동 · 우클릭 드래그 회전 · 휠 줌 · <b>Space</b> 침공 개시
+    우클릭: 이동 · 휠: 줌 · <b>Space</b>: 침공 개시
   </div>`
 const startBtn = document.createElement('div')
 document.body.appendChild(hud)
@@ -164,23 +198,6 @@ void startBtn
 const { state, spawns } = createSiege(20260725)
 let acc = 0
 let last = performance.now()
-
-function collectInput(): SiegeInput {
-  // 카메라 기준 이동 (W = 카메라가 보는 방향)
-  let fx = 0
-  let fz = 0
-  if (keys.has('KeyW')) fz += 1
-  if (keys.has('KeyS')) fz -= 1
-  if (keys.has('KeyA')) fx -= 1
-  if (keys.has('KeyD')) fx += 1
-  const sin = Math.sin(camYaw)
-  const cos = Math.cos(camYaw)
-  return {
-    moveX: fz * -sin + fx * cos,
-    moveZ: fz * -cos - fx * sin,
-    startAssault: keys.has('Space'),
-  }
-}
 
 function syncScene(): void {
   lordMesh.position.set(state.lord.pos.x, 0, state.lord.pos.z)
@@ -209,14 +226,10 @@ function syncScene(): void {
     }
   }
 
-  // 카메라: 성주 추적 궤도
-  const target = new THREE.Vector3(state.lord.pos.x, 1.2, state.lord.pos.z)
-  camera.position.set(
-    target.x + Math.sin(camYaw) * Math.cos(camPitch) * camDist,
-    target.y + Math.sin(camPitch) * camDist,
-    target.z + Math.cos(camYaw) * Math.cos(camPitch) * camDist,
-  )
-  camera.lookAt(target)
+  // 카메라: LoL식 고정 부감 — 성주 남쪽 상공에서 내려다보며 추적
+  const target = new THREE.Vector3(state.lord.pos.x, 0, state.lord.pos.z)
+  camera.position.set(target.x, camDist * 0.95, target.z + camDist * 0.62)
+  camera.lookAt(target.x, 0, target.z - 2)
 
   // HUD
   document.getElementById('wall')!.textContent = `${state.wallHp}/${WALL_HP}`
@@ -236,9 +249,18 @@ function syncScene(): void {
 function frame(now: number): void {
   acc = Math.min(acc + (now - last), STEP_MS * 6)
   last = now
-  const input = collectInput()
   while (acc >= STEP_MS) {
     acc -= STEP_MS
+    // 래치는 실제로 도는 스텝에서만 소비 — 0스텝 프레임에서 입력이 유실되지 않게
+    const input: SiegeInput = {}
+    if (spaceLatch) {
+      input.startAssault = true
+      spaceLatch = false
+    }
+    if (pendingMove) {
+      input.moveTo = pendingMove
+      pendingMove = undefined
+    }
     stepSiege(state, spawns, input)
   }
   syncScene()
