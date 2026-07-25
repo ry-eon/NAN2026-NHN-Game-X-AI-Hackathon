@@ -191,6 +191,28 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   wallSegment(scene, decor, stoneDark, 'x', north, west - ext, east + ext, -1)
   wallSegment(scene, decor, stoneDark, 'x', south, west - ext, east + ext, 1)
 
+  // 모서리 파라펫 이음 — 동/서벽 파라펫은 벽 구간 끝에서 멈추고 북/남벽 파라펫은
+  // 바깥 립에 있어 그 사이가 계단처럼 비었다. 필러로 잇고 모서리는 캡 블록으로 마감.
+  {
+    const lip = CASTLE.wallT / 2 - 0.55
+    const fillLen = lip + 1.15
+    for (const cx of [east + lip, west - lip]) {
+      for (const cz of [north, south]) {
+        const dir = cz === north ? -1 : 1
+        const fill = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.15, fillLen), stoneDark)
+        fill.position.set(cx, wallH + 0.575, cz + dir * (fillLen / 2 - 0.3))
+        fill.castShadow = true
+        fill.receiveShadow = true
+        scene.add(fill)
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(2.1, 2.2, 2.1), stoneDark)
+        cap.position.set(cx, wallH + 1.1, cz + dir * lip)
+        cap.castShadow = true
+        cap.receiveShadow = true
+        scene.add(cap)
+      }
+    }
+  }
+
   // 성문루: 성벽과 같은 높이·두께의 플러시 벽 — 정면이 한 장으로 평평하다.
   // 첨두 아치가 아래를 관통 (보도는 sim상 성문 상부 6.4 구간만 비워둠)
   {
