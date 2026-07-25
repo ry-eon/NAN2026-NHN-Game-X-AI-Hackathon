@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import {
   ENEMY_KINDS,
+  HERO_SKILL,
   UNIT_KINDS,
   WALL_HP,
   createSiege,
@@ -177,6 +178,28 @@ function getSelectionRing(i: number): THREE.Mesh {
   return selectionRings[i]!
 }
 
+// 영웅 스킬 조준 레티클 (원신식 — 반경이 그대로 보인다)
+const aimReticle = new THREE.Group()
+{
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(HERO_SKILL.radius - 0.18, HERO_SKILL.radius, 48),
+    new THREE.MeshBasicMaterial({ color: 0xff7a3a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
+  )
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(HERO_SKILL.radius, 48),
+    new THREE.MeshBasicMaterial({ color: 0xff5a2a, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false }),
+  )
+  ring.rotation.x = -Math.PI / 2
+  disc.rotation.x = -Math.PI / 2
+  disc.position.y = -0.01
+  aimReticle.add(ring, disc)
+  aimReticle.visible = false
+  scene.add(aimReticle)
+}
+let aiming = false
+let skillAuto = true // 자동/수동 토글 (T)
+let pendingHeroSkill: { x: number; z: number } | undefined
+
 // ---------------------------------------------------------------- 입력 (LoL식)
 let spaceLatch = false
 window.addEventListener('keydown', (e) => {
@@ -212,6 +235,7 @@ function pickPoint(clientX: number, clientY: number): { x: number; z: number; h:
 let pendingMove: { x: number; z: number; h?: number } | undefined
 let pendingUnitMove: { ids: number[]; to: { x: number; z: number; h?: number } } | undefined
 const selected = new Set<number>()
+let inspectedEnemy: number | null = null // 클릭 조사 대상 (상태창)
 
 const dragBox = document.createElement('div')
 dragBox.style.cssText =
@@ -220,6 +244,16 @@ document.body.appendChild(dragBox)
 let dragStart: { x: number; y: number } | null = null
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
+  // 수동 조준 중: 좌클릭 = 시전, 우클릭 = 취소 (드래그 선택·이동 명령은 봉인)
+  if (aiming) {
+    if (e.button === 0) {
+      const p = pickPoint(e.clientX, e.clientY)
+      if (p) pendingHeroSkill = { x: p.x, z: p.z }
+    }
+    aiming = false
+    aimReticle.visible = false
+    return
+  }
   if (e.button === 0) {
     dragStart = { x: e.clientX, y: e.clientY }
     return
@@ -238,6 +272,18 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 })
 
 window.addEventListener('pointermove', (e) => {
+  if (aiming) {
+    const p = pickPoint(e.clientX, e.clientY)
+    if (p) {
+      aimReticle.position.set(p.x, p.h + 0.08, p.z)
+      // 사거리 밖이면 흐리게 — 시전해도 sim이 무시한다는 시각 피드백
+      const hero = state.units.find((u) => u.kind === 'hero')
+      const inRange = hero && Math.hypot(p.x - hero.pos.x, p.z - hero.pos.z) <= HERO_SKILL.range
+      for (const c of aimReticle.children)
+        ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(inRange ? 0xff7a3a : 0x5a5a66)
+    }
+    return
+  }
   if (!dragStart) return
   const x0 = Math.min(dragStart.x, e.clientX)
   const y0 = Math.min(dragStart.y, e.clientY)
@@ -256,7 +302,8 @@ window.addEventListener('pointerup', (e) => {
   if (!e.shiftKey) selected.clear()
   const dragDist = Math.hypot(e.clientX - start.x, e.clientY - start.y)
   if (dragDist < 6) {
-    // 단일 클릭 픽킹 — 유닛 모델 직접 레이캐스트
+    // 단일 클릭 픽킹 — 아군 모델 우선, 없으면 괴수(조사용)
+    inspectedEnemy = null
     const ndc = new THREE.Vector2(
       (e.clientX / window.innerWidth) * 2 - 1,
       -(e.clientY / window.innerHeight) * 2 + 1,
@@ -268,6 +315,12 @@ window.addEventListener('pointerup', (e) => {
       let obj: THREE.Object3D | null = hits[0]!.object
       while (obj && !groupToUnitId.has(obj.uuid)) obj = obj.parent
       if (obj) selected.add(groupToUnitId.get(obj.uuid)!)
+      return
+    }
+    const enemyHits = raycaster.intersectObjects([...enemyMeshes.values()], false)
+    if (enemyHits.length > 0) {
+      for (const [id, mesh] of enemyMeshes)
+        if (mesh === enemyHits[0]!.object) inspectedEnemy = id
     }
     return
   }
@@ -285,7 +338,46 @@ window.addEventListener('pointerup', (e) => {
 })
 
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape') selected.clear()
+  if (e.code === 'Escape') {
+    selected.clear()
+    inspectedEnemy = null
+    aiming = false
+    aimReticle.visible = false
+  }
+})
+
+/** 자동 조준: 사거리 내에서 "반경에 가장 많이 쓸려드는" 적 위치 (동률 시 앞선 스폰) */
+function bestSkillTarget(): { x: number; z: number } | null {
+  const hero = state.units.find((u) => u.kind === 'hero')
+  if (!hero) return null
+  let best: { x: number; z: number } | null = null
+  let bestScore = 0
+  for (const e of state.enemies) {
+    if (Math.hypot(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z) > HERO_SKILL.range) continue
+    let n = 0
+    for (const o of state.enemies)
+      if (Math.hypot(o.pos.x - e.pos.x, o.pos.z - e.pos.z) <= HERO_SKILL.radius) n++
+    if (n > bestScore) {
+      bestScore = n
+      best = { x: e.pos.x, z: e.pos.z }
+    }
+  }
+  return best
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyT') skillAuto = !skillAuto
+  if (e.code !== 'KeyE') return
+  const hero = state.units.find((u) => u.kind === 'hero')
+  if (!hero || hero.skillCd > 0) return
+  if (skillAuto) {
+    const t = bestSkillTarget()
+    if (t) pendingHeroSkill = t
+  } else if (!aiming) {
+    aiming = true
+    aimReticle.position.set(hero.pos.x, hero.h + 0.08, hero.pos.z)
+    aimReticle.visible = true
+  }
 })
 
 // 이동 마커 (LoL식 클릭 링) — 성주 초록, 부대 명령 청록
@@ -322,8 +414,22 @@ hud.innerHTML = `
   </div>
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
   <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
+  <div id="skill" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);font-size:13px;
+       background:#000b;border:1px solid #443;border-radius:4px;padding:7px 14px">
+    <b style="color:#ffb060">E</b> ${HERO_SKILL.name} — <span id="skillcd"></span>
+    · <span id="skillmode"></span> <span style="color:#777">(T 전환)</span>
+  </div>
+  <div id="panel" style="position:absolute;bottom:14px;right:16px;width:215px;background:#000b;
+       border:1px solid #333;border-radius:4px;padding:10px 12px;font-size:12px;display:none">
+    <div id="p-name" style="font-size:14px;font-weight:bold;margin-bottom:5px"></div>
+    <div id="p-hptext"></div>
+    <div style="width:100%;height:8px;background:#0008;margin:3px 0 7px">
+      <div id="p-hpbar" style="height:100%;background:#62c462"></div>
+    </div>
+    <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
+  </div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    좌클릭 드래그: 부대 선택 · 우클릭: 이동 명령(선택 없으면 성주) · ESC: 선택 해제 · 휠: 줌 · <b>Space</b>: 침공 개시
+    드래그: 부대 선택 · 우클릭: 이동 명령(무선택 시 성주) · <b>E</b>: 스킬 · 클릭: 상태창 · ESC: 해제 · <b>Space</b>: 침공
   </div>`
 const startBtn = document.createElement('div')
 document.body.appendChild(hud)
@@ -347,6 +453,26 @@ interface Projectile {
 const projectiles: Projectile[] = []
 const flashes: { mesh: THREE.Sprite; t0: number; dur: number; grow: number }[] = []
 const dying: { obj: THREE.Object3D; t0: number; dur: number }[] = []
+const shockwaves: { mesh: THREE.Mesh; t0: number; dur: number; maxR: number }[] = []
+
+/** 스킬 착탄 충격파 — 바닥을 훑는 확장 링 */
+function spawnShockwave(x: number, z: number, maxR: number): void {
+  const mesh = new THREE.Mesh(
+    new THREE.RingGeometry(0.8, 1.0, 40),
+    new THREE.MeshBasicMaterial({
+      color: 0xffa050,
+      transparent: true,
+      opacity: 0.95,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    }),
+  )
+  mesh.rotation.x = -Math.PI / 2
+  mesh.position.set(x, 0.1, z)
+  scene.add(mesh)
+  shockwaves.push({ mesh, t0: performance.now(), dur: 550, maxR })
+}
 
 const flashTex = ((): THREE.CanvasTexture => {
   const c = document.createElement('canvas')
@@ -423,6 +549,10 @@ function handleEvents(events: SiegeEvent[]): void {
       }
       selected.delete(ev.id)
       spawnFlash(new THREE.Vector3(ev.pos.x, 1.0, ev.pos.z), 1.8, 0xff3a3a, 400)
+    } else if (ev.type === 'heroSkillCast') {
+      spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 6.5, 0xffa040, 550)
+      spawnFlash(new THREE.Vector3(ev.x, 3.2, ev.z), 3.5, 0xfff0c0, 380)
+      spawnShockwave(ev.x, ev.z, HERO_SKILL.radius + 1.2)
     } else if (ev.type === 'meleeHit') {
       const u = state.units.find((x) => x.id === ev.unitId)
       if (u) spawnFlash(new THREE.Vector3(u.pos.x, u.h + 1.1, u.pos.z), 0.9, 0xff5a5a, 200)
@@ -464,6 +594,17 @@ function updateFx(now: number): void {
     }
     f.mesh.scale.setScalar(f.grow * (0.4 + t * 0.9))
     ;(f.mesh.material as THREE.SpriteMaterial).opacity = 1 - t
+  }
+  for (let i = shockwaves.length - 1; i >= 0; i--) {
+    const w = shockwaves[i]!
+    const t = (now - w.t0) / w.dur
+    if (t >= 1) {
+      scene.remove(w.mesh)
+      shockwaves.splice(i, 1)
+      continue
+    }
+    w.mesh.scale.setScalar(0.8 + t * w.maxR)
+    ;(w.mesh.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - t)
   }
   for (let i = dying.length - 1; i >= 0; i--) {
     const d = dying[i]!
@@ -582,6 +723,60 @@ function syncScene(): void {
   document.getElementById('army')!.textContent =
     `병력 ${state.units.length} (${[...counts].map(([k, n]) => `${UNIT_KINDS[k]!.name} ${n}`).join(' · ')})` +
     (selected.size > 0 ? ` — 선택 ${selected.size}` : '')
+
+  // 스킬 슬롯
+  const hero = state.units.find((u) => u.kind === 'hero')
+  const cdEl = document.getElementById('skillcd')!
+  document.getElementById('skillmode')!.textContent = skillAuto ? '자동' : '수동 조준'
+  if (!hero) {
+    cdEl.textContent = '영웅 전사'
+    cdEl.style.color = '#c05050'
+  } else if (hero.skillCd > 0) {
+    cdEl.textContent = `${Math.ceil(hero.skillCd / TICKS_PER_SECOND)}s`
+    cdEl.style.color = '#8888a0'
+  } else {
+    cdEl.textContent = aiming ? '조준 중 — 좌클릭 시전' : '준비됨'
+    cdEl.style.color = '#7ade7a'
+  }
+
+  // 상태창 — 선택 유닛 우선, 없으면 클릭 조사한 괴수
+  const panel = document.getElementById('panel')!
+  let shown = false
+  if (selected.size > 0) {
+    const first = state.units.filter((u) => selected.has(u.id)).sort((a, b) => a.id - b.id)[0]
+    if (first) {
+      const def = UNIT_KINDS[first.kind]!
+      document.getElementById('p-name')!.textContent =
+        def.name + (selected.size > 1 ? ` 외 ${selected.size - 1}` : '')
+      document.getElementById('p-hptext')!.textContent = `HP ${first.hp}/${def.hp}`
+      ;(document.getElementById('p-hpbar') as HTMLDivElement).style.width =
+        `${Math.max(0, (first.hp / def.hp) * 100)}%`
+      document.getElementById('p-stats')!.innerHTML =
+        `공격 ${def.dmg}${def.aoe ? ` (광역 ${def.aoe})` : ''} · 사거리 ${def.range}<br>공속 ${def.atkInterval}초` +
+        (first.kind === 'hero'
+          ? `<br>스킬 ${HERO_SKILL.name}: 피해 ${HERO_SKILL.dmg} · 반경 ${HERO_SKILL.radius}`
+          : '')
+      shown = true
+    }
+  } else if (inspectedEnemy !== null) {
+    const e = state.enemies.find((x) => x.id === inspectedEnemy)
+    if (e) {
+      const def = ENEMY_KINDS[e.kind]!
+      document.getElementById('p-name')!.textContent = def.name
+      document.getElementById('p-hptext')!.textContent = `HP ${Math.max(0, e.hp)}/${def.hp}`
+      ;(document.getElementById('p-hpbar') as HTMLDivElement).style.width =
+        `${Math.max(0, (e.hp / def.hp) * 100)}%`
+      ;(document.getElementById('p-hpbar') as HTMLDivElement).style.background = '#c05050'
+      document.getElementById('p-stats')!.innerHTML =
+        `공격 ${def.dmg} · 성벽 파괴 ${def.wallDamage}<br>속도 ${def.speed}`
+      shown = true
+    } else {
+      inspectedEnemy = null
+    }
+  }
+  if (shown && selected.size > 0)
+    (document.getElementById('p-hpbar') as HTMLDivElement).style.background = '#62c462'
+  panel.style.display = shown ? 'block' : 'none'
   const phase = document.getElementById('phase')!
   phase.textContent =
     state.status === 'prep'
@@ -628,6 +823,10 @@ function frame(now: number): void {
     if (pendingUnitMove) {
       input.unitMove = pendingUnitMove
       pendingUnitMove = undefined
+    }
+    if (pendingHeroSkill) {
+      input.heroSkill = pendingHeroSkill
+      pendingHeroSkill = undefined
     }
     stepSiege(state, spawns, input)
     frameEvents.push(...state.events)

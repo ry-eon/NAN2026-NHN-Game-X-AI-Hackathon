@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  HERO_SKILL,
   WALL_HP,
   createSiege,
   stepSiege,
@@ -93,5 +94,35 @@ describe('M2b 전투', () => {
     for (let i = 0; i < 60; i++) stepSiege(state, spawns, {})
     expect(hero.hp).toBeLessThan(UNIT_KINDS.hero!.hp)
     expect(state.wallHp).toBe(WALL_HP)
+  })
+
+  it('영웅 스킬: 반경 내 광역 피해 + 쿨다운·사거리 검증', () => {
+    const { state, spawns } = createSiege(SEED)
+    stepSiege(state, spawns, { startAssault: true })
+    const hero = state.units.find((u) => u.kind === 'hero')!
+    state.units = [hero] // 다른 유닛 사격이 수치 단언에 끼지 않게
+    const mkGrunt = (x: number, z: number) => ({
+      id: state.nextId++,
+      kind: 'grunt',
+      pos: { x, z },
+      hp: 700,
+      cooldown: 0,
+      atWall: false,
+      wave: 0,
+    })
+    // 시전점 (2,0) — 영웅(-12,0)에서 d=14 ≤ 사거리 18. 반경 4.5 안 2마리 + 밖 1마리
+    state.enemies.push(mkGrunt(2, 0), mkGrunt(3, 1.5), mkGrunt(2, 8))
+    stepSiege(state, spawns, { heroSkill: { x: 2, z: 0 } })
+    expect(state.enemies.filter((e) => e.hp === 700 - HERO_SKILL.dmg)).toHaveLength(2)
+    expect(state.enemies.filter((e) => e.hp === 700).length).toBeGreaterThanOrEqual(1)
+    expect(hero.skillCd).toBeGreaterThan(0)
+    // 쿨다운 중 재시전은 무시된다
+    const cdBefore = hero.skillCd
+    stepSiege(state, spawns, { heroSkill: { x: 2, z: 0 } })
+    expect(hero.skillCd).toBe(cdBefore - 1)
+    // 사거리 밖 시전은 쿨다운도 소모하지 않는다
+    hero.skillCd = 0
+    stepSiege(state, spawns, { heroSkill: { x: 40, z: 0 } })
+    expect(hero.skillCd).toBe(0)
   })
 })

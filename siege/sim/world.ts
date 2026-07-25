@@ -255,7 +255,13 @@ export interface FriendlyUnit {
   target: Vec2 | null
   path: Vec2[]
   cooldown: number // 틱
+  /** 영웅 전용 — 스킬 남은 쿨다운 (틱) */
+  skillCd: number
 }
+
+/** 영웅 스킬 「업화」 — 지점 지정 광역 화염. 조준(자동/수동)은 클라이언트 보조,
+ *  sim은 커맨드(지점)만 받아 사거리·쿨다운을 검증한다 = 리플레이 가능 */
+export const HERO_SKILL = { name: '업화', dmg: 500, radius: 4.5, range: 18, cooldown: 14 /* 초 */ }
 
 export interface LordState {
   pos: Vec2
@@ -276,6 +282,8 @@ export interface SiegeInput {
   moveTo?: Vec2 & { h?: number }
   /** 부대 이동 명령 (스타크래프트식 선택 → 우클릭). 대형은 sim이 결정론으로 분산 */
   unitMove?: { ids: number[]; to: Vec2 & { h?: number } }
+  /** 영웅 스킬 시전 지점 — 사거리·쿨다운은 sim이 검증 */
+  heroSkill?: Vec2
   /** 준비 종료 → 침공 개시 */
   startAssault?: boolean
 }
@@ -297,6 +305,7 @@ export type SiegeEvent =
   | { type: 'spawned'; id: number; kind: string; wave: number }
   | { type: 'wallHit'; id: number; damage: number; wallHp: number }
   | { type: 'unitFired'; unitId: number; unitKind: string; targetId: number; from: Vec2 & { h: number }; to: Vec2 }
+  | { type: 'heroSkillCast'; x: number; z: number }
   | { type: 'meleeHit'; enemyId: number; unitId: number }
   | { type: 'enemyDied'; id: number; kind: string; pos: Vec2 }
   | { type: 'unitDied'; id: number; kind: string; pos: Vec2 }
@@ -346,6 +355,7 @@ function initialUnits(nextId: () => number): FriendlyUnit[] {
     target: null,
     path: [],
     cooldown: 0,
+    skillCd: 0,
   })
   const u: FriendlyUnit[] = []
   for (const z of [-15, -9, -5, 5, 9, 15]) u.push(mk('soldier', WALL_X, z, C.wallH))
@@ -483,7 +493,27 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       slot++
     }
   }
-  for (const u of state.units) stepMover(u, UNIT_KINDS[u.kind]!.speed)
+  for (const u of state.units) {
+    if (u.skillCd > 0) u.skillCd--
+    stepMover(u, UNIT_KINDS[u.kind]!.speed)
+  }
+
+  // 영웅 스킬 「업화」 — 지점 광역. 사거리 밖·쿨다운 중이면 무시 (결정론 검증)
+  if (input.heroSkill) {
+    const hero = state.units.find((u) => u.kind === 'hero')
+    if (hero && hero.skillCd <= 0) {
+      const d = Math.hypot(input.heroSkill.x - hero.pos.x, input.heroSkill.z - hero.pos.z)
+      if (d <= HERO_SKILL.range) {
+        hero.skillCd = Math.round(HERO_SKILL.cooldown * TICKS_PER_SECOND)
+        hero.facing = Math.atan2(input.heroSkill.x - hero.pos.x, input.heroSkill.z - hero.pos.z)
+        for (const e of state.enemies) {
+          if (Math.hypot(e.pos.x - input.heroSkill.x, e.pos.z - input.heroSkill.z) <= HERO_SKILL.radius)
+            e.hp -= HERO_SKILL.dmg
+        }
+        state.events.push({ type: 'heroSkillCast', x: input.heroSkill.x, z: input.heroSkill.z })
+      }
+    }
+  }
 
   // 유닛 간 겹침 분리 (같은 층만, 층 이탈 금지 — 성벽에서 밀려 떨어지지 않게)
   for (let i = 0; i < state.units.length; i++) {
