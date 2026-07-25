@@ -209,9 +209,9 @@ export interface EnemyKindDef {
 }
 
 export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
-  grunt: { kind: 'grunt', name: '야귀', hp: 480, dmg: 70, atkInterval: 1.5, speed: 2.4, radius: 0.55, wallDamage: 60 },
-  runner: { kind: 'runner', name: '질주귀', hp: 190, dmg: 50, atkInterval: 1.0, speed: 4.6, radius: 0.45, wallDamage: 40 },
-  tank: { kind: 'tank', name: '갑주귀', hp: 1400, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 0.8, wallDamage: 130 },
+  grunt: { kind: 'grunt', name: '야귀', hp: 700, dmg: 70, atkInterval: 1.5, speed: 2.4, radius: 0.55, wallDamage: 60 },
+  runner: { kind: 'runner', name: '질주귀', hp: 300, dmg: 50, atkInterval: 1.0, speed: 4.6, radius: 0.45, wallDamage: 40 },
+  tank: { kind: 'tank', name: '갑주귀', hp: 2300, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 0.8, wallDamage: 130 },
 }
 
 export interface ActiveEnemy {
@@ -222,6 +222,39 @@ export interface ActiveEnemy {
   cooldown: number // 틱
   atWall: boolean
   wave: number
+}
+
+// ---------------------------------------------------------------- 아군 유닛 (M2b)
+export interface UnitKindDef {
+  kind: string
+  name: string
+  hp: number
+  dmg: number
+  atkInterval: number // 초
+  range: number // 사거리 (XZ 평면)
+  speed: number // 유닛/초
+  radius: number
+  /** 폭발 반경 — 지정 시 착탄점 주변 광역 피해 (대포) */
+  aoe?: number
+}
+
+export const UNIT_KINDS: Record<string, UnitKindDef> = {
+  soldier: { kind: 'soldier', name: '궁수', hp: 260, dmg: 30, atkInterval: 1.3, range: 13, speed: 3.5, radius: 0.4 },
+  ballista: { kind: 'ballista', name: '발리스타', hp: 420, dmg: 200, atkInterval: 2.8, range: 20, speed: 1.2, radius: 0.8 },
+  cannon: { kind: 'cannon', name: '대포', hp: 500, dmg: 140, atkInterval: 3.8, range: 23, speed: 1.0, radius: 0.9, aoe: 2.8 },
+  hero: { kind: 'hero', name: '영웅', hp: 900, dmg: 110, atkInterval: 0.9, range: 11, speed: HERO_SPEED, radius: 0.5 },
+}
+
+export interface FriendlyUnit {
+  id: number
+  kind: string
+  pos: Vec2
+  h: number
+  hp: number
+  facing: number
+  target: Vec2 | null
+  path: Vec2[]
+  cooldown: number // 틱
 }
 
 export interface LordState {
@@ -241,6 +274,8 @@ export type SiegeStatus = 'prep' | 'assault' | 'won' | 'lost'
 export interface SiegeInput {
   /** 성주 이동 명령 (우클릭 지점 + 클릭한 면의 높이 힌트 — 보도 위 vs 터널 구분) */
   moveTo?: Vec2 & { h?: number }
+  /** 부대 이동 명령 (스타크래프트식 선택 → 우클릭). 대형은 sim이 결정론으로 분산 */
+  unitMove?: { ids: number[]; to: Vec2 & { h?: number } }
   /** 준비 종료 → 침공 개시 */
   startAssault?: boolean
 }
@@ -250,6 +285,7 @@ export interface SiegeState {
   status: SiegeStatus
   wallHp: number
   lord: LordState
+  units: FriendlyUnit[]
   enemies: ActiveEnemy[]
   spawnCursor: number
   nextId: number
@@ -260,6 +296,10 @@ export interface SiegeState {
 export type SiegeEvent =
   | { type: 'spawned'; id: number; kind: string; wave: number }
   | { type: 'wallHit'; id: number; damage: number; wallHp: number }
+  | { type: 'unitFired'; unitId: number; unitKind: string; targetId: number; from: Vec2 & { h: number }; to: Vec2 }
+  | { type: 'meleeHit'; enemyId: number; unitId: number }
+  | { type: 'enemyDied'; id: number; kind: string; pos: Vec2 }
+  | { type: 'unitDied'; id: number; kind: string; pos: Vec2 }
   | { type: 'assaultStarted' }
   | { type: 'won' }
   | { type: 'lost' }
@@ -294,16 +334,42 @@ export function buildSpawnTable(seed: number): EnemySpawn[] {
   return spawns.sort((a, b) => a.tick - b.tick)
 }
 
+/** 초기 배치 — 동벽 보도(궁수·대포), 성문 위 다리(발리스타), 지상(영웅). 재배치는 부대 명령으로 */
+function initialUnits(nextId: () => number): FriendlyUnit[] {
+  const mk = (kind: string, x: number, z: number, h: number): FriendlyUnit => ({
+    id: nextId(),
+    kind,
+    pos: { x, z },
+    h,
+    hp: UNIT_KINDS[kind]!.hp,
+    facing: Math.PI / 2, // 동쪽(적 방향)을 본다
+    target: null,
+    path: [],
+    cooldown: 0,
+  })
+  const u: FriendlyUnit[] = []
+  for (const z of [-15, -9, -5, 5, 9, 15]) u.push(mk('soldier', WALL_X, z, C.wallH))
+  u.push(mk('cannon', WALL_X, -12, C.wallH))
+  u.push(mk('cannon', WALL_X, 12, C.wallH))
+  u.push(mk('ballista', WALL_X, -1.6, C.wallH)) // 성문 위 다리
+  u.push(mk('ballista', WALL_X, 1.6, C.wallH))
+  u.push(mk('hero', WALL_X - 6, 0, 0)) // 성문 안쪽 지상 — 출격 가능
+  return u
+}
+
 export function createSiege(seed: number): { state: SiegeState; spawns: EnemySpawn[] } {
+  let id = 1
+  const units = initialUnits(() => id++)
   return {
     state: {
       tick: 0,
       status: 'prep',
       wallHp: WALL_HP,
       lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null, path: [], h: 0 },
+      units,
       enemies: [],
       spawnCursor: 0,
-      nextId: 1,
+      nextId: id,
       events: [],
     },
     spawns: buildSpawnTable(seed),
@@ -312,6 +378,88 @@ export function createSiege(seed: number): { state: SiegeState; spawns: EnemySpa
 
 const clamp = (v: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, v))
 
+/** 이동체 공통 형상 — 성주·아군 유닛이 같은 이동 규칙(BFS 추종 + 층 전이 + 벽 슬라이드)을 공유 */
+interface Mover {
+  pos: Vec2
+  h: number
+  facing: number
+  target: Vec2 | null
+  path: Vec2[]
+}
+
+/** 이동 명령: BFS 경로를 세팅. 경로가 없으면 명령 무시 (제자리) */
+function commandMove(m: Mover, to: Vec2, hHint: number): void {
+  const goal = {
+    x: clamp(to.x, FIELD.minX, FIELD.maxX),
+    z: clamp(to.z, FIELD.minZ, FIELD.maxZ),
+  }
+  const path = findPath(m.pos, goal, m.h, hHint)
+  if (path && path.length > 0) {
+    m.path = path
+    m.target = goal
+  }
+}
+
+/** 1틱 이동 — 웨이포인트 추종. 층 전이 불가 시 벽면 슬라이드, 완전 봉착 시 명령 취소 */
+function stepMover(m: Mover, speed: number): void {
+  if (m.path.length > 0) m.target = m.path[0]!
+  if (!m.target) return
+  const dx = m.target.x - m.pos.x
+  const dz = m.target.z - m.pos.z
+  const dist = Math.hypot(dx, dz)
+  const step = speed * DT
+  const { x: px, z: pz } = m.pos
+  const nx = dist <= step ? m.target.x : px + (dx / dist) * step
+  const nz = dist <= step ? m.target.z : pz + (dz / dist) * step
+
+  const h1 = stepHeight(m.h, nx, nz)
+  const h2 = h1 === null ? stepHeight(m.h, nx, pz) : null
+  const h3 = h1 === null && h2 === null ? stepHeight(m.h, px, nz) : null
+  if (h1 !== null) {
+    m.pos.x = nx
+    m.pos.z = nz
+    m.h = h1
+  } else if (h2 !== null) {
+    m.pos.x = nx // 벽면 슬라이드 (x축만)
+    m.h = h2
+  } else if (h3 !== null) {
+    m.pos.z = nz // 벽면 슬라이드 (z축만)
+    m.h = h3
+  } else {
+    m.path = []
+    m.target = null // 완전 봉착 — 명령 취소
+    return
+  }
+  if (dist > step) m.facing = Math.atan2(dx / dist, dz / dist)
+  const t2 = m.target
+  if (t2 && Math.hypot(t2.x - m.pos.x, t2.z - m.pos.z) <= step * 1.2) {
+    // 웨이포인트 도달 → 다음
+    if (m.path.length > 0) m.path.shift()
+    m.target = m.path.length > 0 ? m.path[0]! : null
+  }
+}
+
+/** 부대 대형 오프셋 — 목표점 주변 결정론 격자 분산 (선택 순서 무관: id 정렬 후 배정) */
+const FORMATION: [number, number][] = [
+  [0, 0], [1.4, 0], [-1.4, 0], [0, 1.4], [0, -1.4],
+  [1.4, 1.4], [-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4],
+  [2.8, 0], [-2.8, 0], [0, 2.8], [0, -2.8],
+]
+
+/** 사거리 내 최근접 적 (동거리 → 낮은 id — 결정론) */
+function acquireTarget(u: FriendlyUnit, enemies: ActiveEnemy[], range: number): ActiveEnemy | null {
+  let best: ActiveEnemy | null = null
+  let bestD = Infinity
+  for (const e of enemies) {
+    const d = Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z)
+    if (d <= range && (d < bestD || (d === bestD && best !== null && e.id < best.id))) {
+      best = e
+      bestD = d
+    }
+  }
+  return best
+}
+
 /** 고정 1틱 전진. 결정론 — 입력 외 외부 상태 없음 */
 export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeInput): SiegeState {
   state.events = []
@@ -319,52 +467,51 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   state.tick++
 
   // 성주 이동 (우클릭 명령 → BFS 경로 추종 — 계단·성문 자동 경유)
-  if (input.moveTo) {
-    const goal = {
-      x: clamp(input.moveTo.x, FIELD.minX, FIELD.maxX),
-      z: clamp(input.moveTo.z, FIELD.minZ, FIELD.maxZ),
-    }
-    const path = findPath(state.lord.pos, goal, state.lord.h, input.moveTo.h ?? 0)
-    if (path && path.length > 0) {
-      state.lord.path = path
-      state.lord.target = goal
-    }
-  }
-  if (state.lord.path.length > 0) {
-    state.lord.target = state.lord.path[0]!
-  }
-  if (state.lord.target) {
-    const dx = state.lord.target.x - state.lord.pos.x
-    const dz = state.lord.target.z - state.lord.pos.z
-    const dist = Math.hypot(dx, dz)
-    const step = LORD_SPEED * DT
-    const { x: px, z: pz } = state.lord.pos
-    const nx = dist <= step ? state.lord.target.x : px + (dx / dist) * step
-    const nz = dist <= step ? state.lord.target.z : pz + (dz / dist) * step
+  if (input.moveTo) commandMove(state.lord, input.moveTo, input.moveTo.h ?? 0)
+  stepMover(state.lord, LORD_SPEED)
 
-    const h1 = stepHeight(state.lord.h, nx, nz)
-    const h2 = h1 === null ? stepHeight(state.lord.h, nx, pz) : null
-    const h3 = h1 === null && h2 === null ? stepHeight(state.lord.h, px, nz) : null
-    if (h1 !== null) {
-      state.lord.pos.x = nx
-      state.lord.pos.z = nz
-      state.lord.h = h1
-    } else if (h2 !== null) {
-      state.lord.pos.x = nx // 벽면 슬라이드 (x축만)
-      state.lord.h = h2
-    } else if (h3 !== null) {
-      state.lord.pos.z = nz // 벽면 슬라이드 (z축만)
-      state.lord.h = h3
-    } else {
-      state.lord.path = []
-      state.lord.target = null // 완전 봉착 — 명령 취소
+  // 부대 이동 명령 — id 정렬 후 대형 오프셋 배정 (결정론)
+  if (input.unitMove) {
+    const ids = [...input.unitMove.ids].sort((a, b) => a - b)
+    const to = input.unitMove.to
+    let slot = 0
+    for (const id of ids) {
+      const u = state.units.find((v) => v.id === id)
+      if (!u) continue
+      const off = FORMATION[Math.min(slot, FORMATION.length - 1)]!
+      commandMove(u, { x: to.x + off[0], z: to.z + off[1] }, to.h ?? 0)
+      slot++
     }
-    if (dist > step) state.lord.facing = Math.atan2(dx / dist, dz / dist)
-    const t2 = state.lord.target
-    if (t2 && Math.hypot(t2.x - state.lord.pos.x, t2.z - state.lord.pos.z) <= step * 1.2) {
-      // 웨이포인트 도달 → 다음
-      if (state.lord.path.length > 0) state.lord.path.shift()
-      state.lord.target = state.lord.path.length > 0 ? state.lord.path[0]! : null
+  }
+  for (const u of state.units) stepMover(u, UNIT_KINDS[u.kind]!.speed)
+
+  // 유닛 간 겹침 분리 (같은 층만, 층 이탈 금지 — 성벽에서 밀려 떨어지지 않게)
+  for (let i = 0; i < state.units.length; i++) {
+    for (let j = i + 1; j < state.units.length; j++) {
+      const a = state.units[i]!
+      const b = state.units[j]!
+      if (Math.abs(a.h - b.h) > 1.5) continue
+      const minD = UNIT_KINDS[a.kind]!.radius + UNIT_KINDS[b.kind]!.radius + 0.15
+      let dx = b.pos.x - a.pos.x
+      let dz = b.pos.z - a.pos.z
+      let d = Math.hypot(dx, dz)
+      if (d >= minD) continue
+      if (d < 1e-4) {
+        dx = 1 // 완전 겹침 — 결정론 축 분리
+        dz = 0
+        d = 1
+      }
+      const push = (minD - d) * 0.25
+      for (const [m, sign] of [[a, -1], [b, 1]] as const) {
+        const nx = m.pos.x + (dx / d) * push * sign
+        const nz = m.pos.z + (dz / d) * push * sign
+        const h = stepHeight(m.h, nx, nz)
+        if (h !== null) {
+          m.pos.x = nx
+          m.pos.z = nz
+          m.h = h
+        }
+      }
     }
   }
 
@@ -394,11 +541,55 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     state.events.push({ type: 'spawned', id: e.id, kind: e.kind, wave: e.wave })
   }
 
-  // 괴수 이동: 성벽 평면을 향해 직진 (M1 — 조향·회피는 M2에서)
+  // 아군 사격 — 정지 상태에서만 (이동 중 발사 불가). 히트스캔: 피해는 즉시, 투사체는 연출
+  for (const u of state.units) {
+    if (u.cooldown > 0) u.cooldown--
+    if (u.path.length > 0 || u.cooldown > 0) continue
+    const def = UNIT_KINDS[u.kind]!
+    const tgt = acquireTarget(u, state.enemies, def.range)
+    if (!tgt) continue
+    u.facing = Math.atan2(tgt.pos.x - u.pos.x, tgt.pos.z - u.pos.z)
+    u.cooldown = Math.round(def.atkInterval * TICKS_PER_SECOND)
+    if (def.aoe) {
+      for (const e of state.enemies) {
+        if (Math.hypot(e.pos.x - tgt.pos.x, e.pos.z - tgt.pos.z) <= def.aoe) e.hp -= def.dmg
+      }
+    } else {
+      tgt.hp -= def.dmg
+    }
+    state.events.push({
+      type: 'unitFired',
+      unitId: u.id,
+      unitKind: u.kind,
+      targetId: tgt.id,
+      from: { x: u.pos.x, z: u.pos.z, h: u.h },
+      to: { x: tgt.pos.x, z: tgt.pos.z },
+    })
+  }
+
+  // 괴수: 지상 아군과 접전 > 성벽 공격 > 성벽으로 직진
   for (const e of state.enemies) {
     const def = ENEMY_KINDS[e.kind]!
     if (e.cooldown > 0) e.cooldown--
-    if (!e.atWall) {
+    // 접전 판정 — 지상(h<1) 아군만 (보도 위는 닿지 못한다)
+    let victim: FriendlyUnit | null = null
+    let victimD = Infinity
+    for (const u of state.units) {
+      if (u.h >= 1) continue
+      const d = Math.hypot(u.pos.x - e.pos.x, u.pos.z - e.pos.z)
+      const engage = def.radius + UNIT_KINDS[u.kind]!.radius + 0.9
+      if (d <= engage && d < victimD) {
+        victim = u
+        victimD = d
+      }
+    }
+    if (victim) {
+      if (e.cooldown <= 0) {
+        victim.hp -= def.dmg
+        e.cooldown = Math.round(def.atkInterval * TICKS_PER_SECOND)
+        state.events.push({ type: 'meleeHit', enemyId: e.id, unitId: victim.id })
+      }
+    } else if (!e.atWall) {
       e.pos.x -= def.speed * DT
       if (e.pos.x <= WALL_X + def.radius + 0.2) {
         e.pos.x = WALL_X + def.radius + 0.2
@@ -410,6 +601,18 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       state.events.push({ type: 'wallHit', id: e.id, damage: def.wallDamage, wallHp: Math.max(0, state.wallHp) })
     }
   }
+
+  // 사망 처리
+  state.enemies = state.enemies.filter((e) => {
+    if (e.hp > 0) return true
+    state.events.push({ type: 'enemyDied', id: e.id, kind: e.kind, pos: { ...e.pos } })
+    return false
+  })
+  state.units = state.units.filter((u) => {
+    if (u.hp > 0) return true
+    state.events.push({ type: 'unitDied', id: u.id, kind: u.kind, pos: { ...u.pos } })
+    return false
+  })
 
   if (state.wallHp <= 0) {
     state.wallHp = 0

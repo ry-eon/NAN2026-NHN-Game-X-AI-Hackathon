@@ -10,6 +10,11 @@ export default defineConfig({
     },
   },
   test: {
-    include: ['core/test/**/*.test.ts', 'bots/test/**/*.test.ts', 'pipeline/test/**/*.test.ts'],
+    include: [
+      'core/test/**/*.test.ts',
+      'bots/test/**/*.test.ts',
+      'pipeline/test/**/*.test.ts',
+      'siege/test/**/*.test.ts',
+    ],
   },
 })
