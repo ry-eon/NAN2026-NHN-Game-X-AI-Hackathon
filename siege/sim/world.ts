@@ -42,9 +42,7 @@ const RECT_COLLIDERS: RectC[] = [
 ]
 /** 망루 (원형) */
 const TOWER_COLLIDERS: { x: number; z: number; r: number }[] = [
-  // 모서리 망루는 성곽 바깥으로 돌출 (보도·시야를 막지 않는 능보 배치)
-  { x: C.east + 2.5, z: C.north - 1.5, r: 4.0 },
-  { x: C.east + 2.5, z: C.south + 1.5, r: 4.0 },
+  // 동쪽 망루는 제거(보도 시야) — 서쪽 실루엣 망루만
   { x: C.west - 2.5, z: C.north - 1.5, r: 4.0 },
   { x: C.west - 2.5, z: C.south + 1.5, r: 4.0 },
 ]
@@ -58,33 +56,39 @@ function blockedGround(x: number, z: number): boolean {
   return false
 }
 
-/** 성벽 보도·계단 높이. 계단 2기(성문 남북 안쪽 벽면), 보도는 동벽 상단(성문 구간 제외) */
-export function heightAt(x: number, z: number): number {
+/**
+ * 해당 지점에서 설 수 있는 높이 후보들.
+ * 성문 위는 2층: 보도(11) + 아래 터널(0) — 보도가 성문 위로 끊김 없이 이어지면서
+ * 성문 통행도 유지된다. 이동은 현재 높이에서 가장 가까운 후보로 연속 전이.
+ */
+export function heightLevels(x: number, z: number): number[] {
   const stairX0 = C.east - halfT - 2.4
   const stairX1 = C.east - halfT + 0.2 // 계단↔보도 겹침 여유
   // 남측 계단: z 4.5(바닥) → 15(정상)
   if (x >= stairX0 && x <= stairX1 && z >= 4.5 && z <= 15) {
-    return (C.wallH * (z - 4.5)) / 10.5
+    return [(C.wallH * (z - 4.5)) / 10.5]
   }
-  // 북측 계단: z -4.5(바닥) → -15(정상)
+  // 북측 계단
   if (x >= stairX0 && x <= stairX1 && z <= -4.5 && z >= -15) {
-    return (C.wallH * (-z - 4.5)) / 10.5
+    return [(C.wallH * (-z - 4.5)) / 10.5]
   }
-  // 동벽 보도 (성문 상부 구간 제외)
-  if (
-    x >= C.east - halfT &&
-    x <= C.east + halfT &&
-    Math.abs(z) >= C.gateHalf &&
-    z >= C.north + 0.5 &&
-    z <= C.south - 0.5
-  ) {
-    return C.wallH
+  // 동벽 (보도는 전 구간 연속, 성문 폭에서는 터널 0층도 공존)
+  if (x >= C.east - halfT && x <= C.east + halfT && z >= C.north + 0.5 && z <= C.south - 0.5) {
+    return Math.abs(z) < C.gateHalf ? [C.wallH, 0] : [C.wallH]
   }
-  return 0
+  return [0]
 }
 
-/** 1유닛 격자 BFS — 계단·성문을 경유하는 보행 경로. 결정론(고정 이웃 순서) */
-export function findPath(from: Vec2, to: Vec2): Vec2[] | null {
+/** 렌더러 참고용 단일 높이 (기준 높이에서 가장 가까운 층) */
+export function heightNear(x: number, z: number, refH: number): number {
+  const levels = heightLevels(x, z)
+  let best = levels[0]!
+  for (const h of levels) if (Math.abs(h - refH) < Math.abs(best - refH)) best = h
+  return best
+}
+
+/** 1유닛 격자 BFS (층 확장) — 계단·성문·성문 위 보도를 경유. 결정론(고정 이웃 순서) */
+export function findPath(from: Vec2, to: Vec2, fromH = 0, toHint = 0): Vec2[] | null {
   const res = 1.0
   const W = Math.ceil((FIELD.maxX - FIELD.minX) / res) + 1
   const H = Math.ceil((FIELD.maxZ - FIELD.minZ) / res) + 1
@@ -98,20 +102,29 @@ export function findPath(from: Vec2, to: Vec2): Vec2[] | null {
   })
   const [sx, sz] = toCell(from)
   const [tx, tz] = toCell(to)
-  const idx = (cx: number, cz: number): number => cz * W + cx
-  const prev = new Int32Array(W * H).fill(-2) // -2 미방문, -1 시작점
-  const queue: number[] = [idx(sx, sz)]
-  prev[idx(sx, sz)] = -1
+  // 노드 = 셀 × 층 (0층/상층) — 성문 위 보도와 아래 터널을 구분
+  const lvlOf = (h: number): number => (h > 5 ? 1 : 0)
+  const key = (cx: number, cz: number, lvl: number): number => (cz * W + cx) * 2 + lvl
+  const prev = new Int32Array(W * H * 2).fill(-2)
+  const nodeH = new Float32Array(W * H * 2)
+  const startKey = key(sx, sz, lvlOf(fromH))
+  prev[startKey] = -1
+  nodeH[startKey] = fromH
+  const queue: number[] = [startKey]
+  const targetKeyPreferred = key(tx, tz, lvlOf(toHint))
   let found = -1
+  let foundAny = -1
   for (let qi = 0; qi < queue.length; qi++) {
     const cur = queue[qi]!
-    if (cur === idx(tx, tz)) {
+    const cell = Math.floor(cur / 2)
+    const cx = cell % W
+    const cz = Math.floor(cell / W)
+    if (cur === targetKeyPreferred) {
       found = cur
       break
     }
-    const cx = cur % W
-    const cz = Math.floor(cur / W)
-    const cw = toWorld(cx, cz)
+    if (cx === tx && cz === tz && foundAny < 0) foundAny = cur
+    const curH = nodeH[cur]!
     for (const [dx, dz] of [
       [0, -1],
       [1, 0],
@@ -121,36 +134,45 @@ export function findPath(from: Vec2, to: Vec2): Vec2[] | null {
       const nx = cx + dx
       const nz = cz + dz
       if (nx < 0 || nz < 0 || nx >= W || nz >= H) continue
-      const ni = idx(nx, nz)
-      if (prev[ni] !== -2) continue
       const nw = toWorld(nx, nz)
-      if (!canStand(cw.x, cw.z, nw.x, nw.z)) continue
-      prev[ni] = cur
-      queue.push(ni)
+      for (const cand of heightLevels(nw.x, nw.z)) {
+        if (Math.abs(cand - curH) > 1.5) continue
+        if (cand < 1 && blockedGround(nw.x, nw.z)) continue
+        const nk = key(nx, nz, lvlOf(cand))
+        if (prev[nk] !== -2) continue
+        prev[nk] = cur
+        nodeH[nk] = cand
+        queue.push(nk)
+      }
     }
   }
-  if (found < 0) return null
+  const goal = found >= 0 ? found : foundAny
+  if (goal < 0) return null
   const path: Vec2[] = []
-  for (let i = found; i >= 0; i = prev[i]!) {
-    path.unshift(toWorld(i % W, Math.floor(i / W)))
+  for (let i = goal; i >= 0; i = prev[i]!) {
+    const cell = Math.floor(i / 2)
+    path.unshift(toWorld(cell % W, Math.floor(cell / W)))
     if (prev[i] === -1) break
   }
-  // 최종 목표점 근사 (같은 높이면 정확 지점으로)
   const last = path[path.length - 1]!
-  if (canStand(last.x, last.z, to.x, to.z)) path.push({ ...to })
+  if (stepHeight(nodeH[goal]!, to.x, to.z) !== null && Math.hypot(last.x - to.x, last.z - to.z) < 1.5) {
+    path.push({ ...to })
+  }
   return path
 }
 
 /**
- * 이동 가능성 판정: 절벽(높이 차 1.5+)과 지상 충돌체를 막는다.
- * 성벽 위 보행·계단·성문 통과는 높이 연속성으로 자연히 허용된다.
+ * 층 인지 전이 판정: 현재 높이(fromH)에서 도착점의 후보 층 중 연속(Δ1.5 이내)인
+ * 높이를 반환. 불가하면 null. 절벽·지상 충돌 차단.
  */
-export function canStand(fromX: number, fromZ: number, toX: number, toZ: number): boolean {
-  const h0 = heightAt(fromX, fromZ)
-  const h1 = heightAt(toX, toZ)
-  if (Math.abs(h1 - h0) > 1.5) return false
-  if (h1 < 1 && blockedGround(toX, toZ)) return false
-  return true
+export function stepHeight(fromH: number, toX: number, toZ: number): number | null {
+  let best: number | null = null
+  for (const h of heightLevels(toX, toZ)) {
+    if (Math.abs(h - fromH) > 1.5) continue
+    if (h < 1 && blockedGround(toX, toZ)) continue
+    if (best === null || Math.abs(h - fromH) < Math.abs(best - fromH)) best = h
+  }
+  return best
 }
 export const LORD_SPEED = 7.5 // 유닛/초
 export const HERO_SPEED = 5.5
@@ -202,13 +224,15 @@ export interface LordState {
   target: Vec2 | null
   /** 경로 탐색 웨이포인트 (BFS) — 계단 경유 등벽이 여기서 나온다 */
   path: Vec2[]
+  /** 현재 서 있는 높이 (2층 구조 대응 — 성문 위 보도 vs 아래 터널) */
+  h: number
 }
 
 export type SiegeStatus = 'prep' | 'assault' | 'won' | 'lost'
 
 export interface SiegeInput {
-  /** 성주 이동 명령 (우클릭 지점) — 명령형 입력이라 리플레이 기록에 적합 */
-  moveTo?: Vec2
+  /** 성주 이동 명령 (우클릭 지점 + 클릭한 면의 높이 힌트 — 보도 위 vs 터널 구분) */
+  moveTo?: Vec2 & { h?: number }
   /** 준비 종료 → 침공 개시 */
   startAssault?: boolean
 }
@@ -268,7 +292,7 @@ export function createSiege(seed: number): { state: SiegeState; spawns: EnemySpa
       tick: 0,
       status: 'prep',
       wallHp: WALL_HP,
-      lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null, path: [] },
+      lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null, path: [], h: 0 },
       enemies: [],
       spawnCursor: 0,
       nextId: 1,
@@ -292,7 +316,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       x: clamp(input.moveTo.x, FIELD.minX, FIELD.maxX),
       z: clamp(input.moveTo.z, FIELD.minZ, FIELD.maxZ),
     }
-    const path = findPath(state.lord.pos, goal)
+    const path = findPath(state.lord.pos, goal, state.lord.h, input.moveTo.h ?? 0)
     if (path && path.length > 0) {
       state.lord.path = path
       state.lord.target = goal
@@ -310,13 +334,19 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     const nx = dist <= step ? state.lord.target.x : px + (dx / dist) * step
     const nz = dist <= step ? state.lord.target.z : pz + (dz / dist) * step
 
-    if (canStand(px, pz, nx, nz)) {
+    const h1 = stepHeight(state.lord.h, nx, nz)
+    const h2 = h1 === null ? stepHeight(state.lord.h, nx, pz) : null
+    const h3 = h1 === null && h2 === null ? stepHeight(state.lord.h, px, nz) : null
+    if (h1 !== null) {
       state.lord.pos.x = nx
       state.lord.pos.z = nz
-    } else if (canStand(px, pz, nx, pz)) {
+      state.lord.h = h1
+    } else if (h2 !== null) {
       state.lord.pos.x = nx // 벽면 슬라이드 (x축만)
-    } else if (canStand(px, pz, px, nz)) {
+      state.lord.h = h2
+    } else if (h3 !== null) {
       state.lord.pos.z = nz // 벽면 슬라이드 (z축만)
+      state.lord.h = h3
     } else {
       state.lord.path = []
       state.lord.target = null // 완전 봉착 — 명령 취소

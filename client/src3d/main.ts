@@ -9,7 +9,6 @@ import {
   stepSiege,
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
-import { heightAt } from '../../siege/sim/world'
 import type { SiegeInput } from '../../siege/sim/world'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
@@ -141,7 +140,7 @@ window.addEventListener('wheel', (e) => {
 // 우클릭 → 지면 좌표로 이동 명령
 const raycaster = new THREE.Raycaster()
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-let pendingMove: { x: number; z: number } | undefined
+let pendingMove: { x: number; z: number; h?: number } | undefined
 renderer.domElement.addEventListener('pointerdown', (e) => {
   if (e.button !== 2) return
   const ndc = new THREE.Vector2(
@@ -153,8 +152,8 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   const structHits = raycaster.intersectObjects(decor.occluders, false)
   const topHit = structHits.find((h) => h.face && h.face.normal.y > 0.55)
   if (topHit) {
-    pendingMove = { x: topHit.point.x, z: topHit.point.z }
-    showMoveMarker(topHit.point.x, topHit.point.z)
+    pendingMove = { x: topHit.point.x, z: topHit.point.z, h: topHit.point.y }
+    showMoveMarker(topHit.point.x, topHit.point.z, topHit.point.y)
     return
   }
   const hit = new THREE.Vector3()
@@ -165,13 +164,13 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
 })
 
 // 이동 마커 (LoL식 클릭 링)
-function showMoveMarker(x: number, z: number): void {
+function showMoveMarker(x: number, z: number, y = 0.05): void {
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.4, 0.6, 24),
     new THREE.MeshBasicMaterial({ color: 0x62c462, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
   )
   ring.rotation.x = -Math.PI / 2
-  ring.position.set(x, 0.05, z)
+  ring.position.set(x, y + 0.05, z)
   scene.add(ring)
   const t0 = performance.now()
   const anim = (): void => {
@@ -220,7 +219,7 @@ function fadeOccluders(): void {
   occlusionRay.far = dist - 0.5
   // 엄격 판정: 실제로 시선을 막는 것만 페이드. 성주가 성벽 위면 페이드 안 함
   // (벽 옆에 붙었을 때 훤히 뚫려 보이는 문제 방지)
-  const lordElevated = heightAt(state.lord.pos.x, state.lord.pos.z) > 1
+  const lordElevated = state.lord.h > 1
   const hits = lordElevated
     ? new Set<THREE.Object3D>()
     : new Set<THREE.Object3D>(
@@ -246,7 +245,7 @@ function syncScene(): void {
   fadeOccluders()
   const lx = THREE.MathUtils.lerp(prevLord.x, state.lord.pos.x, renderAlpha)
   const lz = THREE.MathUtils.lerp(prevLord.z, state.lord.pos.z, renderAlpha)
-  const ly = heightAt(lx, lz)
+  const ly = THREE.MathUtils.lerp(prevLordH, state.lord.h, renderAlpha)
   lordMesh.position.set(lx, ly, lz)
   lordMesh.rotation.y = state.lord.facing
 
@@ -300,9 +299,11 @@ function syncScene(): void {
 
 // 렌더 보간용 이전 틱 위치 (30Hz 시뮬 ↔ 60fps+ 렌더의 버벅임 제거)
 const prevLord = new THREE.Vector3()
+let prevLordH = 0
 const prevEnemies = new Map<number, { x: number; z: number }>()
 
 function snapshotPrev(): void {
+  prevLordH = state.lord.h
   prevLord.set(state.lord.pos.x, 0, state.lord.pos.z)
   prevEnemies.clear()
   for (const e of state.enemies) prevEnemies.set(e.id, { x: e.pos.x, z: e.pos.z })

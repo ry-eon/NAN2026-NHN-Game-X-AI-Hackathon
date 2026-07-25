@@ -269,10 +269,8 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   }
 
   // 망루: 모서리 4 + 성문 좌우 2 (원통 + 원뿔 지붕 + 깃발)
-  // 성문탑(원통 2기)은 보도 시야를 막아 제거 — 모서리 망루는 성곽 바깥 능보로
+  // 동쪽 원통 망루는 보도 시야를 가려 전부 제거 — 서쪽(후방 실루엣)만 유지
   const towers: [number, number, boolean][] = [
-    [east + 2.5, north - 1.5, true],
-    [east + 2.5, south + 1.5, true],
     [west - 2.5, north - 1.5, true],
     [west - 2.5, south + 1.5, true],
   ]
