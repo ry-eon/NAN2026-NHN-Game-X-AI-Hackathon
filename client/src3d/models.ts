@@ -291,6 +291,105 @@ export function animateRig(rig: Rig, t: number, moving: boolean): void {
   }
 }
 
+// ---------------------------------------------------------------- 공성 병기 (전방 = +Z, 기사와 동일 규약)
+
+const MAT_WOOD = new THREE.MeshStandardMaterial({ color: 0x4a3826, roughness: 0.88 })
+const MAT_WOOD_DARK = new THREE.MeshStandardMaterial({ color: 0x33261a, roughness: 0.9 })
+
+/** 대포 — 포신(lathe 프로파일) + 목재 포가 + 바퀴 2륜 */
+export function makeCannon(): THREE.Group {
+  const g = new THREE.Group()
+  // 포신: 포미(두꺼움)→포구(좁아짐) 프로파일, 수평으로 눕혀 +Z를 향한다
+  const barrel = new THREE.Mesh(
+    new THREE.LatheGeometry(
+      [
+        new THREE.Vector2(0.0, 0),
+        new THREE.Vector2(0.22, 0),
+        new THREE.Vector2(0.24, 0.18),
+        new THREE.Vector2(0.17, 0.55),
+        new THREE.Vector2(0.15, 1.35),
+        new THREE.Vector2(0.17, 1.5),
+        new THREE.Vector2(0.13, 1.52),
+      ],
+      16,
+    ),
+    MATS.iron,
+  )
+  barrel.rotation.x = Math.PI / 2 - 0.1 // 살짝 들린 앙각
+  barrel.position.set(0, 0.62, -0.25)
+  // 포신 보강 링 2개
+  for (const t of [0.35, 0.95]) {
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.185, 0.03, 8, 14), MATS.steelDark)
+    ring.position.set(0, 0.62 + t * 0.1, -0.25 + t) // 포신 축을 따라
+    ring.rotation.x = -0.1
+    ring.castShadow = true
+    g.add(ring)
+  }
+  // 포가 (양측 목재 프레임)
+  for (const side of [-1, 1]) {
+    const frame = bevelBox(0.09, 0.5, 1.3, MAT_WOOD, 0.02)
+    frame.position.set(side * 0.28, 0.42, -0.1)
+    frame.rotation.x = -0.12
+    g.add(frame)
+  }
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.95, 10), MAT_WOOD_DARK)
+  axle.rotation.z = Math.PI / 2
+  axle.position.set(0, 0.33, 0.28)
+  g.add(axle)
+  // 바퀴
+  for (const side of [-1, 1]) {
+    const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.33, 0.33, 0.09, 14), MAT_WOOD)
+    wheel.rotation.z = Math.PI / 2
+    wheel.position.set(side * 0.45, 0.33, 0.28)
+    wheel.castShadow = true
+    const hub = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.028, 8, 16), MATS.iron)
+    hub.rotation.y = Math.PI / 2
+    hub.position.copy(wheel.position)
+    hub.castShadow = true
+    g.add(wheel, hub)
+  }
+  g.add(barrel)
+  g.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.castShadow = true
+  })
+  return g
+}
+
+/** 발리스타 — 목재 받침대 + 활대(양팔) + 장전 볼트 */
+export function makeBallista(): THREE.Group {
+  const g = new THREE.Group()
+  const base = bevelBox(0.85, 0.14, 0.95, MAT_WOOD_DARK, 0.025)
+  base.position.y = 0.07
+  const post = bevelBox(0.16, 0.5, 0.16, MAT_WOOD, 0.02)
+  post.position.y = 0.38
+  // 발사 레일 (앞으로 길게, 살짝 들림)
+  const rail = bevelBox(0.12, 0.08, 1.5, MAT_WOOD, 0.02)
+  rail.position.set(0, 0.62, 0.1)
+  rail.rotation.x = -0.16
+  // 활대 (좌우로 벌어진 팔) + 시위
+  for (const side of [-1, 1]) {
+    const arm = bevelBox(0.07, 0.07, 0.85, MAT_WOOD, 0.015)
+    arm.position.set(side * 0.42, 0.66, -0.35)
+    arm.rotation.y = side * 1.25
+    g.add(arm)
+  }
+  const string = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.012, 0.012, 1.55, 6),
+    MATS.steelDark,
+  )
+  string.rotation.z = Math.PI / 2
+  string.position.set(0, 0.66, -0.62)
+  // 장전된 볼트
+  const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.012, 1.15, 8), MATS.iron)
+  bolt.rotation.x = Math.PI / 2 - 0.16
+  bolt.position.set(0, 0.72, 0.15)
+  g.add(base, post, rail, string, bolt)
+  g.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.castShadow = true
+  })
+  return g
+}
+
 // ---------------------------------------------------------------- 불 (스프라이트 화염 + 불티)
 
 export interface FireFx {

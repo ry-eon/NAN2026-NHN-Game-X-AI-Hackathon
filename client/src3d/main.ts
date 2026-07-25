@@ -4,12 +4,13 @@
 import * as THREE from 'three'
 import {
   ENEMY_KINDS,
+  UNIT_KINDS,
   WALL_HP,
   createSiege,
   stepSiege,
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
-import type { SiegeInput } from '../../siege/sim/world'
+import type { FriendlyUnit, SiegeEvent, SiegeInput } from '../../siege/sim/world'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js'
@@ -17,7 +18,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { buildAsh, buildCastle, buildEnvironment, loadSky } from './environment'
-import { animateRig, makeFire, makeKnight } from './models'
+import { animateRig, makeBallista, makeCannon, makeFire, makeKnight } from './models'
+import type { Rig } from './models'
 
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
@@ -124,6 +126,57 @@ const enemyMats: Record<string, THREE.MeshStandardMaterial> = {
   tank: new THREE.MeshStandardMaterial({ color: 0x6a4a9a }),
 }
 
+// 아군 유닛 비주얼 풀 — 병종별 절차 모델. 그룹→유닛 id 역참조는 피킹에 사용
+interface UnitVisual {
+  group: THREE.Group
+  rig?: Rig
+  kind: string
+}
+const unitVisuals = new Map<number, UnitVisual>()
+const groupToUnitId = new Map<string, number>()
+
+function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
+  let v = unitVisuals.get(u.id)
+  if (v) return v
+  if (u.kind === 'soldier') {
+    const rig = makeKnight(0x28303e)
+    rig.root.scale.setScalar(0.88)
+    v = { group: rig.root, rig, kind: u.kind }
+  } else if (u.kind === 'hero') {
+    const rig = makeKnight(0x14355c, true)
+    rig.root.scale.setScalar(1.04)
+    v = { group: rig.root, rig, kind: u.kind }
+  } else if (u.kind === 'cannon') {
+    v = { group: makeCannon(), kind: u.kind }
+  } else {
+    v = { group: makeBallista(), kind: u.kind }
+  }
+  unitVisuals.set(u.id, v)
+  groupToUnitId.set(v.group.uuid, u.id)
+  scene.add(v.group)
+  return v
+}
+
+// 선택 링 풀
+const selectionRings: THREE.Mesh[] = []
+const ringMat = new THREE.MeshBasicMaterial({
+  color: 0x53d6a2,
+  transparent: true,
+  opacity: 0.85,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+})
+function getSelectionRing(i: number): THREE.Mesh {
+  while (selectionRings.length <= i) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.7, 28), ringMat)
+    ring.rotation.x = -Math.PI / 2
+    ring.visible = false
+    scene.add(ring)
+    selectionRings.push(ring)
+  }
+  return selectionRings[i]!
+}
+
 // ---------------------------------------------------------------- 입력 (LoL식)
 let spaceLatch = false
 window.addEventListener('keydown', (e) => {
@@ -137,37 +190,109 @@ window.addEventListener('wheel', (e) => {
   camDist = Math.max(9, Math.min(42, camDist + e.deltaY * 0.02))
 })
 
-// 우클릭 → 지면 좌표로 이동 명령
+// 피킹 공통: 화면 좌표 → 월드 지점 (구조물 상면 우선, 없으면 지면)
 const raycaster = new THREE.Raycaster()
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
-let pendingMove: { x: number; z: number; h?: number } | undefined
-renderer.domElement.addEventListener('pointerdown', (e) => {
-  if (e.button !== 2) return
+function pickPoint(clientX: number, clientY: number): { x: number; z: number; h: number } | null {
   const ndc = new THREE.Vector2(
-    (e.clientX / window.innerWidth) * 2 - 1,
-    -(e.clientY / window.innerHeight) * 2 + 1,
+    (clientX / window.innerWidth) * 2 - 1,
+    -(clientY / window.innerHeight) * 2 + 1,
   )
   raycaster.setFromCamera(ndc, camera)
   // 구조물 상면(법선이 위) 클릭 → 성벽 보도·계단 위 좌표 사용
   const structHits = raycaster.intersectObjects(decor.occluders, false)
   const topHit = structHits.find((h) => h.face && h.face.normal.y > 0.55)
-  if (topHit) {
-    pendingMove = { x: topHit.point.x, z: topHit.point.z, h: topHit.point.y }
-    showMoveMarker(topHit.point.x, topHit.point.z, topHit.point.y)
+  if (topHit) return { x: topHit.point.x, z: topHit.point.z, h: topHit.point.y }
+  const hit = new THREE.Vector3()
+  if (raycaster.ray.intersectPlane(groundPlane, hit)) return { x: hit.x, z: hit.z, h: 0 }
+  return null
+}
+
+// ---- 스타크래프트식 부대 선택 (좌클릭 드래그) + 명령 (우클릭)
+let pendingMove: { x: number; z: number; h?: number } | undefined
+let pendingUnitMove: { ids: number[]; to: { x: number; z: number; h?: number } } | undefined
+const selected = new Set<number>()
+
+const dragBox = document.createElement('div')
+dragBox.style.cssText =
+  'position:fixed;border:1px solid #53d6a2;background:#53d6a222;pointer-events:none;display:none;z-index:5'
+document.body.appendChild(dragBox)
+let dragStart: { x: number; y: number } | null = null
+
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (e.button === 0) {
+    dragStart = { x: e.clientX, y: e.clientY }
     return
   }
-  const hit = new THREE.Vector3()
-  if (raycaster.ray.intersectPlane(groundPlane, hit)) {
-    pendingMove = { x: hit.x, z: hit.z }
-    showMoveMarker(hit.x, hit.z)
+  if (e.button !== 2) return
+  // 우클릭: 선택 부대가 있으면 부대 명령, 없으면 성주 이동
+  const p = pickPoint(e.clientX, e.clientY)
+  if (!p) return
+  if (selected.size > 0) {
+    pendingUnitMove = { ids: [...selected], to: p }
+    showMoveMarker(p.x, p.z, p.h, 0x53d6a2)
+  } else {
+    pendingMove = p
+    showMoveMarker(p.x, p.z, p.h)
   }
 })
 
-// 이동 마커 (LoL식 클릭 링)
-function showMoveMarker(x: number, z: number, y = 0.05): void {
+window.addEventListener('pointermove', (e) => {
+  if (!dragStart) return
+  const x0 = Math.min(dragStart.x, e.clientX)
+  const y0 = Math.min(dragStart.y, e.clientY)
+  dragBox.style.display = 'block'
+  dragBox.style.left = `${x0}px`
+  dragBox.style.top = `${y0}px`
+  dragBox.style.width = `${Math.abs(e.clientX - dragStart.x)}px`
+  dragBox.style.height = `${Math.abs(e.clientY - dragStart.y)}px`
+})
+
+window.addEventListener('pointerup', (e) => {
+  if (e.button !== 0 || !dragStart) return
+  dragBox.style.display = 'none'
+  const start = dragStart
+  dragStart = null
+  if (!e.shiftKey) selected.clear()
+  const dragDist = Math.hypot(e.clientX - start.x, e.clientY - start.y)
+  if (dragDist < 6) {
+    // 단일 클릭 픽킹 — 유닛 모델 직접 레이캐스트
+    const ndc = new THREE.Vector2(
+      (e.clientX / window.innerWidth) * 2 - 1,
+      -(e.clientY / window.innerHeight) * 2 + 1,
+    )
+    raycaster.setFromCamera(ndc, camera)
+    const groups = [...unitVisuals.values()].map((v) => v.group)
+    const hits = raycaster.intersectObjects(groups, true)
+    if (hits.length > 0) {
+      let obj: THREE.Object3D | null = hits[0]!.object
+      while (obj && !groupToUnitId.has(obj.uuid)) obj = obj.parent
+      if (obj) selected.add(groupToUnitId.get(obj.uuid)!)
+    }
+    return
+  }
+  // 박스 선택 — 유닛 위치를 화면에 투영
+  const x0 = Math.min(start.x, e.clientX)
+  const x1 = Math.max(start.x, e.clientX)
+  const y0 = Math.min(start.y, e.clientY)
+  const y1 = Math.max(start.y, e.clientY)
+  for (const u of state.units) {
+    const p = new THREE.Vector3(u.pos.x, u.h + 1, u.pos.z).project(camera)
+    const sx = ((p.x + 1) / 2) * window.innerWidth
+    const sy = ((1 - p.y) / 2) * window.innerHeight
+    if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1 && p.z < 1) selected.add(u.id)
+  }
+})
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape') selected.clear()
+})
+
+// 이동 마커 (LoL식 클릭 링) — 성주 초록, 부대 명령 청록
+function showMoveMarker(x: number, z: number, y = 0.05, color = 0x62c462): void {
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.4, 0.6, 24),
-    new THREE.MeshBasicMaterial({ color: 0x62c462, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
   )
   ring.rotation.x = -Math.PI / 2
   ring.position.set(x, y + 0.05, z)
@@ -196,8 +321,9 @@ hud.innerHTML = `
     성벽 <span id="wall"></span><div style="width:280px;height:10px;background:#000a;margin-top:3px"><div id="wallbar" style="height:100%;width:100%;background:#62c462"></div></div>
   </div>
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
+  <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    우클릭: 이동 · 휠: 줌 · <b>Space</b>: 침공 개시
+    좌클릭 드래그: 부대 선택 · 우클릭: 이동 명령(선택 없으면 성주) · ESC: 선택 해제 · 휠: 줌 · <b>Space</b>: 침공 개시
   </div>`
 const startBtn = document.createElement('div')
 document.body.appendChild(hud)
@@ -207,6 +333,151 @@ void startBtn
 const { state, spawns } = createSiege(20260725)
 let acc = 0
 let last = performance.now()
+
+// ---------------------------------------------------------------- 전투 FX (연출 전용 — 피해는 sim에서 이미 확정)
+interface Projectile {
+  mesh: THREE.Object3D
+  from: THREE.Vector3
+  to: THREE.Vector3
+  t0: number
+  dur: number
+  arc: number
+  explode: boolean
+}
+const projectiles: Projectile[] = []
+const flashes: { mesh: THREE.Sprite; t0: number; dur: number; grow: number }[] = []
+const dying: { obj: THREE.Object3D; t0: number; dur: number }[] = []
+
+const flashTex = ((): THREE.CanvasTexture => {
+  const c = document.createElement('canvas')
+  c.width = 64
+  c.height = 64
+  const ctx = c.getContext('2d')!
+  const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 30)
+  grad.addColorStop(0, 'rgba(255,255,255,1)')
+  grad.addColorStop(0.35, 'rgba(255,190,90,0.9)')
+  grad.addColorStop(1, 'rgba(255,120,30,0)')
+  ctx.fillStyle = grad
+  ctx.fillRect(0, 0, 64, 64)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+})()
+
+function spawnFlash(pos: THREE.Vector3, scale: number, color = 0xffffff, dur = 280): void {
+  const mat = new THREE.SpriteMaterial({
+    map: flashTex,
+    color,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  })
+  const s = new THREE.Sprite(mat)
+  s.position.copy(pos)
+  s.scale.setScalar(scale * 0.4)
+  scene.add(s)
+  flashes.push({ mesh: s, t0: performance.now(), dur, grow: scale })
+}
+
+const arrowGeo = new THREE.BoxGeometry(0.03, 0.03, 0.55)
+const boltGeo = new THREE.BoxGeometry(0.07, 0.07, 0.95)
+const ballGeo = new THREE.SphereGeometry(0.16, 10, 8)
+const projMat = new THREE.MeshBasicMaterial({ color: 0xd8d2c0 })
+const ballMat = new THREE.MeshBasicMaterial({ color: 0x2a2a30 })
+
+/** 발사 연출 — 병종별 궤적. 피해는 sim이 이미 적용했으므로 여긴 그림뿐 */
+function spawnProjectile(kind: string, from: THREE.Vector3, to: THREE.Vector3): void {
+  const spec =
+    kind === 'cannon'
+      ? { geo: ballGeo, mat: ballMat, dur: 480, arc: 4.2, explode: true }
+      : kind === 'ballista'
+        ? { geo: boltGeo, mat: projMat, dur: 170, arc: 0.3, explode: false }
+        : { geo: arrowGeo, mat: projMat, dur: 260, arc: 1.6, explode: false }
+  const mesh = new THREE.Mesh(spec.geo, spec.mat)
+  mesh.position.copy(from)
+  scene.add(mesh)
+  projectiles.push({ mesh, from, to, t0: performance.now(), dur: spec.dur, arc: spec.arc, explode: spec.explode })
+}
+
+/** 병종별 총구 높이 (모델 형상 기준) */
+const MUZZLE_H: Record<string, number> = { soldier: 1.35, hero: 1.4, cannon: 0.9, ballista: 0.8 }
+
+function handleEvents(events: SiegeEvent[]): void {
+  for (const ev of events) {
+    if (ev.type === 'unitFired') {
+      const from = new THREE.Vector3(ev.from.x, ev.from.h + (MUZZLE_H[ev.unitKind] ?? 1), ev.from.z)
+      spawnProjectile(ev.unitKind, from, new THREE.Vector3(ev.to.x, 0.7, ev.to.z))
+    } else if (ev.type === 'enemyDied') {
+      const mesh = enemyMeshes.get(ev.id)
+      if (mesh) {
+        enemyMeshes.delete(ev.id)
+        dying.push({ obj: mesh, t0: performance.now(), dur: 380 })
+      }
+      spawnFlash(new THREE.Vector3(ev.pos.x, 0.8, ev.pos.z), 1.6, 0xff6a4a, 300)
+    } else if (ev.type === 'unitDied') {
+      const v = unitVisuals.get(ev.id)
+      if (v) {
+        unitVisuals.delete(ev.id)
+        groupToUnitId.delete(v.group.uuid)
+        dying.push({ obj: v.group, t0: performance.now(), dur: 600 })
+      }
+      selected.delete(ev.id)
+      spawnFlash(new THREE.Vector3(ev.pos.x, 1.0, ev.pos.z), 1.8, 0xff3a3a, 400)
+    } else if (ev.type === 'meleeHit') {
+      const u = state.units.find((x) => x.id === ev.unitId)
+      if (u) spawnFlash(new THREE.Vector3(u.pos.x, u.h + 1.1, u.pos.z), 0.9, 0xff5a5a, 200)
+    } else if (ev.type === 'wallHit') {
+      const e = state.enemies.find((x) => x.id === ev.id)
+      if (e) spawnFlash(new THREE.Vector3(e.pos.x - 0.6, 1.4, e.pos.z), 1.1, 0xffb060, 220)
+    }
+  }
+}
+
+/** FX 갱신 — 매 프레임 */
+function updateFx(now: number): void {
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i]!
+    const t = (now - p.t0) / p.dur
+    if (t >= 1) {
+      scene.remove(p.mesh)
+      if (p.explode) spawnFlash(p.to.clone(), 3.2, 0xffc070, 380)
+      projectiles.splice(i, 1)
+      continue
+    }
+    const pos = p.from.clone().lerp(p.to, t)
+    pos.y += Math.sin(Math.PI * t) * p.arc
+    // 진행 방향으로 정렬
+    const ahead = p.from
+      .clone()
+      .lerp(p.to, Math.min(1, t + 0.05))
+    ahead.y += Math.sin(Math.PI * Math.min(1, t + 0.05)) * p.arc
+    p.mesh.position.copy(pos)
+    p.mesh.lookAt(ahead)
+  }
+  for (let i = flashes.length - 1; i >= 0; i--) {
+    const f = flashes[i]!
+    const t = (now - f.t0) / f.dur
+    if (t >= 1) {
+      scene.remove(f.mesh)
+      flashes.splice(i, 1)
+      continue
+    }
+    f.mesh.scale.setScalar(f.grow * (0.4 + t * 0.9))
+    ;(f.mesh.material as THREE.SpriteMaterial).opacity = 1 - t
+  }
+  for (let i = dying.length - 1; i >= 0; i--) {
+    const d = dying[i]!
+    const t = (now - d.t0) / d.dur
+    if (t >= 1) {
+      scene.remove(d.obj)
+      dying.splice(i, 1)
+      continue
+    }
+    d.obj.rotation.x = -t * 1.2 // 쓰러짐
+    d.obj.position.y -= 0.01
+    d.obj.scale.setScalar(Math.max(0.01, 1 - t * 0.5))
+  }
+}
 
 const occlusionRay = new THREE.Raycaster()
 
@@ -276,6 +547,26 @@ function syncScene(): void {
     }
   }
 
+  // 아군 유닛 — 위치·방향·선택 링
+  let ringIdx = 0
+  for (const u of state.units) {
+    const v = ensureUnitVisual(u)
+    const prev = prevUnits.get(u.id)
+    const ux = prev ? THREE.MathUtils.lerp(prev.x, u.pos.x, renderAlpha) : u.pos.x
+    const uz = prev ? THREE.MathUtils.lerp(prev.z, u.pos.z, renderAlpha) : u.pos.z
+    const uy = prev ? THREE.MathUtils.lerp(prev.h, u.h, renderAlpha) : u.h
+    v.group.position.set(ux, uy, uz)
+    v.group.rotation.y = u.facing
+    if (selected.has(u.id)) {
+      const ring = getSelectionRing(ringIdx++)
+      ring.visible = true
+      const r = UNIT_KINDS[u.kind]!.radius
+      ring.scale.setScalar(0.8 + r)
+      ring.position.set(ux, uy + 0.06, uz)
+    }
+  }
+  for (let i = ringIdx; i < selectionRings.length; i++) selectionRings[i]!.visible = false
+
   // 카메라: LoL식 고정 부감 — 성주 남쪽 상공에서 내려다보며 추적
   const target = new THREE.Vector3(lx, ly, lz)
   // 비스듬한 앵글(약 43°) — 성벽·인물·바위의 수직면이 화면에 실린다
@@ -286,6 +577,11 @@ function syncScene(): void {
   document.getElementById('wall')!.textContent = `${state.wallHp}/${WALL_HP}`
   ;(document.getElementById('wallbar') as HTMLDivElement).style.width =
     `${(state.wallHp / WALL_HP) * 100}%`
+  const counts = new Map<string, number>()
+  for (const u of state.units) counts.set(u.kind, (counts.get(u.kind) ?? 0) + 1)
+  document.getElementById('army')!.textContent =
+    `병력 ${state.units.length} (${[...counts].map(([k, n]) => `${UNIT_KINDS[k]!.name} ${n}`).join(' · ')})` +
+    (selected.size > 0 ? ` — 선택 ${selected.size}` : '')
   const phase = document.getElementById('phase')!
   phase.textContent =
     state.status === 'prep'
@@ -301,17 +597,21 @@ function syncScene(): void {
 const prevLord = new THREE.Vector3()
 let prevLordH = 0
 const prevEnemies = new Map<number, { x: number; z: number }>()
+const prevUnits = new Map<number, { x: number; z: number; h: number }>()
 
 function snapshotPrev(): void {
   prevLordH = state.lord.h
   prevLord.set(state.lord.pos.x, 0, state.lord.pos.z)
   prevEnemies.clear()
   for (const e of state.enemies) prevEnemies.set(e.id, { x: e.pos.x, z: e.pos.z })
+  prevUnits.clear()
+  for (const u of state.units) prevUnits.set(u.id, { x: u.pos.x, z: u.pos.z, h: u.h })
 }
 
 function frame(now: number): void {
   acc = Math.min(acc + (now - last), STEP_MS * 6)
   last = now
+  const frameEvents: SiegeEvent[] = []
   while (acc >= STEP_MS) {
     snapshotPrev()
     acc -= STEP_MS
@@ -325,11 +625,22 @@ function frame(now: number): void {
       input.moveTo = pendingMove
       pendingMove = undefined
     }
+    if (pendingUnitMove) {
+      input.unitMove = pendingUnitMove
+      pendingUnitMove = undefined
+    }
     stepSiege(state, spawns, input)
+    frameEvents.push(...state.events)
   }
+  handleEvents(frameEvents)
+  updateFx(now)
   // 장식 애니메이션 (연출 전용 — sim 무관)
   const t = now / 1000
   animateRig(lordRig, t, state.lord.target !== null)
+  for (const u of state.units) {
+    const v = unitVisuals.get(u.id)
+    if (v?.rig) animateRig(v.rig, t + u.id * 0.7, u.path.length > 0)
+  }
   for (const f of fires) f.update(t)
   decor.torchLights.forEach((l, i) => {
     l.intensity = 12 + Math.sin(t * 9 + i * 1.7) * 2.5 + Math.sin(t * 23 + i) * 1.5
@@ -353,6 +664,17 @@ function frame(now: number): void {
   requestAnimationFrame(frame)
 }
 requestAnimationFrame(frame)
+
+// 자동 검증 훅 — headless 스크린샷 테스트가 sim을 빨리감기(결정론이라 안전).
+// FX 이벤트는 버리고 상태만 전진한다. 게임 플레이 입력 경로와 무관.
+;(window as unknown as Record<string, unknown>).__siege = {
+  state,
+  fastForward: (n: number, input: SiegeInput = {}): void => {
+    stepSiege(state, spawns, input)
+    for (let i = 1; i < n; i++) stepSiege(state, spawns, {})
+    snapshotPrev()
+  },
+}
 
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
