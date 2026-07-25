@@ -132,13 +132,15 @@ function wallSegment(
   // 텍스처 반복을 벽 크기에 비례 — 늘어짐 방지 (구간별 독립 재질)
   const mat = pbrDisplaced('bricks', len / 5.5, wallH / 5.5, 0.22, { color: 0x9aa0b0 })
   // 변위 맵이 실제 요철을 만들도록 세분화
+  // 본체는 0.25 낮게 — 변위 요철(≤0.22)이 보도 상판을 뚫지 않도록 (상판이 걷는 면)
+  const bodyH = wallH - 0.25
   const geo =
     axis === 'z'
-      ? new THREE.BoxGeometry(wallT, wallH, len, 4, 24, Math.max(24, Math.floor(len * 2)))
-      : new THREE.BoxGeometry(len, wallH, wallT, Math.max(24, Math.floor(len * 2)), 24, 4)
+      ? new THREE.BoxGeometry(wallT, bodyH, len, 4, 24, Math.max(24, Math.floor(len * 2)))
+      : new THREE.BoxGeometry(len, bodyH, wallT, Math.max(24, Math.floor(len * 2)), 24, 4)
   const seg = new THREE.Mesh(geo, mat)
   decor.occluders.push(seg)
-  seg.position.set(axis === 'z' ? fixed : mid, wallH / 2, axis === 'z' ? mid : fixed)
+  seg.position.set(axis === 'z' ? fixed : mid, bodyH / 2, axis === 'z' ? mid : fixed)
   seg.castShadow = true
   seg.receiveShadow = true
   scene.add(seg)
@@ -194,6 +196,27 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   wallSegment(scene, decor, stoneDark, 'z', west, north, south, -1)
   wallSegment(scene, decor, stoneDark, 'x', north, west - ext, east + ext, -1)
   wallSegment(scene, decor, stoneDark, 'x', south, west - ext, east + ext, 1)
+
+  // 보도 상판 — 벽 박스 윗면은 옆면 기준 UV라 길이 방향으로 텍스처가 죽 늘어진다.
+  // 걷는 면 전체를 포장(paving) 데크로 덮어 4면이 같은 질감이 되게 한다.
+  {
+    const deck = (w: number, d: number, x: number, z: number, yTop: number): void => {
+      const m = new THREE.Mesh(
+        new THREE.BoxGeometry(w, 0.3, d),
+        pbr('stone', w / 3.2, d / 3.2, { color: 0x9aa0b8 }),
+      )
+      m.position.set(x, yTop - 0.15, z)
+      m.receiveShadow = true
+      scene.add(m)
+    }
+    const spanZ = south - north + CASTLE.wallT
+    const spanX = east - west + CASTLE.wallT
+    // 동/서는 0.012 위 — 모서리 겹침에서 면 충돌(z-fighting) 방지
+    deck(CASTLE.wallT, spanZ, east, 0, wallH + 0.012)
+    deck(CASTLE.wallT, spanZ, west, 0, wallH + 0.012)
+    deck(spanX, CASTLE.wallT, (east + west) / 2, north, wallH)
+    deck(spanX, CASTLE.wallT, (east + west) / 2, south, wallH)
+  }
 
   // 모서리 파라펫 이음 — 동/서벽 파라펫은 벽 구간 끝에서 멈추고 북/남벽 파라펫은
   // 바깥 립에 있어 그 사이가 계단처럼 비었다. 필러로 잇고 모서리는 캡 블록으로 마감.

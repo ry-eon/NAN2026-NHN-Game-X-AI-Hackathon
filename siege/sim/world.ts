@@ -73,10 +73,17 @@ export function heightLevels(x: number, z: number): number[] {
   if (x >= stairX0 && x <= stairX1 && z <= -4.5 && z >= -15) {
     return [(C.wallH * (-z - 4.5)) / 10.5]
   }
-  // 동벽 (보도는 전 구간 연속, 성문 폭에서는 터널 0층도 공존)
-  if (x >= C.east - halfT && x <= C.east + halfT && z >= C.north + 0.5 && z <= C.south - 0.5) {
-    return Math.abs(z) < C.gateHalf ? [C.wallH, 0] : [C.wallH]
-  }
+  // 내성 몸체가 서벽 보도에 파고드는 구간 — 보도·지상 모두 통행 불가 (지상은 콜라이더가 차단)
+  if (x >= C.west + 1.5 && x <= C.west + 10.5 && z >= -6.5 && z <= 6.5) return [0]
+  // 성곽 보도 4면 전체 (모서리 포함 연속) — 동벽 성문 폭에서는 터널 0층 공존
+  const onEast = x >= C.east - halfT && x <= C.east + halfT && z >= C.north - halfT && z <= C.south + halfT
+  const onWest = x >= C.west - halfT && x <= C.west + halfT && z >= C.north - halfT && z <= C.south + halfT
+  const onNS =
+    x >= C.west - halfT &&
+    x <= C.east + halfT &&
+    (Math.abs(z - C.north) <= halfT || Math.abs(z - C.south) <= halfT)
+  if (onEast) return Math.abs(z) < C.gateHalf ? [C.wallH, 0] : [C.wallH]
+  if (onWest || onNS) return [C.wallH]
   return [0]
 }
 
