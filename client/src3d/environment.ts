@@ -143,7 +143,20 @@ function wallSegment(
   seg.receiveShadow = true
   scene.add(seg)
   // 흉벽 — 보도 바깥 가장자리 (안쪽은 배치 공간으로 비운다)
+  // 연속 낮은 파라펫 위에 성가퀴가 솟는 총안 구조: 사이가 비지 않고 낮은 벽으로 이어진다
   const lip = (wallT / 2 - 0.55) * outerSign
+  const parapet = new THREE.Mesh(
+    axis === 'z' ? new THREE.BoxGeometry(1.1, 1.15, len) : new THREE.BoxGeometry(len, 1.15, 1.1),
+    darkMat,
+  )
+  parapet.position.set(
+    axis === 'z' ? fixed + lip : mid,
+    wallH + 0.575,
+    axis === 'z' ? mid : fixed + lip,
+  )
+  parapet.castShadow = true
+  parapet.receiveShadow = true
+  scene.add(parapet)
   for (let d = -len / 2 + 1.8; d < len / 2 - 1; d += 4.2) {
     const m = new THREE.Mesh(
       axis === 'z'
@@ -170,11 +183,13 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   const { east, west, north, south, wallH, gateHalf } = CASTLE
 
   // 4면 성곽 (동면은 성문 개구부)
+  // 북/남벽은 동/서벽 두께 끝까지 연장 — 망루 제거 후 모서리 노치가 비지 않게
+  const ext = CASTLE.wallT / 2 - 0.05 // 0.05 안쪽: 면 겹침(z-fighting) 방지
   wallSegment(scene, decor, stoneDark, 'z', east, north, -gateHalf, 1)
   wallSegment(scene, decor, stoneDark, 'z', east, gateHalf, south, 1)
   wallSegment(scene, decor, stoneDark, 'z', west, north, south, -1)
-  wallSegment(scene, decor, stoneDark, 'x', north, west, east, -1)
-  wallSegment(scene, decor, stoneDark, 'x', south, west, east, 1)
+  wallSegment(scene, decor, stoneDark, 'x', north, west - ext, east + ext, -1)
+  wallSegment(scene, decor, stoneDark, 'x', south, west - ext, east + ext, 1)
 
   // 성문루: 성벽과 같은 높이·두께의 플러시 벽 — 정면이 한 장으로 평평하다.
   // 첨두 아치가 아래를 관통 (보도는 sim상 성문 상부 6.4 구간만 비워둠)
@@ -201,8 +216,13 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     gatehouse.receiveShadow = true
     decor.occluders.push(gatehouse)
     scene.add(gatehouse)
-    // 성문 상부 흉벽 (연속 실루엣)
+    // 성문 상부 흉벽 (연속 실루엣) — 벽 구간과 같은 파라펫으로 이어붙임
     const lip2 = CASTLE.wallT / 2 - 0.55
+    const gatePara = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.15, gw * 2), stoneDark)
+    gatePara.position.set(east + lip2, wallH + 0.575, 0)
+    gatePara.castShadow = true
+    gatePara.receiveShadow = true
+    scene.add(gatePara)
     for (let z = -gw + 0.9; z < gw; z += 2.1) {
       const m2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 1.6), stoneDark)
       m2.position.set(east + lip2, wallH + 1.1, z)

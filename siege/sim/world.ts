@@ -36,8 +36,9 @@ const halfT = C.wallT / 2
 /** 지상 통행 불가 사각 (동벽은 높이 규칙이 담당, 성문 측면 스트립만 예외 추가) */
 const RECT_COLLIDERS: RectC[] = [
   { x0: C.west - halfT, x1: C.west + halfT, z0: C.north, z1: C.south }, // 서벽
-  { x0: C.west, x1: C.east, z0: C.north - halfT, z1: C.north + halfT }, // 북벽
-  { x0: C.west, x1: C.east, z0: C.south - halfT, z1: C.south + halfT }, // 남벽
+  // 북/남벽은 동/서벽 두께 끝까지 — 렌더의 모서리 연장과 일치
+  { x0: C.west - halfT, x1: C.east + halfT, z0: C.north - halfT, z1: C.north + halfT }, // 북벽
+  { x0: C.west - halfT, x1: C.east + halfT, z0: C.south - halfT, z1: C.south + halfT }, // 남벽
   { x0: C.west + 1.5, x1: C.west + 10.5, z0: -6.5, z1: 6.5 }, // 내성
 ]
 /** 망루 (원형) */
