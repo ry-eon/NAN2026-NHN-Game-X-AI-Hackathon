@@ -157,7 +157,11 @@ function wallSegment(
   parapet.castShadow = true
   parapet.receiveShadow = true
   scene.add(parapet)
-  for (let d = -len / 2 + 1.8; d < len / 2 - 1; d += 4.2) {
+  // 성가퀴는 월드 좌표 4.2 그리드에 정렬 — 구간·성문 이음새에서도 간격이 일정
+  const step = 4.2
+  const lo = Math.min(from, to)
+  const hi = Math.max(from, to)
+  for (let w = Math.ceil((lo + 0.8) / step) * step; w <= hi - 0.8; w += step) {
     const m = new THREE.Mesh(
       axis === 'z'
         ? new THREE.BoxGeometry(1.1, 2.2, 2.1)
@@ -165,9 +169,9 @@ function wallSegment(
       darkMat,
     )
     m.position.set(
-      axis === 'z' ? fixed + lip : mid + d,
+      axis === 'z' ? fixed + lip : w,
       wallH + 1.1,
-      axis === 'z' ? mid + d : fixed + lip,
+      axis === 'z' ? w : fixed + lip,
     )
     m.castShadow = true
     scene.add(m)
@@ -245,12 +249,11 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     gatePara.castShadow = true
     gatePara.receiveShadow = true
     scene.add(gatePara)
-    for (let z = -gw + 0.9; z < gw; z += 2.1) {
-      const m2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 1.6), stoneDark)
-      m2.position.set(east + lip2, wallH + 1.1, z)
-      m2.castShadow = true
-      scene.add(m2)
-    }
+    // 성문 상부 성가퀴도 벽 구간과 같은 규격·같은 월드 4.2 그리드 (z=0 한 기)
+    const m2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 2.1), stoneDark)
+    m2.position.set(east + lip2, wallH + 1.1, 0)
+    m2.castShadow = true
+    scene.add(m2)
   }
   // 홍예석(voussoir): 첨두 곡선을 따라 낱개 돌 — '조립된 석조'의 인상
   {
