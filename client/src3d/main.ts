@@ -14,7 +14,6 @@ import {
 import type { FriendlyUnit, SiegeEvent, SiegeInput } from '../../siege/sim/world'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { SSAOPass } from 'three/examples/jsm/postprocessing/SSAOPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
@@ -25,9 +24,14 @@ import type { Rig } from './models'
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
 // ---------------------------------------------------------------- 씬
-const renderer = new THREE.WebGLRenderer({ antialias: true })
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: 'high-performance', // 듀얼 GPU 노트북에서 외장 GPU 선택
+  stencil: false,
+})
 renderer.setSize(window.innerWidth, window.innerHeight)
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+// 레티나 2.0은 포스트프로세싱 포함 픽셀량 4배 — 1.5로 상한 (조작감 우선)
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -70,11 +74,8 @@ const fires = decor.torchLights.map((l) => {
 // ---------------------------------------------------------------- 포스트프로세싱
 const composer = new EffectComposer(renderer)
 composer.addPass(new RenderPass(scene, camera))
-const ssao = new SSAOPass(scene, camera, window.innerWidth, window.innerHeight)
-ssao.kernelRadius = 0.7
-ssao.minDistance = 0.002
-ssao.maxDistance = 0.09
-composer.addPass(ssao)
+// SSAO는 제거 (2026-07-27): 씬 전체 재렌더 + 풀해상도 커널 = 최대 프레임 비용.
+// 낮 씬은 태양 그림자·헤미 지면색이 음영을 충분히 만든다 — 조작감이 우선.
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
   0.35, // strength — 낮: 태양·화염 FX만 은은히
@@ -443,6 +444,7 @@ hud.innerHTML = `
   </div>
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
   <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
+  <div id="fps" style="position:absolute;top:14px;right:16px;font-size:12px;color:#88a088"></div>
   <div id="skill" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);font-size:13px;
        background:#000b;border:1px solid #443;border-radius:4px;padding:7px 14px">
     <b style="color:#ffb060">E</b> ${HERO_SKILL.name} — <span id="skillcd"></span>
@@ -696,24 +698,27 @@ function updateFx(now: number): void {
 
 const occlusionRay = new THREE.Raycaster()
 
-/** 카메라와 성주 사이를 가리는 구조물을 반투명 처리 (RTS 관례) */
-function fadeOccluders(): void {
-  const lordPos = new THREE.Vector3(state.lord.pos.x, 1.2, state.lord.pos.z)
-  const dir = lordPos.clone().sub(camera.position)
-  const dist = dir.length()
-  occlusionRay.set(camera.position, dir.normalize())
-  occlusionRay.far = dist - 0.5
-  // 엄격 판정: 실제로 시선을 막는 것만 페이드. 성주가 성벽 위면 페이드 안 함
-  // (벽 옆에 붙었을 때 훤히 뚫려 보이는 문제 방지)
-  const lordElevated = state.lord.h > 1
-  const hits = lordElevated
-    ? new Set<THREE.Object3D>()
-    : new Set<THREE.Object3D>(
-        occlusionRay.intersectObjects(decor.occluders, false).map((h) => h.object),
-      )
+/** 카메라와 성주 사이를 가리는 구조물을 반투명 처리 (RTS 관례).
+ *  고폴리 벽 레이캐스트는 비싸므로 updateRay 프레임에만 — 페이드 자체는 매 프레임 */
+let occluderHits = new Set<THREE.Object3D>()
+function fadeOccluders(updateRay: boolean): void {
+  if (updateRay) {
+    // 엄격 판정: 실제로 시선을 막는 것만 페이드. 성주가 성벽 위면 페이드 안 함
+    // (벽 옆에 붙었을 때 훤히 뚫려 보이는 문제 방지)
+    if (state.lord.h > 1) {
+      occluderHits = new Set()
+    } else {
+      const lordPos = new THREE.Vector3(state.lord.pos.x, 1.2, state.lord.pos.z)
+      const dir = lordPos.clone().sub(camera.position)
+      const dist = dir.length()
+      occlusionRay.set(camera.position, dir.normalize())
+      occlusionRay.far = dist - 0.5
+      occluderHits = new Set(occlusionRay.intersectObjects(decor.occluders, false).map((h) => h.object))
+    }
+  }
   for (const mesh of decor.occluders) {
     const mat = (mesh as THREE.Mesh).material as THREE.MeshStandardMaterial
-    const targetOpacity = hits.has(mesh) ? 0.18 : 1
+    const targetOpacity = occluderHits.has(mesh) ? 0.18 : 1
     if (mat.opacity !== targetOpacity) {
       mat.transparent = true
       mat.opacity += (targetOpacity - mat.opacity) * 0.25
@@ -726,9 +731,11 @@ function fadeOccluders(): void {
 }
 
 let renderAlpha = 1
+let frameNo = 0
 
 function syncScene(): void {
-  fadeOccluders()
+  fadeOccluders(frameNo % 4 === 0)
+  frameNo++
   const lx = THREE.MathUtils.lerp(prevLord.x, state.lord.pos.x, renderAlpha)
   const lz = THREE.MathUtils.lerp(prevLord.z, state.lord.pos.z, renderAlpha)
   const ly = THREE.MathUtils.lerp(prevLordH, state.lord.h, renderAlpha)
@@ -877,7 +884,16 @@ function snapshotPrev(): void {
   for (const u of state.units) prevUnits.set(u.id, { x: u.pos.x, z: u.pos.z, h: u.h })
 }
 
+let fpsFrames = 0
+let fpsT0 = performance.now()
+
 function frame(now: number): void {
+  fpsFrames++
+  if (now - fpsT0 >= 500) {
+    document.getElementById('fps')!.textContent = `${Math.round((fpsFrames * 1000) / (now - fpsT0))} fps`
+    fpsFrames = 0
+    fpsT0 = now
+  }
   acc = Math.min(acc + (now - last), STEP_MS * 6)
   last = now
   const frameEvents: SiegeEvent[] = []

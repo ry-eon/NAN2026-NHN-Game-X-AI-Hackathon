@@ -146,10 +146,12 @@ function wallSegment(
   // 변위 맵이 실제 요철을 만들도록 세분화
   // 본체는 0.25 낮게 — 변위 요철(≤0.22)이 보도 상판을 뚫지 않도록 (상판이 걷는 면)
   const bodyH = wallH - 0.25
+  // 세분화는 변위가 읽히는 최소선까지만 — 성능 패스(2026-07-27)에서 밀도 절반 인하
+  const segLen = Math.max(14, Math.floor(len))
   const geo =
     axis === 'z'
-      ? new THREE.BoxGeometry(wallT, bodyH, len, 4, 24, Math.max(24, Math.floor(len * 2)))
-      : new THREE.BoxGeometry(len, bodyH, wallT, Math.max(24, Math.floor(len * 2)), 24, 4)
+      ? new THREE.BoxGeometry(wallT, bodyH, len, 2, 12, segLen)
+      : new THREE.BoxGeometry(len, bodyH, wallT, segLen, 12, 2)
   const seg = new THREE.Mesh(geo, mat)
   decor.occluders.push(seg)
   seg.position.set(axis === 'z' ? fixed : mid, bodyH / 2, axis === 'z' ? mid : fixed)
