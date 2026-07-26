@@ -3,7 +3,11 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  CASTLE,
+  ENEMY_KINDS,
+  findPath,
   HERO_SKILL,
+  stepHeight,
   WALL_HP,
   createSiege,
   stepSiege,
@@ -94,6 +98,30 @@ describe('M2b 전투', () => {
     for (let i = 0; i < 60; i++) stepSiege(state, spawns, {})
     expect(hero.hp).toBeLessThan(UNIT_KINDS.hero!.hp)
     expect(state.wallHp).toBe(WALL_HP)
+  })
+
+  it('영역 정합: 흉벽 띠는 설 수 없고, 터널은 통행, 괴수는 벽 바깥 면에서 멈춘다', () => {
+    const outerFace = CASTLE.east + CASTLE.wallT / 2 // -2
+    // 보도에서 흉벽 띠(동벽 바깥 1.3)로는 못 들어간다 — 성가퀴 돌 속에 서던 문제
+    expect(stepHeight(CASTLE.wallH, outerFace - 0.5, 10)).toBeNull()
+    // 북벽 바깥 띠·모서리 캡도 마찬가지
+    expect(stepHeight(CASTLE.wallH, -6, CASTLE.north - CASTLE.wallT / 2 + 0.5)).toBeNull()
+    expect(stepHeight(CASTLE.wallH, outerFace - 0.5, CASTLE.north - CASTLE.wallT / 2 + 0.5)).toBeNull()
+    // 성문 터널은 벽 두께 전체가 지상 통행
+    expect(stepHeight(0, outerFace - 0.5, 0)).toBe(0)
+    // 흉벽 위(설 수 없는 지점) 클릭 → 가장 가까운 보도 지점으로 근접 이동 (명령 무시 대신)
+    const path = findPath({ x: -6, z: 10 }, { x: outerFace - 0.4, z: 10 }, CASTLE.wallH, CASTLE.wallH)
+    expect(path).not.toBeNull()
+    // 괴수 정지선 = 벽 바깥 면 + 반경 (벽 속으로 파고들던 문제)
+    const { state, spawns } = createSiege(SEED)
+    state.units = []
+    stepSiege(state, spawns, { startAssault: true })
+    for (let i = 0; i < 30 * 40; i++) stepSiege(state, spawns, {})
+    const atWall = state.enemies.filter((e) => e.atWall)
+    expect(atWall.length).toBeGreaterThan(0)
+    for (const e of atWall) {
+      expect(e.pos.x).toBeGreaterThanOrEqual(outerFace + ENEMY_KINDS[e.kind]!.radius)
+    }
   })
 
   it('영웅 스킬: 반경 내 광역 피해 + 쿨다운·사거리 검증', () => {

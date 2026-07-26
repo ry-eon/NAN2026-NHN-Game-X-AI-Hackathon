@@ -57,10 +57,15 @@ function blockedGround(x: number, z: number): boolean {
   return false
 }
 
+/** 보도 바깥쪽 흉벽(파라펫+성가퀴) 점유 폭 — 렌더의 립 1.1 + 유닛 여유.
+ *  이 띠는 돌벽 그 자체라 설 수 없다 (빈 배열 = 통행 불가) */
+const PARAPET_KEEPOUT = 1.3
+
 /**
- * 해당 지점에서 설 수 있는 높이 후보들.
+ * 해당 지점에서 설 수 있는 높이 후보들. 빈 배열 = 어느 층에도 설 수 없음(벽체).
  * 성문 위는 2층: 보도(11) + 아래 터널(0) — 보도가 성문 위로 끊김 없이 이어지면서
  * 성문 통행도 유지된다. 이동은 현재 높이에서 가장 가까운 후보로 연속 전이.
+ * 보도의 바깥 가장자리(흉벽 띠)는 제외 — 유닛이 성가퀴 돌 속에 서지 않게.
  */
 export function heightLevels(x: number, z: number): number[] {
   const stairX0 = C.east - halfT - 2.4
@@ -75,21 +80,40 @@ export function heightLevels(x: number, z: number): number[] {
   }
   // 내성 몸체가 서벽 보도에 파고드는 구간 — 보도·지상 모두 통행 불가 (지상은 콜라이더가 차단)
   if (x >= C.west + 1.5 && x <= C.west + 10.5 && z >= -6.5 && z <= 6.5) return [0]
-  // 성곽 보도 4면 전체 (모서리 포함 연속) — 동벽 성문 폭에서는 터널 0층 공존
-  const onEast = x >= C.east - halfT && x <= C.east + halfT && z >= C.north - halfT && z <= C.south + halfT
-  const onWest = x >= C.west - halfT && x <= C.west + halfT && z >= C.north - halfT && z <= C.south + halfT
-  const onNS =
-    x >= C.west - halfT &&
-    x <= C.east + halfT &&
-    (Math.abs(z - C.north) <= halfT || Math.abs(z - C.south) <= halfT)
-  if (onEast) return Math.abs(z) < C.gateHalf ? [C.wallH, 0] : [C.wallH]
-  if (onWest || onNS) return [C.wallH]
+  // 흉벽 띠 경계 (보도에서 설 수 있는 한계선)
+  const walkE = C.east + halfT - PARAPET_KEEPOUT // 동벽 바깥(+x) 한계
+  const walkW = C.west - halfT + PARAPET_KEEPOUT // 서벽 바깥(-x) 한계
+  const inZSpan = z >= C.north - halfT && z <= C.south + halfT
+  // 모서리 포함 북/남 바깥 z 띠 (밴드 공통 제외선)
+  const outerZ = z < C.north - halfT + PARAPET_KEEPOUT || z > C.south + halfT - PARAPET_KEEPOUT
+  // 동벽 밴드
+  if (x >= C.east - halfT && x <= C.east + halfT && inZSpan) {
+    if (Math.abs(z) < C.gateHalf) {
+      // 성문 폭: 터널(0)은 벽 두께 전체 통행, 위 다리는 흉벽 안쪽까지만
+      return x > walkE ? [0] : [C.wallH, 0]
+    }
+    return x > walkE || outerZ ? [] : [C.wallH]
+  }
+  // 서벽 밴드
+  if (x >= C.west - halfT && x <= C.west + halfT && inZSpan) {
+    return x < walkW || outerZ ? [] : [C.wallH]
+  }
+  // 북/남벽 밴드 — 바깥쪽 z 가장자리 + 모서리 캡(동/서 바깥 x 띠) 제외
+  const onNorth = Math.abs(z - C.north) <= halfT
+  const onSouth = Math.abs(z - C.south) <= halfT
+  if (x >= C.west - halfT && x <= C.east + halfT && (onNorth || onSouth)) {
+    if (x > walkE || x < walkW) return []
+    if (onNorth && z < C.north - halfT + PARAPET_KEEPOUT) return []
+    if (onSouth && z > C.south + halfT - PARAPET_KEEPOUT) return []
+    return [C.wallH]
+  }
   return [0]
 }
 
 /** 렌더러 참고용 단일 높이 (기준 높이에서 가장 가까운 층) */
 export function heightNear(x: number, z: number, refH: number): number {
   const levels = heightLevels(x, z)
+  if (levels.length === 0) return refH
   let best = levels[0]!
   for (const h of levels) if (Math.abs(h - refH) < Math.abs(best - refH)) best = h
   return best
@@ -122,6 +146,8 @@ export function findPath(from: Vec2, to: Vec2, fromH = 0, toHint = 0): Vec2[] | 
   const targetKeyPreferred = key(tx, tz, lvlOf(toHint))
   let found = -1
   let foundAny = -1
+  let nearBest = -1 // 목표 셀이 벽체(설 수 없음)일 때: 가장 가까운 도달 가능 셀 (RTS 관례)
+  let nearDist = Infinity
   for (let qi = 0; qi < queue.length; qi++) {
     const cur = queue[qi]!
     const cell = Math.floor(cur / 2)
@@ -132,6 +158,11 @@ export function findPath(from: Vec2, to: Vec2, fromH = 0, toHint = 0): Vec2[] | 
       break
     }
     if (cx === tx && cz === tz && foundAny < 0) foundAny = cur
+    const dCell = Math.abs(cx - tx) + Math.abs(cz - tz)
+    if (dCell < nearDist) {
+      nearDist = dCell
+      nearBest = cur
+    }
     const curH = nodeH[cur]!
     for (const [dx, dz] of [
       [0, -1],
@@ -154,7 +185,7 @@ export function findPath(from: Vec2, to: Vec2, fromH = 0, toHint = 0): Vec2[] | 
       }
     }
   }
-  const goal = found >= 0 ? found : foundAny
+  const goal = found >= 0 ? found : foundAny >= 0 ? foundAny : nearDist <= 8 ? nearBest : -1
   if (goal < 0) return null
   const path: Vec2[] = []
   for (let i = goal; i >= 0; i = prev[i]!) {
@@ -209,9 +240,9 @@ export interface EnemyKindDef {
 }
 
 export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
-  grunt: { kind: 'grunt', name: '야귀', hp: 700, dmg: 70, atkInterval: 1.5, speed: 2.4, radius: 0.55, wallDamage: 60 },
+  grunt: { kind: 'grunt', name: '야귀', hp: 660, dmg: 70, atkInterval: 1.5, speed: 2.4, radius: 0.55, wallDamage: 60 },
   runner: { kind: 'runner', name: '질주귀', hp: 300, dmg: 50, atkInterval: 1.0, speed: 4.6, radius: 0.45, wallDamage: 40 },
-  tank: { kind: 'tank', name: '갑주귀', hp: 2300, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 0.8, wallDamage: 130 },
+  tank: { kind: 'tank', name: '갑주귀', hp: 2050, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 0.8, wallDamage: 130 },
 }
 
 export interface ActiveEnemy {
@@ -239,10 +270,10 @@ export interface UnitKindDef {
 }
 
 export const UNIT_KINDS: Record<string, UnitKindDef> = {
-  soldier: { kind: 'soldier', name: '궁수', hp: 260, dmg: 30, atkInterval: 1.3, range: 13, speed: 3.5, radius: 0.4 },
-  ballista: { kind: 'ballista', name: '발리스타', hp: 420, dmg: 200, atkInterval: 2.8, range: 20, speed: 1.2, radius: 0.8 },
-  cannon: { kind: 'cannon', name: '대포', hp: 500, dmg: 140, atkInterval: 3.8, range: 23, speed: 1.0, radius: 0.9, aoe: 2.8 },
-  hero: { kind: 'hero', name: '영웅', hp: 900, dmg: 110, atkInterval: 0.9, range: 11, speed: HERO_SPEED, radius: 0.5 },
+  soldier: { kind: 'soldier', name: '궁수', hp: 260, dmg: 33, atkInterval: 1.3, range: 14, speed: 3.5, radius: 0.4 },
+  ballista: { kind: 'ballista', name: '발리스타', hp: 420, dmg: 200, atkInterval: 2.8, range: 21, speed: 1.2, radius: 0.8 },
+  cannon: { kind: 'cannon', name: '대포', hp: 500, dmg: 140, atkInterval: 3.8, range: 24, speed: 1.0, radius: 0.9, aoe: 2.8 },
+  hero: { kind: 'hero', name: '영웅', hp: 900, dmg: 110, atkInterval: 0.9, range: 13, speed: HERO_SPEED, radius: 0.5 },
 }
 
 export interface FriendlyUnit {
@@ -449,11 +480,12 @@ function stepMover(m: Mover, speed: number): void {
   }
 }
 
-/** 부대 대형 오프셋 — 목표점 주변 결정론 격자 분산 (선택 순서 무관: id 정렬 후 배정) */
+/** 부대 대형 오프셋 — 목표점 주변 결정론 격자 분산 (선택 순서 무관: id 정렬 후 배정).
+ *  간격 1.8 = 최대 유닛(대포 r0.9) 2기가 겹치지 않는 거리 */
 const FORMATION: [number, number][] = [
-  [0, 0], [1.4, 0], [-1.4, 0], [0, 1.4], [0, -1.4],
-  [1.4, 1.4], [-1.4, -1.4], [1.4, -1.4], [-1.4, 1.4],
-  [2.8, 0], [-2.8, 0], [0, 2.8], [0, -2.8],
+  [0, 0], [1.8, 0], [-1.8, 0], [0, 1.8], [0, -1.8],
+  [1.8, 1.8], [-1.8, -1.8], [1.8, -1.8], [-1.8, 1.8],
+  [3.6, 0], [-3.6, 0], [0, 3.6], [0, -3.6],
 ]
 
 /** 사거리 내 최근접 적 (동거리 → 낮은 id — 결정론) */
@@ -532,7 +564,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
         dz = 0
         d = 1
       }
-      const push = (minD - d) * 0.25
+      const push = (minD - d) * 0.4
       for (const [m, sign] of [[a, -1], [b, 1]] as const) {
         const nx = m.pos.x + (dx / d) * push * sign
         const nz = m.pos.z + (dz / d) * push * sign
@@ -622,8 +654,11 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       }
     } else if (!e.atWall) {
       e.pos.x -= def.speed * DT
-      if (e.pos.x <= WALL_X + def.radius + 0.2) {
-        e.pos.x = WALL_X + def.radius + 0.2
+      // 성벽 "바깥 면"에서 정지 — WALL_X는 벽 중심선이라 두께 절반을 더한다
+      // (벽 속으로 파고들어 보이지 않는 채 공격하던 문제)
+      const wallFace = WALL_X + C.wallT / 2 + def.radius + 0.2
+      if (e.pos.x <= wallFace) {
+        e.pos.x = wallFace
         e.atWall = true
       }
     } else if (e.cooldown <= 0) {
