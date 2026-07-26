@@ -271,6 +271,8 @@ let pendingMove: { x: number; z: number; h?: number } | undefined
 let pendingUnitMove: { ids: number[]; to: { x: number; z: number; h?: number } } | undefined
 const selected = new Set<number>()
 let inspectedEnemy: number | null = null // 클릭 조사 대상 (상태창)
+let lastClickUnit = -1 // 더블클릭 판정
+let lastClickTime = 0
 
 const dragBox = document.createElement('div')
 dragBox.style.cssText =
@@ -350,7 +352,19 @@ window.addEventListener('pointerup', (e) => {
     if (hits.length > 0) {
       let obj: THREE.Object3D | null = hits[0]!.object
       while (obj && !groupToUnitId.has(obj.uuid)) obj = obj.parent
-      if (obj) selected.add(groupToUnitId.get(obj.uuid)!)
+      if (obj) {
+        const id = groupToUnitId.get(obj.uuid)!
+        // 더블클릭 = 같은 병종 전체 선택 (스타크래프트 관례)
+        const now = performance.now()
+        if (id === lastClickUnit && now - lastClickTime < 350) {
+          const kind = state.units.find((u) => u.id === id)?.kind
+          for (const u of state.units) if (u.kind === kind) selected.add(u.id)
+        } else {
+          selected.add(id)
+        }
+        lastClickUnit = id
+        lastClickTime = now
+      }
       return
     }
     const enemyHits = raycaster.intersectObjects([...enemyMeshes.values()], false)
@@ -380,6 +394,23 @@ window.addEventListener('keydown', (e) => {
     aiming = false
     aimingHeroId = null
     aimReticle.visible = false
+  }
+})
+
+// 컨트롤 그룹 (스타크래프트식): Ctrl+1~5 = 지정, 1~5 = 호출
+const ctrlGroups = new Map<number, number[]>()
+window.addEventListener('keydown', (e) => {
+  const m = /^Digit([1-5])$/.exec(e.code)
+  if (!m) return
+  const slot = Number(m[1])
+  if (e.ctrlKey) {
+    ctrlGroups.set(slot, [...selected])
+    e.preventDefault()
+  } else {
+    const ids = ctrlGroups.get(slot)
+    if (!ids || ids.length === 0) return
+    selected.clear()
+    for (const id of ids) if (state.units.some((u) => u.id === id)) selected.add(id)
   }
 })
 
@@ -458,8 +489,15 @@ hud.innerHTML = `
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
   <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
   <div id="fps" style="position:absolute;top:14px;right:16px;font-size:12px;color:#88a088"></div>
-  <div id="herobar" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);
-       display:flex;gap:8px;align-items:flex-end"></div>
+  <div id="deck" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);
+       display:flex;gap:10px;align-items:flex-end">
+    <div id="herobar" style="display:flex;gap:8px;align-items:flex-end"></div>
+    <div id="selpanel" style="pointer-events:auto;display:none;background:#000d;border:1px solid #345;
+         border-radius:6px;padding:8px 10px;max-width:340px">
+      <div id="selcount" style="font-size:11px;color:#9fc4a8;margin-bottom:5px"></div>
+      <div id="selgrid" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+    </div>
+  </div>
   <div id="panel" style="position:absolute;bottom:14px;right:16px;width:215px;background:#000b;
        border:1px solid #333;border-radius:4px;padding:10px 12px;font-size:12px;display:none">
     <div id="p-name" style="font-size:14px;font-weight:bold;margin-bottom:5px"></div>
@@ -470,7 +508,7 @@ hud.innerHTML = `
     <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
   </div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    드래그: 부대 선택 · 우클릭: 이동 명령(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 자동/수동 · 클릭: 상태창 · ESC: 해제 · <b>Space</b>: 침공
+    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~5</b>: 부대 지정 / <b>1~5</b>: 호출 · 우클릭: 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공
   </div>`
 const startBtn = document.createElement('div')
 document.body.appendChild(hud)
@@ -740,32 +778,49 @@ function fadeOccluders(updateRay: boolean): void {
   }
 }
 
-// ---------------------------------------------------------------- 영웅 캐릭터 창 (LoL/SC식 — 다영웅 전제)
+// ---------------------------------------------------------------- 영웅 캐릭터 창 + 선택 부대 패널 (SC/LoL식)
 interface HeroCard {
   root: HTMLDivElement
   hpText: HTMLSpanElement
   hpBar: HTMLDivElement
   skillBtn: HTMLDivElement
+  skillOv: HTMLDivElement
   skillCd: HTMLSpanElement
+  mode: HTMLSpanElement
 }
 const heroCards = new Map<number, HeroCard>()
 
 function buildHeroCard(heroId: number, index: number): HeroCard {
   const root = document.createElement('div')
   root.style.cssText =
-    'pointer-events:auto;width:150px;background:#000d;border:1px solid #345;border-radius:6px;' +
+    'pointer-events:auto;width:172px;background:#000d;border:1px solid #345;border-radius:6px;' +
     'padding:8px 10px;cursor:pointer;font-family:monospace;color:#e8e8f0;user-select:none'
   root.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center">
-      <b style="color:#7ab0ff">⚔ 영웅${index > 0 ? ` ${index + 1}` : ''}</b>
-      <span class="hp-t" style="font-size:11px"></span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <div style="width:38px;height:38px;border-radius:5px;border:1px solid #57a;flex:none;
+           display:flex;align-items:center;justify-content:center;font-size:20px;
+           background:radial-gradient(circle at 35% 30%, #2d64b0, #122340)">⚔</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b style="color:#7ab0ff;font-size:13px">영웅${index > 0 ? ` ${index + 1}` : ''}</b>
+          <span class="hp-t" style="font-size:10px"></span>
+        </div>
+        <div style="width:100%;height:7px;background:#0009;margin-top:4px;border-radius:2px">
+          <div class="hp-b" style="height:100%;width:100%;background:#62c462;border-radius:2px"></div>
+        </div>
+      </div>
     </div>
-    <div style="width:100%;height:7px;background:#0009;margin:4px 0 6px;border-radius:2px">
-      <div class="hp-b" style="height:100%;width:100%;background:#62c462;border-radius:2px"></div>
-    </div>
-    <div class="sk" style="font-size:12px;text-align:center;border:1px solid #664;border-radius:4px;
-         padding:3px 0;background:#221a">
-      <b style="color:#ffb060">E</b> ${HERO_SKILL.name} <span class="sk-cd"></span>
+    <div style="display:flex;gap:7px;align-items:center;margin-top:7px">
+      <div class="sk" style="position:relative;width:36px;height:36px;border:1px solid #764;border-radius:5px;
+           overflow:hidden;flex:none;cursor:pointer;
+           background:radial-gradient(circle at 50% 65%, #ff9a40, #7a2808)">
+        <span style="position:absolute;top:1px;left:4px;font-size:10px;font-weight:bold;color:#ffe0b0;text-shadow:0 1px 2px #000">E</span>
+        <div class="sk-ov" style="position:absolute;left:0;bottom:0;width:100%;height:0;background:#000b"></div>
+        <span class="sk-cd" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+              font-size:12px;font-weight:bold;text-shadow:0 1px 2px #000"></span>
+      </div>
+      <div style="font-size:11px;color:#c8b890;line-height:1.35">${HERO_SKILL.name}<br>
+        <span class="sk-mode" style="color:#8898a8"></span></div>
     </div>`
   // 카드 클릭 = 해당 영웅만 선택 (LoL 초상 클릭 관례)
   root.addEventListener('pointerdown', (e) => {
@@ -784,7 +839,9 @@ function buildHeroCard(heroId: number, index: number): HeroCard {
     hpText: root.querySelector('.hp-t') as HTMLSpanElement,
     hpBar: root.querySelector('.hp-b') as HTMLDivElement,
     skillBtn,
+    skillOv: root.querySelector('.sk-ov') as HTMLDivElement,
     skillCd: root.querySelector('.sk-cd') as HTMLSpanElement,
+    mode: root.querySelector('.sk-mode') as HTMLSpanElement,
   }
   document.getElementById('herobar')!.appendChild(root)
   return card
@@ -810,15 +867,65 @@ function updateHeroBar(): void {
     card.hpBar.style.width = `${Math.max(0, (h.hp / maxHp) * 100)}%`
     card.hpBar.style.background = h.hp / maxHp > 0.35 ? '#62c462' : '#d05050'
     card.root.style.borderColor = selected.has(h.id) ? '#ffd870' : '#345'
+    const cdMax = HERO_SKILL.cooldown * TICKS_PER_SECOND
     if (h.skillCd > 0) {
-      card.skillCd.textContent = `${Math.ceil(h.skillCd / TICKS_PER_SECOND)}s`
-      card.skillBtn.style.opacity = '0.45'
+      // 쿨다운 스윕 — 아래에서 위로 차오르는 LoL식 오버레이
+      card.skillOv.style.height = `${(h.skillCd / cdMax) * 100}%`
+      card.skillCd.textContent = `${Math.ceil(h.skillCd / TICKS_PER_SECOND)}`
+      card.mode.textContent = skillAuto ? '자동' : '수동'
     } else {
-      card.skillCd.textContent =
-        aiming && aimingHeroId === h.id ? '조준 중' : skillAuto ? '자동' : '수동'
-      card.skillBtn.style.opacity = '1'
+      card.skillOv.style.height = '0'
+      card.skillCd.textContent = ''
+      card.mode.textContent =
+        aiming && aimingHeroId === h.id ? '조준 중…' : skillAuto ? '자동 (T)' : '수동 (T)'
     }
   })
+}
+
+// 선택 부대 패널 (SC식) — 칩 그리드, 칩 클릭 = 단독 선택
+const KIND_SHORT: Record<string, string> = { soldier: '궁', ballista: '발', cannon: '포', hero: '영' }
+const selChips = new Map<number, { root: HTMLDivElement; hp: HTMLDivElement }>()
+let selPanelKey = ''
+
+function updateSelPanel(): void {
+  const sel = state.units.filter((u) => selected.has(u.id))
+  const panel = document.getElementById('selpanel')!
+  if (sel.length === 0) {
+    panel.style.display = 'none'
+    selPanelKey = ''
+    return
+  }
+  panel.style.display = 'block'
+  const key = sel.map((u) => u.id).join(',')
+  if (key !== selPanelKey) {
+    selPanelKey = key
+    const grid = document.getElementById('selgrid')!
+    grid.innerHTML = ''
+    selChips.clear()
+    for (const u of sel) {
+      const chip = document.createElement('div')
+      chip.style.cssText =
+        'width:34px;cursor:pointer;text-align:center;font-family:monospace;font-size:12px;' +
+        'background:#1a2430;border:1px solid #456;border-radius:4px;padding:2px 0 3px;color:#cde'
+      chip.innerHTML = `${KIND_SHORT[u.kind] ?? '?'}<div style="height:4px;background:#0009;margin:2px 3px 0">
+        <div class="c-hp" style="height:100%;width:100%;background:#62c462"></div></div>`
+      chip.addEventListener('pointerdown', (e) => {
+        e.stopPropagation()
+        selected.clear()
+        selected.add(u.id)
+      })
+      grid.appendChild(chip)
+      selChips.set(u.id, { root: chip, hp: chip.querySelector('.c-hp') as HTMLDivElement })
+    }
+  }
+  const counts = new Map<string, number>()
+  for (const u of sel) counts.set(u.kind, (counts.get(u.kind) ?? 0) + 1)
+  document.getElementById('selcount')!.textContent =
+    `선택 ${sel.length} — ` + [...counts].map(([k, n]) => `${UNIT_KINDS[k]!.name} ${n}`).join(' · ')
+  for (const u of sel) {
+    const chip = selChips.get(u.id)
+    if (chip) chip.hp.style.width = `${Math.max(0, (u.hp / UNIT_KINDS[u.kind]!.hp) * 100)}%`
+  }
 }
 
 let renderAlpha = 1
@@ -897,6 +1004,7 @@ function syncScene(): void {
     (selected.size > 0 ? ` — 선택 ${selected.size}` : '')
 
   updateHeroBar()
+  updateSelPanel()
 
   // 상태창 — 선택 유닛 우선, 없으면 클릭 조사한 괴수
   const panel = document.getElementById('panel')!
