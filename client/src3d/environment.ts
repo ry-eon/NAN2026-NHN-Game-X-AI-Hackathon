@@ -63,28 +63,40 @@ function pbrDisplaced(
 // ---------------------------------------------------------------- 환경광 (HDRI)
 
 export function loadSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer): void {
+  // 낮 씬 (2026-07-27 사용자 피드백: "밤이 생각보다 안 보인다 — 낮이 낫겠다")
   new RGBELoader().load('/assets/hdr/dusk_1k.hdr', (hdr) => {
     hdr.mapping = THREE.EquirectangularReflectionMapping
-    scene.environment = hdr // PBR 미세 간접광만 (반사 디테일용)
-    scene.environmentIntensity = 0.25
+    scene.environment = hdr // PBR 미세 간접광·반사 디테일용 (강도만 낮 기준으로)
+    scene.environmentIntensity = 0.55
     void renderer
   })
-  // 배경: 칠흑에 가까운 밤 — 다크소울 톤
-  scene.background = new THREE.Color(0x05060c)
+  // 하늘: 절차 그라데이션 돔 (천정 청색 → 지평선 뿌연 백청)
+  const skyMat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    uniforms: {
+      top: { value: new THREE.Color(0x6f9fd8) },
+      horizon: { value: new THREE.Color(0xe4ecf4) },
+    },
+    vertexShader: `varying vec3 vPos; void main(){ vPos = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+    fragmentShader: `uniform vec3 top; uniform vec3 horizon; varying vec3 vPos;
+      void main(){
+        float h = clamp(normalize(vPos).y, 0.0, 1.0);
+        gl_FragColor = vec4(mix(horizon, top, pow(h, 0.55)), 1.0);
+      }`,
+  })
+  const dome = new THREE.Mesh(new THREE.SphereGeometry(185, 24, 16), skyMat)
+  scene.add(dome)
+  scene.background = new THREE.Color(0xe4ecf4) // 돔 바깥 폴백
 
-  // 창백한 달 (안개 무시, 낮게)
-  const moon = new THREE.Mesh(
-    new THREE.SphereGeometry(3.2, 16, 12),
-    new THREE.MeshBasicMaterial({ color: 0x9aa4bd, fog: false }),
+  // 태양 (동쪽 상공 — 키 라이트와 같은 방향, 블룸이 광휘를 만든다)
+  const sun = new THREE.Mesh(
+    new THREE.SphereGeometry(6, 16, 12),
+    new THREE.MeshBasicMaterial({ color: 0xfff4d8, fog: false }),
   )
-  moon.position.set(FIELD.maxX + 60, 30, -40)
-  scene.add(moon)
-  const halo = new THREE.Mesh(
-    new THREE.SphereGeometry(4.6, 16, 12),
-    new THREE.MeshBasicMaterial({ color: 0x6a7490, transparent: true, opacity: 0.22, fog: false }),
-  )
-  halo.position.copy(moon.position)
-  scene.add(halo)
+  sun.position.set(120, 102, -54)
+  scene.add(sun)
 }
 
 /** 떠다니는 재(灰) 입자 — 렌더러 전용 연출 */

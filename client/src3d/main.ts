@@ -31,19 +31,19 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
-renderer.toneMappingExposure = 1.3
+renderer.toneMappingExposure = 1.15
 document.getElementById('game')!.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
-scene.fog = new THREE.Fog(0x0c0e1a, 55, 170) // 밤안개 — 시야 끝이 어둠에 잠긴다
+scene.fog = new THREE.Fog(0xc9d4e2, 75, 235) // 낮 대기 원근 — 지평선이 뿌옇게 잠긴다
 
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200)
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 240)
 
 loadSky(scene, renderer)
-const hemi = new THREE.HemisphereLight(0x5d6a98, 0x262832, 1.35)
+const hemi = new THREE.HemisphereLight(0xa8c0e0, 0x6b6f62, 1.15)
 scene.add(hemi)
-// 달빛 — 차갑고 낮은 키 라이트 (동쪽에서 길게 드리우는 그림자)
-const sun = new THREE.DirectionalLight(0xa8b8e4, 3.1)
+// 오전 햇살 — 따뜻한 키 라이트 (동쪽에서 길게 드리우는 그림자)
+const sun = new THREE.DirectionalLight(0xfff0d2, 2.7)
 sun.position.set(40, 34, -18)
 sun.castShadow = true
 sun.shadow.mapSize.set(2048, 2048)
@@ -66,23 +66,6 @@ const fires = decor.torchLights.map((l) => {
   return f
 })
 
-// 달빛 광선 (가짜 볼류메트릭) — 어둠을 가르는 빛줄기
-for (let i = 0; i < 3; i++) {
-  const shaft = new THREE.Mesh(
-    new THREE.PlaneGeometry(7 + i * 3, 46),
-    new THREE.MeshBasicMaterial({
-      color: 0x5a6a9a,
-      transparent: true,
-      opacity: 0.05,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  )
-  shaft.position.set(8 + i * 11, 18, -6 + i * 7)
-  shaft.rotation.set(0.28, 0.5, 0.62)
-  scene.add(shaft)
-}
 
 // ---------------------------------------------------------------- 포스트프로세싱
 const composer = new EffectComposer(renderer)
@@ -94,14 +77,14 @@ ssao.maxDistance = 0.09
 composer.addPass(ssao)
 const bloom = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  0.55, // strength — 횃불·달만 은은히
+  0.35, // strength — 낮: 태양·화염 FX만 은은히
   0.6,
-  0.82, // threshold
+  0.9, // threshold
 )
 composer.addPass(bloom)
 // 비네트 (다크소울식 화면 가장자리 침잠)
 const vignette = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, strength: { value: 0.42 } },
+  uniforms: { tDiffuse: { value: null }, strength: { value: 0.3 } },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: `uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
     void main(){
@@ -117,6 +100,7 @@ composer.addPass(new OutputPass())
 // 성주 — 절차 조형 풀아머 기사 (금장, 검증 슬라이스 v2)
 const lordRig = makeKnight(0x4a1414, true)
 const lordMesh = lordRig.root
+lordMesh.add(makeNameplate('성주', '#ff9a7a').translateY(2.5))
 scene.add(lordMesh)
 
 // 괴수 메시 풀
@@ -136,21 +120,66 @@ interface UnitVisual {
 const unitVisuals = new Map<number, UnitVisual>()
 const groupToUnitId = new Map<string, number>()
 
+/** 머리 위 이름표 — 영웅·성주 식별 (사용자 피드백: 캐릭터 구분이 안 됨) */
+function makeNameplate(text: string, color: string): THREE.Sprite {
+  const c = document.createElement('canvas')
+  c.width = 192
+  c.height = 64
+  const ctx = c.getContext('2d')!
+  ctx.font = 'bold 40px sans-serif'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.shadowColor = '#000'
+  ctx.shadowBlur = 8
+  ctx.fillStyle = color
+  ctx.fillText(text, 96, 34)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  const s = new THREE.Sprite(
+    new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }),
+  )
+  s.scale.set(1.7, 0.57, 1)
+  s.renderOrder = 10
+  return s
+}
+
+/** 공성 병기 옆 조작 병사 (사용자 피드백: 병기는 병사가 조작하는 형태) —
+ *  병기 그룹의 자식이라 함께 이동·회전, 이동 시 미는 걸음 애니메이션 */
+function attachCrew(weapon: THREE.Group, offsetX: number, offsetZ: number): Rig {
+  const crew = makeKnight(0x28303e)
+  crew.root.scale.setScalar(0.8)
+  crew.root.position.set(offsetX, 0, offsetZ)
+  weapon.add(crew.root)
+  return crew
+}
+
 function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
   let v = unitVisuals.get(u.id)
   if (v) return v
   if (u.kind === 'soldier') {
-    const rig = makeKnight(0x28303e)
+    // 궁수 — 활·화살통 실루엣, 녹갈색 천
+    const rig = makeKnight(0x3a4a2e, false, true)
     rig.root.scale.setScalar(0.88)
     v = { group: rig.root, rig, kind: u.kind }
   } else if (u.kind === 'hero') {
-    const rig = makeKnight(0x14355c, true)
-    rig.root.scale.setScalar(1.04)
+    // 영웅 — 크게, 청색+금장, 이름표, 상시 금색 링
+    const rig = makeKnight(0x1d4e8c, true)
+    rig.root.scale.setScalar(1.15)
+    rig.root.add(makeNameplate('영웅', '#ffd870').translateY(2.5))
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.62, 0.74, 28),
+      new THREE.MeshBasicMaterial({ color: 0xd8a832, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false }),
+    )
+    ring.rotation.x = -Math.PI / 2
+    ring.position.y = 0.05
+    rig.root.add(ring)
     v = { group: rig.root, rig, kind: u.kind }
   } else if (u.kind === 'cannon') {
-    v = { group: makeCannon(), kind: u.kind }
+    const group = makeCannon()
+    v = { group, rig: attachCrew(group, 0.55, -1.05), kind: u.kind }
   } else {
-    v = { group: makeBallista(), kind: u.kind }
+    const group = makeBallista()
+    v = { group, rig: attachCrew(group, 0, -1.15), kind: u.kind }
   }
   unitVisuals.set(u.id, v)
   groupToUnitId.set(v.group.uuid, u.id)
@@ -454,6 +483,16 @@ const projectiles: Projectile[] = []
 const flashes: { mesh: THREE.Sprite; t0: number; dur: number; grow: number }[] = []
 const dying: { obj: THREE.Object3D; t0: number; dur: number }[] = []
 const shockwaves: { mesh: THREE.Mesh; t0: number; dur: number; maxR: number }[] = []
+const fireCols: { fx: ReturnType<typeof makeFire>; t0: number; dur: number }[] = []
+const tempLights: { light: THREE.PointLight; t0: number; dur: number; peak: number }[] = []
+
+/** 순간 광원 (폭발·스킬) — dur 동안 감쇠 후 제거 */
+function spawnLight(pos: THREE.Vector3, color: number, peak: number, dur: number): void {
+  const light = new THREE.PointLight(color, peak, 22, 1.8)
+  light.position.copy(pos)
+  scene.add(light)
+  tempLights.push({ light, t0: performance.now(), dur, peak })
+}
 
 /** 스킬 착탄 충격파 — 바닥을 훑는 확장 링 */
 function spawnShockwave(x: number, z: number, maxR: number): void {
@@ -505,11 +544,11 @@ function spawnFlash(pos: THREE.Vector3, scale: number, color = 0xffffff, dur = 2
   flashes.push({ mesh: s, t0: performance.now(), dur, grow: scale })
 }
 
-const arrowGeo = new THREE.BoxGeometry(0.03, 0.03, 0.55)
-const boltGeo = new THREE.BoxGeometry(0.07, 0.07, 0.95)
-const ballGeo = new THREE.SphereGeometry(0.16, 10, 8)
-const projMat = new THREE.MeshBasicMaterial({ color: 0xd8d2c0 })
-const ballMat = new THREE.MeshBasicMaterial({ color: 0x2a2a30 })
+const arrowGeo = new THREE.BoxGeometry(0.06, 0.06, 0.75)
+const boltGeo = new THREE.BoxGeometry(0.1, 0.1, 1.15)
+const ballGeo = new THREE.SphereGeometry(0.2, 10, 8)
+const projMat = new THREE.MeshBasicMaterial({ color: 0xfff2c8 })
+const ballMat = new THREE.MeshBasicMaterial({ color: 0x1a1a20 })
 
 /** 발사 연출 — 병종별 궤적. 피해는 sim이 이미 적용했으므로 여긴 그림뿐 */
 function spawnProjectile(kind: string, from: THREE.Vector3, to: THREE.Vector3): void {
@@ -533,6 +572,9 @@ function handleEvents(events: SiegeEvent[]): void {
     if (ev.type === 'unitFired') {
       const from = new THREE.Vector3(ev.from.x, ev.from.h + (MUZZLE_H[ev.unitKind] ?? 1), ev.from.z)
       spawnProjectile(ev.unitKind, from, new THREE.Vector3(ev.to.x, 0.7, ev.to.z))
+      // 발사 섬광 — 어디서 쏘는지 읽히게 (대포는 크게)
+      spawnFlash(from.clone(), ev.unitKind === 'cannon' ? 2.4 : 0.8, 0xffdf9a, 200)
+      if (ev.unitKind === 'cannon') spawnLight(from.clone(), 0xffb060, 40, 300)
     } else if (ev.type === 'enemyDied') {
       const mesh = enemyMeshes.get(ev.id)
       if (mesh) {
@@ -550,9 +592,15 @@ function handleEvents(events: SiegeEvent[]): void {
       selected.delete(ev.id)
       spawnFlash(new THREE.Vector3(ev.pos.x, 1.0, ev.pos.z), 1.8, 0xff3a3a, 400)
     } else if (ev.type === 'heroSkillCast') {
-      spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 6.5, 0xffa040, 550)
-      spawnFlash(new THREE.Vector3(ev.x, 3.2, ev.z), 3.5, 0xfff0c0, 380)
+      spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 8, 0xffa040, 650)
+      spawnFlash(new THREE.Vector3(ev.x, 3.6, ev.z), 4.5, 0xfff0c0, 450)
       spawnShockwave(ev.x, ev.z, HERO_SKILL.radius + 1.2)
+      spawnLight(new THREE.Vector3(ev.x, 2.5, ev.z), 0xff8030, 90, 700)
+      // 화염 기둥 — 1.2초간 타오른다
+      const fx = makeFire(2.6)
+      fx.group.position.set(ev.x, 0.1, ev.z)
+      scene.add(fx.group)
+      fireCols.push({ fx, t0: performance.now(), dur: 1200 })
     } else if (ev.type === 'meleeHit') {
       const u = state.units.find((x) => x.id === ev.unitId)
       if (u) spawnFlash(new THREE.Vector3(u.pos.x, u.h + 1.1, u.pos.z), 0.9, 0xff5a5a, 200)
@@ -574,6 +622,11 @@ function updateFx(now: number): void {
       projectiles.splice(i, 1)
       continue
     }
+    if (t >= 0.95 && !p.explode && p.mesh.visible) {
+      // 착탄 순간 소형 임팩트 — 명중이 읽히게
+      spawnFlash(p.to.clone(), 0.6, 0xffcaa0, 150)
+      p.mesh.visible = false
+    }
     const pos = p.from.clone().lerp(p.to, t)
     pos.y += Math.sin(Math.PI * t) * p.arc
     // 진행 방향으로 정렬
@@ -594,6 +647,27 @@ function updateFx(now: number): void {
     }
     f.mesh.scale.setScalar(f.grow * (0.4 + t * 0.9))
     ;(f.mesh.material as THREE.SpriteMaterial).opacity = 1 - t
+  }
+  for (let i = fireCols.length - 1; i >= 0; i--) {
+    const f = fireCols[i]!
+    const t = (now - f.t0) / f.dur
+    if (t >= 1) {
+      scene.remove(f.fx.group)
+      fireCols.splice(i, 1)
+      continue
+    }
+    f.fx.update(now / 1000)
+    f.fx.group.scale.setScalar(t > 0.7 ? 1 - (t - 0.7) / 0.3 : 1) // 말미에 잦아든다
+  }
+  for (let i = tempLights.length - 1; i >= 0; i--) {
+    const l = tempLights[i]!
+    const t = (now - l.t0) / l.dur
+    if (t >= 1) {
+      scene.remove(l.light)
+      tempLights.splice(i, 1)
+      continue
+    }
+    l.light.intensity = l.peak * (1 - t) * (1 - t)
   }
   for (let i = shockwaves.length - 1; i >= 0; i--) {
     const w = shockwaves[i]!
@@ -842,7 +916,8 @@ function frame(now: number): void {
   }
   for (const f of fires) f.update(t)
   decor.torchLights.forEach((l, i) => {
-    l.intensity = 12 + Math.sin(t * 9 + i * 1.7) * 2.5 + Math.sin(t * 23 + i) * 1.5
+    // 낮이라 횃불은 은은한 보조광만
+    l.intensity = 5 + Math.sin(t * 9 + i * 1.7) * 1.2 + Math.sin(t * 23 + i) * 0.7
   })
   decor.flags.forEach((f, i) => {
     f.rotation.y = Math.sin(t * 2.2 + i) * 0.35

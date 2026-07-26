@@ -76,8 +76,9 @@ export interface Rig {
  * 풀아머 기사 (신장 ≈1.9). accent = 천 색상(진영/영웅 구분).
  * 부품: 투구(프로파일+바이저 슬릿+크레스트) / 흉갑(lathe 배럴) / 견갑(반구 2겹) /
  * 폴드 스커트 / 팔·다리(상완·전완 분절+장갑) / 망토 / 검+칼집.
+ * archer = 궁수 변형: 검·크레스트 대신 활 + 화살통 (실루엣으로 병종 구분)
  */
-export function makeKnight(accent = 0x4a1414, gilded = false): Rig {
+export function makeKnight(accent = 0x4a1414, gilded = false, archer = false): Rig {
   const root = new THREE.Group()
   const cloth = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.95 })
   const trim = gilded ? MATS.gold : MATS.steelDark
@@ -223,10 +224,12 @@ export function makeKnight(accent = 0x4a1414, gilded = false): Rig {
   )
   visor.position.y = 1.8
   torso.add(visor)
-  // 크레스트 (세로 볏)
-  const crest = bevelBox(0.035, 0.22, 0.38, cloth, 0.012)
-  crest.position.set(0, 2.04, -0.02)
-  torso.add(crest)
+  // 크레스트 (세로 볏) — 궁수는 없음 (실루엣 구분)
+  if (!archer) {
+    const crest = bevelBox(0.035, 0.22, 0.38, cloth, 0.012)
+    crest.position.set(0, 2.04, -0.02)
+    torso.add(crest)
+  }
   if (gilded) {
     const circlet = new THREE.Mesh(new THREE.TorusGeometry(0.165, 0.022, 8, 18), MATS.gold)
     circlet.rotation.x = Math.PI / 2
@@ -246,19 +249,48 @@ export function makeKnight(accent = 0x4a1414, gilded = false): Rig {
   cloak.castShadow = true
   torso.add(cloak)
 
-  // ---- 검 (칼집, 왼쪽 허리)
-  const scabbard = new THREE.Group()
-  const sheath = bevelBox(0.05, 0.78, 0.09, MATS.leather, 0.015)
-  sheath.position.y = -0.32
-  const guard = bevelBox(0.16, 0.03, 0.05, trim, 0.01)
-  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.14, 8), MATS.leather)
-  grip.position.y = 0.08
-  const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), trim)
-  pommel.position.y = 0.16
-  scabbard.add(sheath, guard, grip, pommel)
-  scabbard.position.set(-0.3, 1.02, 0.05)
-  scabbard.rotation.z = 0.18
-  torso.add(scabbard)
+  if (archer) {
+    // ---- 활 (왼손 고정 — 팔과 함께 흔들린다) + 등 뒤 화살통
+    const bowGroup = new THREE.Group()
+    const bowArc = new THREE.Mesh(
+      new THREE.TorusGeometry(0.42, 0.022, 6, 14, Math.PI * 0.92),
+      MATS.leather,
+    )
+    bowArc.rotation.z = Math.PI / 2 - Math.PI * 0.46 // 호가 세로로 서게
+    const string = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.008, 0.008, 0.77, 4),
+      new THREE.MeshBasicMaterial({ color: 0xd8d2c0 }),
+    )
+    string.position.x = -0.08
+    bowGroup.add(bowArc, string)
+    bowGroup.position.set(0, -0.66, 0.12)
+    bowGroup.rotation.y = Math.PI / 2
+    lArm.add(bowGroup)
+    const quiver = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.5, 8), MATS.leather)
+    quiver.position.set(0.14, 1.42, -0.22)
+    quiver.rotation.z = -0.3
+    quiver.castShadow = true
+    torso.add(quiver)
+    for (let i = 0; i < 3; i++) {
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.09, 5), MATS.steelDark)
+      tip.position.set(0.1 + i * 0.045, 1.72, -0.24)
+      torso.add(tip)
+    }
+  } else {
+    // ---- 검 (칼집, 왼쪽 허리)
+    const scabbard = new THREE.Group()
+    const sheath = bevelBox(0.05, 0.78, 0.09, MATS.leather, 0.015)
+    sheath.position.y = -0.32
+    const guard = bevelBox(0.16, 0.03, 0.05, trim, 0.01)
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.14, 8), MATS.leather)
+    grip.position.y = 0.08
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 8), trim)
+    pommel.position.y = 0.16
+    scabbard.add(sheath, guard, grip, pommel)
+    scabbard.position.set(-0.3, 1.02, 0.05)
+    scabbard.rotation.z = 0.18
+    torso.add(scabbard)
+  }
 
   root.add(lLeg, rLeg, torso, lArm, rArm)
   root.traverse((o) => {
