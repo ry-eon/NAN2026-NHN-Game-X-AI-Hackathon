@@ -30,8 +30,12 @@ const renderer = new THREE.WebGLRenderer({
   stencil: false,
 })
 renderer.setSize(window.innerWidth, window.innerHeight)
-// 레티나 2.0은 포스트프로세싱 포함 픽셀량 4배 — 1.5로 상한 (조작감 우선)
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
+// 동적 해상도: iGPU(UHD 630)는 fill-rate 한계라 화면이 크면 어떤 최적화로도 60이 안 나온다.
+// fps를 보고 내부 렌더 스케일을 0.7~1.5 사이에서 자동 조절 (RTS라 약간 소프트해도 무방)
+const RES_MAX = Math.min(window.devicePixelRatio, 1.5)
+const RES_MIN = 0.7
+let resScale = RES_MAX
+renderer.setPixelRatio(resScale)
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -50,7 +54,7 @@ scene.add(hemi)
 const sun = new THREE.DirectionalLight(0xfff0d2, 2.7)
 sun.position.set(40, 34, -18)
 sun.castShadow = true
-sun.shadow.mapSize.set(2048, 2048)
+sun.shadow.mapSize.set(1536, 1536)
 sun.shadow.camera.left = -50
 sun.shadow.camera.right = 50
 sun.shadow.camera.top = 50
@@ -227,8 +231,9 @@ const aimReticle = new THREE.Group()
   scene.add(aimReticle)
 }
 let aiming = false
+let aimingHeroId: number | null = null // 수동 조준 중인 영웅
 let skillAuto = true // 자동/수동 토글 (T)
-let pendingHeroSkill: { x: number; z: number } | undefined
+let pendingHeroSkill: { x: number; z: number; heroId?: number } | undefined
 
 // ---------------------------------------------------------------- 입력 (LoL식)
 let spaceLatch = false
@@ -278,9 +283,10 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   if (aiming) {
     if (e.button === 0) {
       const p = pickPoint(e.clientX, e.clientY)
-      if (p) pendingHeroSkill = { x: p.x, z: p.z }
+      if (p) pendingHeroSkill = { x: p.x, z: p.z, heroId: aimingHeroId ?? undefined }
     }
     aiming = false
+    aimingHeroId = null
     aimReticle.visible = false
     return
   }
@@ -307,7 +313,7 @@ window.addEventListener('pointermove', (e) => {
     if (p) {
       aimReticle.position.set(p.x, p.h + 0.08, p.z)
       // 사거리 밖이면 흐리게 — 시전해도 sim이 무시한다는 시각 피드백
-      const hero = state.units.find((u) => u.kind === 'hero')
+      const hero = state.units.find((u) => u.id === aimingHeroId)
       const inRange = hero && Math.hypot(p.x - hero.pos.x, p.z - hero.pos.z) <= HERO_SKILL.range
       for (const c of aimReticle.children)
         ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(inRange ? 0xff7a3a : 0x5a5a66)
@@ -372,14 +378,13 @@ window.addEventListener('keydown', (e) => {
     selected.clear()
     inspectedEnemy = null
     aiming = false
+    aimingHeroId = null
     aimReticle.visible = false
   }
 })
 
 /** 자동 조준: 사거리 내에서 "반경에 가장 많이 쓸려드는" 적 위치 (동률 시 앞선 스폰) */
-function bestSkillTarget(): { x: number; z: number } | null {
-  const hero = state.units.find((u) => u.kind === 'hero')
-  if (!hero) return null
+function bestSkillTarget(hero: FriendlyUnit): { x: number; z: number } | null {
   let best: { x: number; z: number } | null = null
   let bestScore = 0
   for (const e of state.enemies) {
@@ -395,19 +400,27 @@ function bestSkillTarget(): { x: number; z: number } | null {
   return best
 }
 
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyT') skillAuto = !skillAuto
-  if (e.code !== 'KeyE') return
-  const hero = state.units.find((u) => u.kind === 'hero')
-  if (!hero || hero.skillCd > 0) return
+/** 스킬 발동 (E 키·영웅 카드 버튼 공용) — 자동이면 즉시, 수동이면 조준 모드 진입 */
+function triggerSkill(hero: FriendlyUnit): void {
+  if (hero.skillCd > 0) return
   if (skillAuto) {
-    const t = bestSkillTarget()
-    if (t) pendingHeroSkill = t
+    const t = bestSkillTarget(hero)
+    if (t) pendingHeroSkill = { ...t, heroId: hero.id }
   } else if (!aiming) {
     aiming = true
+    aimingHeroId = hero.id
     aimReticle.position.set(hero.pos.x, hero.h + 0.08, hero.pos.z)
     aimReticle.visible = true
   }
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyT') skillAuto = !skillAuto
+  if (e.code !== 'KeyE') return
+  // 선택 중인 영웅 우선, 없으면 첫 영웅
+  const heroes = state.units.filter((u) => u.kind === 'hero')
+  const hero = heroes.find((h) => selected.has(h.id)) ?? heroes[0]
+  if (hero) triggerSkill(hero)
 })
 
 // 이동 마커 (LoL식 클릭 링) — 성주 초록, 부대 명령 청록
@@ -445,11 +458,8 @@ hud.innerHTML = `
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
   <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
   <div id="fps" style="position:absolute;top:14px;right:16px;font-size:12px;color:#88a088"></div>
-  <div id="skill" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);font-size:13px;
-       background:#000b;border:1px solid #443;border-radius:4px;padding:7px 14px">
-    <b style="color:#ffb060">E</b> ${HERO_SKILL.name} — <span id="skillcd"></span>
-    · <span id="skillmode"></span> <span style="color:#777">(T 전환)</span>
-  </div>
+  <div id="herobar" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);
+       display:flex;gap:8px;align-items:flex-end"></div>
   <div id="panel" style="position:absolute;bottom:14px;right:16px;width:215px;background:#000b;
        border:1px solid #333;border-radius:4px;padding:10px 12px;font-size:12px;display:none">
     <div id="p-name" style="font-size:14px;font-weight:bold;margin-bottom:5px"></div>
@@ -460,7 +470,7 @@ hud.innerHTML = `
     <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
   </div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    드래그: 부대 선택 · 우클릭: 이동 명령(무선택 시 성주) · <b>E</b>: 스킬 · 클릭: 상태창 · ESC: 해제 · <b>Space</b>: 침공
+    드래그: 부대 선택 · 우클릭: 이동 명령(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 자동/수동 · 클릭: 상태창 · ESC: 해제 · <b>Space</b>: 침공
   </div>`
 const startBtn = document.createElement('div')
 document.body.appendChild(hud)
@@ -730,6 +740,87 @@ function fadeOccluders(updateRay: boolean): void {
   }
 }
 
+// ---------------------------------------------------------------- 영웅 캐릭터 창 (LoL/SC식 — 다영웅 전제)
+interface HeroCard {
+  root: HTMLDivElement
+  hpText: HTMLSpanElement
+  hpBar: HTMLDivElement
+  skillBtn: HTMLDivElement
+  skillCd: HTMLSpanElement
+}
+const heroCards = new Map<number, HeroCard>()
+
+function buildHeroCard(heroId: number, index: number): HeroCard {
+  const root = document.createElement('div')
+  root.style.cssText =
+    'pointer-events:auto;width:150px;background:#000d;border:1px solid #345;border-radius:6px;' +
+    'padding:8px 10px;cursor:pointer;font-family:monospace;color:#e8e8f0;user-select:none'
+  root.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <b style="color:#7ab0ff">⚔ 영웅${index > 0 ? ` ${index + 1}` : ''}</b>
+      <span class="hp-t" style="font-size:11px"></span>
+    </div>
+    <div style="width:100%;height:7px;background:#0009;margin:4px 0 6px;border-radius:2px">
+      <div class="hp-b" style="height:100%;width:100%;background:#62c462;border-radius:2px"></div>
+    </div>
+    <div class="sk" style="font-size:12px;text-align:center;border:1px solid #664;border-radius:4px;
+         padding:3px 0;background:#221a">
+      <b style="color:#ffb060">E</b> ${HERO_SKILL.name} <span class="sk-cd"></span>
+    </div>`
+  // 카드 클릭 = 해당 영웅만 선택 (LoL 초상 클릭 관례)
+  root.addEventListener('pointerdown', (e) => {
+    e.stopPropagation()
+    selected.clear()
+    selected.add(heroId)
+  })
+  const skillBtn = root.querySelector('.sk') as HTMLDivElement
+  skillBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation()
+    const hero = state.units.find((u) => u.id === heroId)
+    if (hero) triggerSkill(hero)
+  })
+  const card: HeroCard = {
+    root,
+    hpText: root.querySelector('.hp-t') as HTMLSpanElement,
+    hpBar: root.querySelector('.hp-b') as HTMLDivElement,
+    skillBtn,
+    skillCd: root.querySelector('.sk-cd') as HTMLSpanElement,
+  }
+  document.getElementById('herobar')!.appendChild(root)
+  return card
+}
+
+function updateHeroBar(): void {
+  const heroes = state.units.filter((u) => u.kind === 'hero')
+  // 전사한 영웅 카드 제거
+  for (const [id, card] of heroCards) {
+    if (!heroes.some((h) => h.id === id)) {
+      card.root.remove()
+      heroCards.delete(id)
+    }
+  }
+  heroes.forEach((h, i) => {
+    let card = heroCards.get(h.id)
+    if (!card) {
+      card = buildHeroCard(h.id, i)
+      heroCards.set(h.id, card)
+    }
+    const maxHp = UNIT_KINDS.hero!.hp
+    card.hpText.textContent = `${h.hp}/${maxHp}`
+    card.hpBar.style.width = `${Math.max(0, (h.hp / maxHp) * 100)}%`
+    card.hpBar.style.background = h.hp / maxHp > 0.35 ? '#62c462' : '#d05050'
+    card.root.style.borderColor = selected.has(h.id) ? '#ffd870' : '#345'
+    if (h.skillCd > 0) {
+      card.skillCd.textContent = `${Math.ceil(h.skillCd / TICKS_PER_SECOND)}s`
+      card.skillBtn.style.opacity = '0.45'
+    } else {
+      card.skillCd.textContent =
+        aiming && aimingHeroId === h.id ? '조준 중' : skillAuto ? '자동' : '수동'
+      card.skillBtn.style.opacity = '1'
+    }
+  })
+}
+
 let renderAlpha = 1
 let frameNo = 0
 
@@ -805,20 +896,7 @@ function syncScene(): void {
     `병력 ${state.units.length} (${[...counts].map(([k, n]) => `${UNIT_KINDS[k]!.name} ${n}`).join(' · ')})` +
     (selected.size > 0 ? ` — 선택 ${selected.size}` : '')
 
-  // 스킬 슬롯
-  const hero = state.units.find((u) => u.kind === 'hero')
-  const cdEl = document.getElementById('skillcd')!
-  document.getElementById('skillmode')!.textContent = skillAuto ? '자동' : '수동 조준'
-  if (!hero) {
-    cdEl.textContent = '영웅 전사'
-    cdEl.style.color = '#c05050'
-  } else if (hero.skillCd > 0) {
-    cdEl.textContent = `${Math.ceil(hero.skillCd / TICKS_PER_SECOND)}s`
-    cdEl.style.color = '#8888a0'
-  } else {
-    cdEl.textContent = aiming ? '조준 중 — 좌클릭 시전' : '준비됨'
-    cdEl.style.color = '#7ade7a'
-  }
+  updateHeroBar()
 
   // 상태창 — 선택 유닛 우선, 없으면 클릭 조사한 괴수
   const panel = document.getElementById('panel')!
@@ -887,10 +965,40 @@ function snapshotPrev(): void {
 let fpsFrames = 0
 let fpsT0 = performance.now()
 
+function applyResScale(): void {
+  renderer.setPixelRatio(resScale)
+  composer.setPixelRatio(resScale)
+  composer.setSize(window.innerWidth, window.innerHeight)
+}
+
+/** 동적 해상도 조절 — 하락은 빠르게(-0.2), 회복은 천천히(+0.05, 헌팅 방지).
+ *  최저 스케일에서도 40 미만이면 블룸까지 끄고, 여유가 돌아오면 순서대로 복구.
+ *  초기 3초는 에셋 로딩 히치라 판단 유보 */
+const ADAPT_WARMUP_MS = 3000
+function adaptQuality(fps: number, now: number): void {
+  if (now < ADAPT_WARMUP_MS) return
+  if (fps < 45 && resScale > RES_MIN) {
+    resScale = Math.max(RES_MIN, resScale - 0.2)
+    applyResScale()
+  } else if (fps < 40 && resScale <= RES_MIN && bloom.enabled) {
+    bloom.enabled = false
+  } else if (fps > 57) {
+    if (resScale < RES_MAX) {
+      resScale = Math.min(RES_MAX, resScale + 0.05)
+      applyResScale()
+    } else if (!bloom.enabled) {
+      bloom.enabled = true
+    }
+  }
+}
+
 function frame(now: number): void {
   fpsFrames++
   if (now - fpsT0 >= 500) {
-    document.getElementById('fps')!.textContent = `${Math.round((fpsFrames * 1000) / (now - fpsT0))} fps`
+    const fps = (fpsFrames * 1000) / (now - fpsT0)
+    document.getElementById('fps')!.textContent =
+      `${Math.round(fps)} fps · 해상도 ${Math.round((resScale / RES_MAX) * 100)}%${bloom.enabled ? '' : ' · 블룸 꺼짐'}`
+    adaptQuality(fps, now)
     fpsFrames = 0
     fpsT0 = now
   }

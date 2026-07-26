@@ -282,8 +282,8 @@ export interface SiegeInput {
   moveTo?: Vec2 & { h?: number }
   /** 부대 이동 명령 (스타크래프트식 선택 → 우클릭). 대형은 sim이 결정론으로 분산 */
   unitMove?: { ids: number[]; to: Vec2 & { h?: number } }
-  /** 영웅 스킬 시전 지점 — 사거리·쿨다운은 sim이 검증 */
-  heroSkill?: Vec2
+  /** 영웅 스킬 시전 지점 — 사거리·쿨다운은 sim이 검증. heroId 생략 시 첫 영웅 (다영웅 대비) */
+  heroSkill?: Vec2 & { heroId?: number }
   /** 준비 종료 → 침공 개시 */
   startAssault?: boolean
 }
@@ -500,7 +500,8 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
 
   // 영웅 스킬 「업화」 — 지점 광역. 사거리 밖·쿨다운 중이면 무시 (결정론 검증)
   if (input.heroSkill) {
-    const hero = state.units.find((u) => u.kind === 'hero')
+    const wantId = input.heroSkill.heroId
+    const hero = state.units.find((u) => u.kind === 'hero' && (wantId === undefined || u.id === wantId))
     if (hero && hero.skillCd <= 0) {
       const d = Math.hypot(input.heroSkill.x - hero.pos.x, input.heroSkill.z - hero.pos.z)
       if (d <= HERO_SKILL.range) {

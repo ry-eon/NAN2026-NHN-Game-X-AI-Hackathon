@@ -293,8 +293,12 @@ export function makeKnight(accent = 0x4a1414, gilded = false, archer = false): R
   }
 
   root.add(lLeg, rLeg, torso, lArm, rArm)
+  // 그림자는 실루엣을 만드는 큰 부품만 — 기사 1기당 그림자 패스 드로우콜 절반 이하
   root.traverse((o) => {
-    if (o instanceof THREE.Mesh) o.castShadow = true
+    if (o instanceof THREE.Mesh) {
+      o.geometry.computeBoundingSphere()
+      o.castShadow = (o.geometry.boundingSphere?.radius ?? 1) > 0.16
+    }
   })
   return { root, lArm, rArm, lLeg, rLeg, torso, cloak }
 }

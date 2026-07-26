@@ -5,6 +5,7 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { CASTLE, FIELD } from '../../siege/sim/world'
 
 const rand01 = (i: number, salt: number): number =>
@@ -127,11 +128,19 @@ export interface WorldDecor {
   occluders: THREE.Mesh[]
 }
 
-/** 흉벽 달린 성벽 구간 (축 정렬) */
+/** 정적 석재(파라펫·성가퀴·필러) 지오메트리 배치 — buildCastle 말미에 한 메시로 병합.
+ *  낱개 메시 ~60개 → 1 드로우콜 (그림자 패스 포함 절감). 성능 패스 2 (2026-07-27) */
+let stoneBatch: THREE.BufferGeometry[] = []
+function batchBox(w: number, h: number, d: number, x: number, y: number, z: number): void {
+  const g = new THREE.BoxGeometry(w, h, d)
+  g.translate(x, y, z)
+  stoneBatch.push(g)
+}
+
+/** 흉벽 달린 성벽 구간 (축 정렬) — 파라펫·성가퀴는 stoneBatch로 (병합 렌더) */
 function wallSegment(
   scene: THREE.Scene,
   decor: WorldDecor,
-  darkMat: THREE.Material,
   axis: 'x' | 'z',
   fixed: number,
   from: number,
@@ -161,36 +170,15 @@ function wallSegment(
   // 흉벽 — 보도 바깥 가장자리 (안쪽은 배치 공간으로 비운다)
   // 연속 낮은 파라펫 위에 성가퀴가 솟는 총안 구조: 사이가 비지 않고 낮은 벽으로 이어진다
   const lip = (wallT / 2 - 0.55) * outerSign
-  const parapet = new THREE.Mesh(
-    axis === 'z' ? new THREE.BoxGeometry(1.1, 1.15, len) : new THREE.BoxGeometry(len, 1.15, 1.1),
-    darkMat,
-  )
-  parapet.position.set(
-    axis === 'z' ? fixed + lip : mid,
-    wallH + 0.575,
-    axis === 'z' ? mid : fixed + lip,
-  )
-  parapet.castShadow = true
-  parapet.receiveShadow = true
-  scene.add(parapet)
+  if (axis === 'z') batchBox(1.1, 1.15, len, fixed + lip, wallH + 0.575, mid)
+  else batchBox(len, 1.15, 1.1, mid, wallH + 0.575, fixed + lip)
   // 성가퀴는 월드 좌표 4.2 그리드에 정렬 — 구간·성문 이음새에서도 간격이 일정
   const step = 4.2
   const lo = Math.min(from, to)
   const hi = Math.max(from, to)
   for (let w = Math.ceil((lo + 0.8) / step) * step; w <= hi - 0.8; w += step) {
-    const m = new THREE.Mesh(
-      axis === 'z'
-        ? new THREE.BoxGeometry(1.1, 2.2, 2.1)
-        : new THREE.BoxGeometry(2.1, 2.2, 1.1),
-      darkMat,
-    )
-    m.position.set(
-      axis === 'z' ? fixed + lip : w,
-      wallH + 1.1,
-      axis === 'z' ? w : fixed + lip,
-    )
-    m.castShadow = true
-    scene.add(m)
+    if (axis === 'z') batchBox(1.1, 2.2, 2.1, fixed + lip, wallH + 1.1, w)
+    else batchBox(2.1, 2.2, 1.1, w, wallH + 1.1, fixed + lip)
   }
 }
 
@@ -205,11 +193,12 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   // 4면 성곽 (동면은 성문 개구부)
   // 북/남벽은 동/서벽 두께 끝까지 연장 — 망루 제거 후 모서리 노치가 비지 않게
   const ext = CASTLE.wallT / 2 - 0.05 // 0.05 안쪽: 면 겹침(z-fighting) 방지
-  wallSegment(scene, decor, stoneDark, 'z', east, north, -gateHalf, 1)
-  wallSegment(scene, decor, stoneDark, 'z', east, gateHalf, south, 1)
-  wallSegment(scene, decor, stoneDark, 'z', west, north, south, -1)
-  wallSegment(scene, decor, stoneDark, 'x', north, west - ext, east + ext, -1)
-  wallSegment(scene, decor, stoneDark, 'x', south, west - ext, east + ext, 1)
+  stoneBatch = []
+  wallSegment(scene, decor, 'z', east, north, -gateHalf, 1)
+  wallSegment(scene, decor, 'z', east, gateHalf, south, 1)
+  wallSegment(scene, decor, 'z', west, north, south, -1)
+  wallSegment(scene, decor, 'x', north, west - ext, east + ext, -1)
+  wallSegment(scene, decor, 'x', south, west - ext, east + ext, 1)
 
   // 보도 상판 — 벽 박스 윗면은 옆면 기준 UV라 길이 방향으로 텍스처가 죽 늘어진다.
   // 걷는 면 전체를 포장(paving) 데크로 덮어 4면이 같은 질감이 되게 한다.
@@ -240,16 +229,8 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     for (const cx of [east + lip, west - lip]) {
       for (const cz of [north, south]) {
         const dir = cz === north ? -1 : 1
-        const fill = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.15, fillLen), stoneDark)
-        fill.position.set(cx, wallH + 0.575, cz + dir * (fillLen / 2 - 0.3))
-        fill.castShadow = true
-        fill.receiveShadow = true
-        scene.add(fill)
-        const cap = new THREE.Mesh(new THREE.BoxGeometry(2.1, 2.2, 2.1), stoneDark)
-        cap.position.set(cx, wallH + 1.1, cz + dir * lip)
-        cap.castShadow = true
-        cap.receiveShadow = true
-        scene.add(cap)
+        batchBox(1.1, 1.15, fillLen, cx, wallH + 0.575, cz + dir * (fillLen / 2 - 0.3))
+        batchBox(2.1, 2.2, 2.1, cx, wallH + 1.1, cz + dir * lip)
       }
     }
   }
@@ -279,18 +260,10 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     gatehouse.receiveShadow = true
     decor.occluders.push(gatehouse)
     scene.add(gatehouse)
-    // 성문 상부 흉벽 (연속 실루엣) — 벽 구간과 같은 파라펫으로 이어붙임
+    // 성문 상부 흉벽·성가퀴 (연속 실루엣) — 벽 구간과 같은 규격, 병합 배치로
     const lip2 = CASTLE.wallT / 2 - 0.55
-    const gatePara = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.15, gw * 2), stoneDark)
-    gatePara.position.set(east + lip2, wallH + 0.575, 0)
-    gatePara.castShadow = true
-    gatePara.receiveShadow = true
-    scene.add(gatePara)
-    // 성문 상부 성가퀴도 벽 구간과 같은 규격·같은 월드 4.2 그리드 (z=0 한 기)
-    const m2 = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 2.1), stoneDark)
-    m2.position.set(east + lip2, wallH + 1.1, 0)
-    m2.castShadow = true
-    scene.add(m2)
+    batchBox(1.1, 1.15, gw * 2, east + lip2, wallH + 0.575, 0)
+    batchBox(1.1, 2.2, 2.1, east + lip2, wallH + 1.1, 0)
   }
   // 홍예석(voussoir): 첨두 곡선을 따라 낱개 돌 — '조립된 석조'의 인상
   {
@@ -560,6 +533,13 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
     decor.torchLights.push(light)
     scene.add(light)
   }
+
+  // 정적 석재(파라펫·성가퀴·필러·캡) 일괄 병합 — 낱개 ~60 드로우콜 → 1
+  const stoneMerged = new THREE.Mesh(mergeGeometries(stoneBatch), stoneDark)
+  stoneMerged.castShadow = true
+  stoneMerged.receiveShadow = true
+  scene.add(stoneMerged)
+  stoneBatch = []
 
   return decor
 }
