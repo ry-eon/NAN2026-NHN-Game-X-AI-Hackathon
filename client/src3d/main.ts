@@ -18,8 +18,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { buildAsh, buildCastle, buildEnvironment, loadSky } from './environment'
-import { animateRig, makeBallista, makeCannon, makeFire, makeKnight } from './models'
-import type { Rig } from './models'
+import { animateMonster, animateRig, makeBallista, makeCannon, makeFire, makeKnight, makeMonster } from './models'
+import type { MonsterRig, Rig } from './models'
 
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
@@ -108,13 +108,16 @@ const lordMesh = lordRig.root
 lordMesh.add(makeNameplate('성주', '#ff9a7a').translateY(2.5))
 scene.add(lordMesh)
 
-// 괴수 메시 풀
-const enemyMeshes = new Map<number, THREE.Mesh>()
-const enemyMats: Record<string, THREE.MeshStandardMaterial> = {
-  grunt: new THREE.MeshStandardMaterial({ color: 0x9a4444 }),
-  runner: new THREE.MeshStandardMaterial({ color: 0xc07c3e }),
-  tank: new THREE.MeshStandardMaterial({ color: 0x6a4a9a }),
+// 괴수 비주얼 풀 — 절차 괴수 리그 (models.makeMonster)
+interface EnemyVisual {
+  group: THREE.Group
+  rig: MonsterRig
 }
+const enemyVisuals = new Map<number, EnemyVisual>()
+const enemyGroupToId = new Map<string, number>()
+const enemyAttackT = new Map<number, number>() // meleeHit/wallHit 시각 — 내리찍기 스윙 재생용
+const enemyFacing = new Map<number, number>() // 접전 중 바라볼 방향 (기본은 서쪽 -x)
+const ENEMY_FACE_WEST = -Math.PI / 2
 
 // 아군 유닛 비주얼 풀 — 병종별 절차 모델. 그룹→유닛 id 역참조는 피킹에 사용
 interface UnitVisual {
@@ -367,10 +370,14 @@ window.addEventListener('pointerup', (e) => {
       }
       return
     }
-    const enemyHits = raycaster.intersectObjects([...enemyMeshes.values()], false)
+    const enemyHits = raycaster.intersectObjects(
+      [...enemyVisuals.values()].map((v) => v.group),
+      true,
+    )
     if (enemyHits.length > 0) {
-      for (const [id, mesh] of enemyMeshes)
-        if (mesh === enemyHits[0]!.object) inspectedEnemy = id
+      let obj: THREE.Object3D | null = enemyHits[0]!.object
+      while (obj && !enemyGroupToId.has(obj.uuid)) obj = obj.parent
+      if (obj) inspectedEnemy = enemyGroupToId.get(obj.uuid)!
     }
     return
   }
@@ -626,10 +633,13 @@ function handleEvents(events: SiegeEvent[]): void {
       spawnFlash(from.clone(), ev.unitKind === 'cannon' ? 2.4 : 0.8, 0xffdf9a, 200)
       if (ev.unitKind === 'cannon') spawnLight(from.clone(), 0xffb060, 40, 300)
     } else if (ev.type === 'enemyDied') {
-      const mesh = enemyMeshes.get(ev.id)
-      if (mesh) {
-        enemyMeshes.delete(ev.id)
-        dying.push({ obj: mesh, t0: performance.now(), dur: 380 })
+      const v = enemyVisuals.get(ev.id)
+      if (v) {
+        enemyVisuals.delete(ev.id)
+        enemyGroupToId.delete(v.group.uuid)
+        enemyAttackT.delete(ev.id)
+        enemyFacing.delete(ev.id)
+        dying.push({ obj: v.group, t0: performance.now(), dur: 380 })
       }
       spawnFlash(new THREE.Vector3(ev.pos.x, 0.8, ev.pos.z), 1.6, 0xff6a4a, 300)
     } else if (ev.type === 'unitDied') {
@@ -652,9 +662,17 @@ function handleEvents(events: SiegeEvent[]): void {
       scene.add(fx.group)
       fireCols.push({ fx, t0: performance.now(), dur: 1200 })
     } else if (ev.type === 'meleeHit') {
+      enemyAttackT.set(ev.enemyId, performance.now())
       const u = state.units.find((x) => x.id === ev.unitId)
-      if (u) spawnFlash(new THREE.Vector3(u.pos.x, u.h + 1.1, u.pos.z), 0.9, 0xff5a5a, 200)
+      const e = state.enemies.find((x) => x.id === ev.enemyId)
+      if (u) {
+        spawnFlash(new THREE.Vector3(u.pos.x, u.h + 1.1, u.pos.z), 0.9, 0xff5a5a, 200)
+        // 접전 대상을 바라보게 — sim에 방향 개념이 없으므로 연출 전용
+        if (e) enemyFacing.set(ev.enemyId, Math.atan2(u.pos.x - e.pos.x, u.pos.z - e.pos.z))
+      }
     } else if (ev.type === 'wallHit') {
+      enemyAttackT.set(ev.id, performance.now())
+      enemyFacing.set(ev.id, ENEMY_FACE_WEST)
       const e = state.enemies.find((x) => x.id === ev.id)
       if (e) spawnFlash(new THREE.Vector3(e.pos.x - 0.6, 1.4, e.pos.z), 1.1, 0xffb060, 220)
     }
@@ -941,29 +959,31 @@ function syncScene(): void {
   lordMesh.rotation.y = state.lord.facing
 
   for (const e of state.enemies) {
-    let mesh = enemyMeshes.get(e.id)
-    if (!mesh) {
-      const def = ENEMY_KINDS[e.kind]!
-      mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(def.radius, 8, 7),
-        enemyMats[e.kind] ?? enemyMats.grunt!,
-      )
-      mesh.scale.y = 1.25
-      mesh.castShadow = true
-      enemyMeshes.set(e.id, mesh)
-      scene.add(mesh)
+    let v = enemyVisuals.get(e.id)
+    if (!v) {
+      const rig = makeMonster(e.kind)
+      v = { group: rig.root, rig }
+      enemyVisuals.set(e.id, v)
+      enemyGroupToId.set(rig.root.uuid, e.id)
+      scene.add(rig.root)
     }
-    const def = ENEMY_KINDS[e.kind]!
-    const bob = e.atWall ? 0 : Math.sin(state.tick * 0.3 + e.id) * 0.08
     const prev = prevEnemies.get(e.id)
     const ex = prev ? THREE.MathUtils.lerp(prev.x, e.pos.x, renderAlpha) : e.pos.x
     const ez = prev ? THREE.MathUtils.lerp(prev.z, e.pos.z, renderAlpha) : e.pos.z
-    mesh.position.set(ex, def.radius * 1.2 + bob, ez)
+    v.group.position.set(ex, 0, ez)
+    // 이동 중엔 서쪽(성벽), 정지 시엔 마지막 접전 방향
+    const moving = prev
+      ? Math.abs(prev.x - e.pos.x) + Math.abs(prev.z - e.pos.z) > 1e-4
+      : true
+    v.group.rotation.y = moving ? ENEMY_FACE_WEST : (enemyFacing.get(e.id) ?? ENEMY_FACE_WEST)
   }
-  for (const [id, mesh] of enemyMeshes) {
+  for (const [id, v] of enemyVisuals) {
     if (!state.enemies.some((e) => e.id === id)) {
-      scene.remove(mesh)
-      enemyMeshes.delete(id)
+      scene.remove(v.group)
+      enemyGroupToId.delete(v.group.uuid)
+      enemyAttackT.delete(id)
+      enemyFacing.delete(id)
+      enemyVisuals.delete(id)
     }
   }
 
@@ -986,6 +1006,15 @@ function syncScene(): void {
     }
   }
   for (let i = ringIdx; i < selectionRings.length; i++) selectionRings[i]!.visible = false
+  // 스테일 스윕 — fastForward(검증 훅)는 이벤트를 버리므로 unitDied 연출 없이 사라진 유닛 정리
+  for (const [id, v] of unitVisuals) {
+    if (!state.units.some((u) => u.id === id)) {
+      scene.remove(v.group)
+      groupToUnitId.delete(v.group.uuid)
+      unitVisuals.delete(id)
+      selected.delete(id)
+    }
+  }
 
   // 카메라: LoL식 고정 부감 — 성주 남쪽 상공에서 내려다보며 추적
   const target = new THREE.Vector3(lx, ly, lz)
@@ -1145,6 +1174,16 @@ function frame(now: number): void {
   for (const u of state.units) {
     const v = unitVisuals.get(u.id)
     if (v?.rig) animateRig(v.rig, t + u.id * 0.7, u.path.length > 0)
+  }
+  for (const e of state.enemies) {
+    const v = enemyVisuals.get(e.id)
+    if (!v) continue
+    const prev = prevEnemies.get(e.id)
+    const moving = prev
+      ? Math.abs(prev.x - e.pos.x) + Math.abs(prev.z - e.pos.z) > 1e-4
+      : true
+    const atk = enemyAttackT.get(e.id)
+    animateMonster(v.rig, t + e.id * 0.9, moving, atk === undefined ? -1 : now - atk)
   }
   for (const f of fires) f.update(t)
   decor.torchLights.forEach((l, i) => {

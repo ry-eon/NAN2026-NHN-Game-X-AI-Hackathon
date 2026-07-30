@@ -426,6 +426,438 @@ export function makeBallista(): THREE.Group {
   return g
 }
 
+// ---------------------------------------------------------------- 괴수 (야귀·질주귀·갑주귀)
+// 기사와 같은 원칙(프로파일·부품 조립)이되 실루엣으로 병종이 읽히게 한다:
+// 야귀 = 구부정한 덩치 + 곤봉, 질주귀 = 전경 자세 + 갈퀴손 + 후방 뿔, 갑주귀 = 판금 거구 + 대형 망치.
+// 발광 눈은 부감 거리에서도 "괴수"임을 읽게 하는 최소 비용 장치 (블룸이 살짝 잡아준다).
+
+const MAT_BONE = new THREE.MeshStandardMaterial({ color: 0xd6c9a8, roughness: 0.55 })
+const MAT_EYE = new THREE.MeshBasicMaterial({ color: 0xffb63a })
+// 갑주는 iron(0x33353c)이 아니라 steelDark 계열 — 대낮 들판에서 iron은 검은 덩어리로 뭉개진다 (스크린샷 검증)
+const MAT_ARMOR = new THREE.MeshStandardMaterial({ color: 0x565b68, metalness: 0.75, roughness: 0.5 })
+const MONSTER_SKIN: Record<string, THREE.MeshStandardMaterial> = {
+  grunt: new THREE.MeshStandardMaterial({ color: 0x8a4038, roughness: 0.92 }),
+  runner: new THREE.MeshStandardMaterial({ color: 0x9c4f28, roughness: 0.9 }),
+  tank: new THREE.MeshStandardMaterial({ color: 0x52406b, roughness: 0.88 }),
+}
+
+export interface MonsterRig {
+  root: THREE.Group
+  torso: THREE.Group
+  head: THREE.Group
+  lArm: THREE.Group
+  rArm: THREE.Group
+  lLeg: THREE.Group
+  rLeg: THREE.Group
+  hunch: number // 기본 전경(앞으로 숙임) 각
+  hipH: number // 골반 높이 — torso 피벗이 여기 있어 hunch가 골반 기준으로 돈다
+  gait: number // 보행 주파수 — sim 이동 속도와 보폭이 맞게
+  atkDur: number // 공격 스윙 길이 (ms)
+}
+
+export function makeMonster(kind: string): MonsterRig {
+  const skin = MONSTER_SKIN[kind] ?? MONSTER_SKIN.grunt!
+  const root = new THREE.Group()
+  const K =
+    kind === 'runner'
+      ? { hipH: 0.78, hunch: 0.5, gait: 13, atkDur: 300, legR: 0.09, spread: 0.16 }
+      : kind === 'tank'
+        ? { hipH: 1.12, hunch: 0.12, gait: 5.5, atkDur: 620, legR: 0.2, spread: 0.3 }
+        : { hipH: 0.84, hunch: 0.3, gait: 8, atkDur: 450, legR: 0.14, spread: 0.24 }
+
+  // ---- 다리 (골반 피벗) — 맨발엔 발톱, 갑주귀는 정강받이+쇠발
+  const mkLeg = (side: number): THREE.Group => {
+    const leg = new THREE.Group()
+    leg.position.set(side * K.spread, K.hipH, 0)
+    const thigh = lathe(
+      [
+        [K.legR * 1.15, 0],
+        [K.legR * 1.25, -K.hipH * 0.2],
+        [K.legR * 0.85, -K.hipH * 0.55],
+      ],
+      skin,
+      10,
+    )
+    const shin = lathe(
+      [
+        [K.legR * 0.8, -K.hipH * 0.55],
+        [K.legR * 0.95, -K.hipH * 0.65],
+        [K.legR * 0.7, -K.hipH * 0.97],
+      ],
+      skin,
+      10,
+    )
+    leg.add(thigh, shin)
+    if (kind === 'tank') {
+      const greave = lathe(
+        [
+          [K.legR * 0.85, -K.hipH * 0.55],
+          [K.legR * 1.05, -K.hipH * 0.63],
+          [K.legR * 0.8, -K.hipH * 0.92],
+        ],
+        MAT_ARMOR,
+        10,
+      )
+      const foot = bevelBox(0.3, 0.12, 0.42, MAT_ARMOR, 0.02)
+      foot.position.set(0, -K.hipH + 0.06, 0.08)
+      leg.add(greave, foot)
+    } else {
+      for (const dx of [-1, 0, 1]) {
+        const toe = new THREE.Mesh(new THREE.ConeGeometry(K.legR * 0.38, K.legR * 1.6, 6), MAT_BONE)
+        toe.rotation.x = Math.PI / 2 - 0.25
+        toe.position.set(dx * K.legR * 0.55, -K.hipH + K.legR * 0.35, K.legR * 1.1)
+        leg.add(toe)
+      }
+    }
+    return leg
+  }
+  const lLeg = mkLeg(-1)
+  const rLeg = mkLeg(1)
+
+  // ---- 몸통 (골반 피벗 — 로컬 y=0이 골반)
+  const torso = new THREE.Group()
+  torso.position.y = K.hipH
+  const head = new THREE.Group()
+
+  const mkArm = (
+    side: number,
+    at: [number, number],
+    upper: [number, number][],
+    fore: [number, number][],
+    fistS: number,
+    fistY: number,
+  ): THREE.Group => {
+    const arm = new THREE.Group()
+    arm.position.set(side * at[0], at[1], 0)
+    const fist = bevelBox(fistS, fistS * 0.9, fistS, skin, 0.02)
+    fist.position.y = fistY
+    arm.add(lathe(upper, skin, 10), lathe(fore, skin, 10), fist)
+    return arm
+  }
+  let lArm: THREE.Group
+  let rArm: THREE.Group
+
+  if (kind === 'runner') {
+    // 몸통 — 마르고 좁게
+    torso.add(
+      lathe(
+        [
+          [0.17, 0],
+          [0.24, 0.2],
+          [0.2, 0.42],
+          [0.12, 0.52],
+        ],
+        skin,
+        12,
+      ),
+    )
+    // 등뼈 가시 4개
+    for (let i = 0; i < 4; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.13, 5), MAT_BONE)
+      spike.rotation.x = -2.3
+      spike.position.set(0, 0.1 + i * 0.12, -0.2)
+      torso.add(spike)
+    }
+    // 머리 — 뒤로 긴 두개골 + 후방 단일 뿔
+    head.position.set(0, 0.55, 0.1)
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), skin)
+    skull.scale.set(0.9, 0.8, 1.3)
+    skull.position.y = 0.08
+    const jaw = bevelBox(0.16, 0.07, 0.16, skin, 0.015)
+    jaw.position.set(0, -0.03, 0.12)
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.4, 7), MAT_BONE)
+    horn.rotation.x = -0.9
+    horn.position.set(0, 0.2, -0.12)
+    head.add(skull, jaw, horn)
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), MAT_EYE)
+      eye.position.set(s * 0.07, 0.1, 0.19)
+      head.add(eye)
+    }
+    // 팔 — 길고 가늘게 + 갈퀴 3개
+    const armProf = (): [[number, number][], [number, number][]] => [
+      [
+        [0.06, 0],
+        [0.065, -0.16],
+        [0.05, -0.4],
+      ],
+      [
+        [0.05, -0.4],
+        [0.06, -0.48],
+        [0.045, -0.75],
+      ],
+    ]
+    lArm = mkArm(-1, [0.26, 0.44], ...armProf(), 0.1, -0.79)
+    rArm = mkArm(1, [0.26, 0.44], ...armProf(), 0.1, -0.79)
+    for (const arm of [lArm, rArm])
+      for (const dx of [-1, 0, 1]) {
+        const claw = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.17, 5), MAT_BONE)
+        claw.rotation.x = Math.PI
+        claw.position.set(dx * 0.04, -0.9, 0.02)
+        arm.add(claw)
+      }
+  } else if (kind === 'tank') {
+    // 몸통 — 거구 + 판금 흉갑·폴드
+    torso.add(
+      lathe(
+        [
+          [0.34, 0],
+          [0.5, 0.3],
+          [0.46, 0.62],
+          [0.28, 0.78],
+        ],
+        skin,
+        14,
+      ),
+      lathe(
+        [
+          [0.48, 0.28],
+          [0.54, 0.45],
+          [0.44, 0.66],
+          [0.3, 0.76],
+        ],
+        MAT_ARMOR,
+        14,
+      ),
+      lathe(
+        [
+          [0.4, 0.05],
+          [0.46, -0.08],
+        ],
+        MAT_ARMOR,
+        14,
+      ),
+      lathe(
+        [
+          [0.44, -0.06],
+          [0.5, -0.2],
+        ],
+        MATS.steelDark,
+        14,
+      ),
+    )
+    // 견갑 (반구 + 정수리 스파이크)
+    for (const s of [-1, 1]) {
+      const pauldron = new THREE.Mesh(
+        new THREE.SphereGeometry(0.26, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2),
+        MAT_ARMOR,
+      )
+      pauldron.position.set(s * 0.52, 0.72, 0)
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.22, 7), MATS.steelDark)
+      spike.position.set(s * 0.52, 0.98, 0)
+      torso.add(pauldron, spike)
+    }
+    // 머리 — 뿔투구, 슬릿 안쪽 발광 눈
+    head.position.set(0, 0.82, 0.1)
+    const helm = lathe(
+      [
+        [0.19, 0],
+        [0.21, 0.08],
+        [0.21, 0.22],
+        [0.16, 0.3],
+        [0.0, 0.34],
+      ],
+      MAT_ARMOR,
+      14,
+    )
+    const slit = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.213, 0.213, 0.05, 14, 1, true, -0.7, 1.4),
+      new THREE.MeshBasicMaterial({ color: 0x000000 }),
+    )
+    slit.position.y = 0.13
+    head.add(helm, slit)
+    for (const s of [-1, 1]) {
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.42, 8), MAT_BONE)
+      horn.rotation.z = -s * 0.9
+      horn.position.set(s * 0.24, 0.22, 0)
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), MAT_EYE)
+      eye.position.set(s * 0.07, 0.13, 0.19)
+      const tusk = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.13, 6), MAT_BONE)
+      tusk.position.set(s * 0.08, -0.04, 0.17)
+      head.add(horn, eye, tusk)
+    }
+    // 팔 + 철 건틀릿, 오른손 대형 망치
+    const armProf = (): [[number, number][], [number, number][]] => [
+      [
+        [0.13, 0],
+        [0.14, -0.18],
+        [0.11, -0.45],
+      ],
+      [
+        [0.115, -0.45],
+        [0.15, -0.56],
+        [0.11, -0.85],
+      ],
+    ]
+    lArm = mkArm(-1, [0.6, 0.68], ...armProf(), 0.22, -0.92)
+    rArm = mkArm(1, [0.6, 0.68], ...armProf(), 0.22, -0.92)
+    for (const arm of [lArm, rArm]) {
+      const gauntlet = lathe(
+        [
+          [0.12, -0.68],
+          [0.16, -0.76],
+          [0.13, -0.9],
+        ],
+        MAT_ARMOR,
+        10,
+      )
+      arm.add(gauntlet)
+    }
+    const maul = new THREE.Group()
+    maul.position.y = -0.92
+    maul.rotation.x = 0.8
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.95, 8), MAT_WOOD_DARK)
+    handle.position.y = -0.42
+    const maulHead = bevelBox(0.36, 0.3, 0.3, MATS.iron, 0.03)
+    maulHead.position.y = -0.95
+    const band = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.03, 6, 12), MATS.steelDark)
+    band.rotation.x = Math.PI / 2
+    band.position.y = -0.78
+    maul.add(handle, maulHead, band)
+    rArm.add(maul)
+  } else {
+    // ---- 야귀 (기본) — 구부정한 덩치
+    torso.add(
+      lathe(
+        [
+          [0.24, 0],
+          [0.4, 0.22],
+          [0.42, 0.42],
+          [0.3, 0.6],
+          [0.18, 0.68],
+        ],
+        skin,
+        14,
+      ),
+    )
+    for (const s of [-1, 1]) {
+      const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 8), skin)
+      shoulder.position.set(s * 0.34, 0.56, 0)
+      torso.add(shoulder)
+    }
+    // 등뼈 가시 3개 + 허리 천
+    for (let i = 0; i < 3; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.16, 5), MAT_BONE)
+      spike.rotation.x = -2.3
+      spike.position.set(0, 0.24 + i * 0.16, -0.33)
+      torso.add(spike)
+    }
+    const cloth = bevelBox(0.34, 0.3, 0.05, MATS.clothDark, 0.015)
+    cloth.position.set(0, -0.1, 0.24)
+    cloth.rotation.x = 0.12
+    torso.add(cloth)
+    // 머리 — 하악 돌출 + 송곳니 + 양뿔
+    head.position.set(0, 0.68, 0.14)
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.2, 14, 10), skin)
+    skull.scale.set(1, 0.85, 1)
+    skull.position.y = 0.1
+    const jaw = bevelBox(0.26, 0.1, 0.2, skin, 0.02)
+    jaw.position.set(0, -0.04, 0.1)
+    head.add(skull, jaw)
+    for (const s of [-1, 1]) {
+      const tusk = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.12, 6), MAT_BONE)
+      tusk.position.set(s * 0.09, 0.03, 0.19)
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), MAT_EYE)
+      eye.position.set(s * 0.08, 0.14, 0.16)
+      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.3, 7), MAT_BONE)
+      horn.rotation.z = -s * 0.55
+      horn.rotation.x = -0.2
+      horn.position.set(s * 0.15, 0.26, -0.02)
+      head.add(tusk, eye, horn)
+    }
+    // 팔 — 전완이 굵은 곤봉팔, 오른손 나무 곤봉
+    const armProf = (): [[number, number][], [number, number][]] => [
+      [
+        [0.1, 0],
+        [0.11, -0.14],
+        [0.08, -0.36],
+      ],
+      [
+        [0.085, -0.36],
+        [0.12, -0.46],
+        [0.09, -0.72],
+      ],
+    ]
+    lArm = mkArm(-1, [0.44, 0.5], ...armProf(), 0.17, -0.78)
+    rArm = mkArm(1, [0.44, 0.5], ...armProf(), 0.17, -0.78)
+    const club = new THREE.Group()
+    club.position.y = -0.78
+    club.rotation.x = 0.85
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.033, 0.028, 0.5, 8), MAT_WOOD_DARK)
+    handle.position.y = -0.25
+    const clubHead = lathe(
+      [
+        [0.05, -0.48],
+        [0.11, -0.56],
+        [0.12, -0.68],
+        [0.0, -0.76],
+      ],
+      MAT_WOOD_DARK,
+      10,
+    )
+    club.add(handle, clubHead)
+    for (let i = 0; i < 3; i++) {
+      const stud = new THREE.Mesh(new THREE.ConeGeometry(0.025, 0.09, 5), MATS.iron)
+      const a = (i / 3) * Math.PI * 2
+      stud.position.set(Math.sin(a) * 0.11, -0.62, Math.cos(a) * 0.11)
+      stud.rotation.z = -Math.sin(a) * 1.3
+      stud.rotation.x = Math.cos(a) * 1.3
+      club.add(stud)
+    }
+    rArm.add(club)
+  }
+
+  torso.add(head, lArm, rArm)
+  root.add(lLeg, rLeg, torso)
+  // 그림자는 실루엣 부품만 — 기사와 동일한 드로우콜 절약 규칙
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh) {
+      o.geometry.computeBoundingSphere()
+      o.castShadow = (o.geometry.boundingSphere?.radius ?? 1) > 0.16
+    }
+  })
+  return { root, torso, head, lArm, rArm, lLeg, rLeg, hunch: K.hunch, hipH: K.hipH, gait: K.gait, atkDur: K.atkDur }
+}
+
+/** 괴수 보행/대기 + 공격 스윙. attackMs = meleeHit/wallHit 이벤트로부터 경과 ms (없으면 음수) */
+export function animateMonster(rig: MonsterRig, t: number, moving: boolean, attackMs: number): void {
+  if (moving) {
+    const s = Math.sin(t * rig.gait)
+    const lift = Math.abs(Math.cos(t * rig.gait))
+    rig.lLeg.rotation.x = s * 0.62
+    rig.rLeg.rotation.x = -s * 0.62
+    rig.lArm.rotation.x = -s * 0.5
+    rig.rArm.rotation.x = s * 0.5
+    rig.torso.rotation.x = rig.hunch + lift * 0.06
+    rig.torso.rotation.z = s * 0.05
+    rig.torso.position.y = rig.hipH + lift * 0.05
+  } else {
+    const breathe = Math.sin(t * 1.6)
+    rig.lLeg.rotation.x = 0
+    rig.rLeg.rotation.x = 0
+    rig.lArm.rotation.x = breathe * 0.04
+    rig.rArm.rotation.x = -breathe * 0.04
+    rig.torso.rotation.x = rig.hunch + breathe * 0.015
+    rig.torso.rotation.z = 0
+    rig.torso.position.y = rig.hipH
+  }
+  rig.head.rotation.x = -rig.hunch * 0.55 // 숙여도 시선은 전방
+  // 공격 — 크게 들어올렸다(윈드업) 내리찍기. 피해는 sim이 이미 적용, 이것은 연출
+  if (attackMs >= 0 && attackMs < rig.atkDur) {
+    const p = attackMs / rig.atkDur
+    const wind = 0.42
+    const arm =
+      p < wind
+        ? THREE.MathUtils.lerp(0.2, 2.3, p / wind)
+        : THREE.MathUtils.lerp(2.3, -0.7, (p - wind) / (1 - wind))
+    rig.rArm.rotation.x = arm
+    rig.lArm.rotation.x = arm * 0.35
+    rig.torso.rotation.x =
+      rig.hunch +
+      (p < wind ? -0.12 * (p / wind) : THREE.MathUtils.lerp(-0.12, 0.28, (p - wind) / (1 - wind)))
+  }
+}
+
 // ---------------------------------------------------------------- 불 (스프라이트 화염 + 불티)
 
 export interface FireFx {
