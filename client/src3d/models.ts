@@ -45,6 +45,63 @@ export function bevelBox(
   return mesh
 }
 
+// ---------------------------------------------------------------- 개체별 머티리얼 (피격 플래시·소멸 페이드용)
+
+/**
+ * 리그 안의 공유 머티리얼(MATS.*)을 인스턴스 사본으로 교체한다.
+ * 개체 하나만 번쩍이거나 사라지게 하려면 머티리얼이 그 개체 것이어야 한다.
+ * 사본은 `userData.owned`로 표시 — 폐기 시 이것만 dispose 해서 공유 머티리얼을 깨지 않는다.
+ * 리그당 사본 4~6개(원본별 1개) 수준이라 셰이더 프로그램은 그대로 재사용된다.
+ */
+export function ownMaterials(root: THREE.Object3D): THREE.Material[] {
+  const map = new Map<THREE.Material, THREE.Material>()
+  root.traverse((o) => {
+    const holder = o as THREE.Mesh | THREE.Sprite
+    const src = holder.material as THREE.Material | THREE.Material[] | undefined
+    if (!src || Array.isArray(src)) return
+    let mine = map.get(src)
+    if (!mine) {
+      mine = src.clone()
+      mine.userData.owned = true
+      map.set(src, mine)
+    }
+    holder.material = mine
+  })
+  return [...map.values()]
+}
+
+/** 피격 플래시 — k=0이면 원상. emissive는 항상 컴파일되는 유니폼이라 재컴파일이 없다.
+ *  따뜻한 백색: 붉은 괴수 피부에 순백을 더하면 분홍 사탕색으로 뜬다 (실기기 스크린샷 검증) */
+export function setFlash(mats: THREE.Material[], k: number): void {
+  for (const m of mats) {
+    if (m instanceof THREE.MeshStandardMaterial) m.emissive.setRGB(k, k * 0.78, k * 0.52)
+  }
+}
+
+/** 소멸 페이드 — 개체 전용 머티리얼이므로 이 개체만 사라진다 */
+export function setOpacity(mats: THREE.Material[], o: number): void {
+  for (const m of mats) {
+    m.transparent = o < 1
+    m.opacity = o
+  }
+}
+
+/** 리그 폐기 — 메시 지오메트리는 전부 인스턴스 것, 머티리얼은 owned 표시된 사본만.
+ *  스프라이트 지오메트리는 three.js 내부 공유물이라 절대 dispose 하지 않는다 */
+export function disposeTree(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    const holder = o as THREE.Mesh | THREE.Sprite
+    if (o instanceof THREE.Mesh) o.geometry.dispose()
+    const mat = holder.material as THREE.Material | THREE.Material[] | undefined
+    for (const m of Array.isArray(mat) ? mat : mat ? [mat] : []) {
+      if (!m.userData.owned) continue
+      const map = (m as THREE.MeshStandardMaterial).map
+      if (map) map.dispose()
+      m.dispose()
+    }
+  })
+}
+
 /** 회전 프로파일 (lathe) 헬퍼 */
 function lathe(
   points: [number, number][],
@@ -70,6 +127,9 @@ export interface Rig {
   rLeg: THREE.Group
   torso: THREE.Group
   cloak?: THREE.Mesh
+  mats: THREE.Material[] // 개체 전용 사본 — 피격 플래시·소멸 페이드
+  atkStyle: 'bow' | 'sword' // 공격 모션 (궁수=활 놓기, 그 외=검 내려치기)
+  atkDur: number // 공격 모션 길이 (ms)
 }
 
 /**
@@ -300,11 +360,32 @@ export function makeKnight(accent = 0x4a1414, gilded = false, archer = false): R
       o.castShadow = (o.geometry.boundingSphere?.radius ?? 1) > 0.16
     }
   })
-  return { root, lArm, rArm, lLeg, rLeg, torso, cloak }
+  return {
+    root,
+    lArm,
+    rArm,
+    lLeg,
+    rLeg,
+    torso,
+    cloak,
+    mats: ownMaterials(root),
+    atkStyle: archer ? 'bow' : 'sword',
+    atkDur: archer ? 460 : 430,
+  }
 }
 
-/** 보행/대기 절차 애니메이션 — moving 여부에 따라 팔다리 스윙·호흡 */
-export function animateRig(rig: Rig, t: number, moving: boolean): void {
+/**
+ * 보행/대기 + 공격 + 피격 절차 애니메이션.
+ * attackMs = unitFired 이벤트로부터 경과 ms, hitMs = 피격(meleeHit)으로부터 경과 ms (없으면 음수).
+ * 셋 다 연출 전용 — 피해·명중은 sim이 이미 확정했다.
+ */
+export function animateRig(
+  rig: Rig,
+  t: number,
+  moving: boolean,
+  attackMs = -1,
+  hitMs = -1,
+): void {
   if (moving) {
     const swing = Math.sin(t * 9)
     rig.lLeg.rotation.x = swing * 0.55
@@ -325,16 +406,66 @@ export function animateRig(rig: Rig, t: number, moving: boolean): void {
     rig.torso.position.y = breathe * 0.008
     if (rig.cloak) rig.cloak.rotation.x = 0.08 + breathe * 0.02
   }
+  rig.torso.rotation.y = 0
+  rig.torso.rotation.z = 0
+
+  // ---- 공격: 궁수는 시위를 놓는 순간부터 복귀, 검사는 윈드업→내려치기
+  if (attackMs >= 0 && attackMs < rig.atkDur) {
+    const p = attackMs / rig.atkDur
+    if (rig.atkStyle === 'bow') {
+      // 발사 직후 0.12까지 사격 자세 유지 → 나머지 구간에 대기 자세로 복귀
+      const hold = p < 0.12 ? 1 : 1 - (p - 0.12) / 0.88
+      const ease = hold * hold
+      rig.lArm.rotation.x = -1.5 * ease // 활 든 왼팔을 전방으로
+      // 시위를 놓는 순간 오른손이 뒤로 튀었다가(0.45) 앞으로 풀린다
+      rig.rArm.rotation.x = (p < 0.08 ? 0.45 : THREE.MathUtils.lerp(0.45, -0.1, Math.min(1, (p - 0.08) / 0.3))) * ease
+      rig.torso.rotation.y = 0.3 * ease // 몸을 틀어 겨눈 자세
+      rig.torso.rotation.x -= 0.05 * ease
+    } else {
+      // 윈드업을 짧게 — 사격 이벤트가 곧 타격 시점이라 크게 뜸을 들이면 검기와 어긋난다
+      const wind = 0.25
+      const arm =
+        p < wind
+          ? THREE.MathUtils.lerp(0.1, 2.5, p / wind)
+          : THREE.MathUtils.lerp(2.5, -0.95, (p - wind) / (1 - wind))
+      rig.rArm.rotation.x = arm
+      rig.lArm.rotation.x = arm * 0.25
+      rig.torso.rotation.x +=
+        p < wind ? -0.16 * (p / wind) : THREE.MathUtils.lerp(-0.16, 0.3, (p - wind) / (1 - wind))
+      rig.torso.rotation.y = p < wind ? -0.2 * (p / wind) : THREE.MathUtils.lerp(-0.2, 0.15, (p - wind) / (1 - wind))
+    }
+  }
+
+  // ---- 피격: 뒤로 젖혀졌다가 떨림이 잦아든다 (공격 모션 위에 덧씌운다)
+  if (hitMs >= 0 && hitMs < HIT_REACT_MS) {
+    const q = 1 - hitMs / HIT_REACT_MS
+    rig.torso.rotation.x -= 0.32 * q * q
+    rig.torso.rotation.z = 0.14 * q * Math.sin(hitMs * 0.05)
+    rig.torso.position.y -= 0.04 * q * q
+  }
 }
+
+/** 피격 리액션 길이 (ms) — 리그·플래시 공용 */
+export const HIT_REACT_MS = 230
 
 // ---------------------------------------------------------------- 공성 병기 (전방 = +Z, 기사와 동일 규약)
 
 const MAT_WOOD = new THREE.MeshStandardMaterial({ color: 0x4a3826, roughness: 0.88 })
 const MAT_WOOD_DARK = new THREE.MeshStandardMaterial({ color: 0x33261a, roughness: 0.9 })
 
+/** 공성 병기 — recoil 그룹은 발사 시 뒤로 밀렸다 돌아오는 부품(포신·시위) */
+export interface WeaponRig {
+  group: THREE.Group
+  recoil: THREE.Group
+  recoilDist: number // 반동 이동량 (병기 로컬 z)
+  reloadMs: number
+}
+
 /** 대포 — 포신(lathe 프로파일) + 목재 포가 + 바퀴 2륜 */
-export function makeCannon(): THREE.Group {
+export function makeCannon(): WeaponRig {
   const g = new THREE.Group()
+  const recoil = new THREE.Group() // 포신 일체 — 발사 때 포가 위를 뒤로 미끄러진다
+  g.add(recoil)
   // 포신: 포미(두꺼움)→포구(좁아짐) 프로파일, 수평으로 눕혀 +Z를 향한다
   const barrel = new THREE.Mesh(
     new THREE.LatheGeometry(
@@ -359,7 +490,7 @@ export function makeCannon(): THREE.Group {
     ring.position.set(0, 0.62 + t * 0.1, -0.25 + t) // 포신 축을 따라
     ring.rotation.x = -0.1
     ring.castShadow = true
-    g.add(ring)
+    recoil.add(ring)
   }
   // 포가 (양측 목재 프레임)
   for (const side of [-1, 1]) {
@@ -384,16 +515,18 @@ export function makeCannon(): THREE.Group {
     hub.castShadow = true
     g.add(wheel, hub)
   }
-  g.add(barrel)
+  recoil.add(barrel)
   g.traverse((o) => {
     if (o instanceof THREE.Mesh) o.castShadow = true
   })
-  return g
+  return { group: g, recoil, recoilDist: 0.34, reloadMs: 900 }
 }
 
 /** 발리스타 — 목재 받침대 + 활대(양팔) + 장전 볼트 */
-export function makeBallista(): THREE.Group {
+export function makeBallista(): WeaponRig {
   const g = new THREE.Group()
+  const recoil = new THREE.Group() // 시위 + 장전 볼트 — 발사 때 앞으로 튕겼다 재장전된다
+  g.add(recoil)
   const base = bevelBox(0.85, 0.14, 0.95, MAT_WOOD_DARK, 0.025)
   base.position.y = 0.07
   const post = bevelBox(0.16, 0.5, 0.16, MAT_WOOD, 0.02)
@@ -419,11 +552,24 @@ export function makeBallista(): THREE.Group {
   const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.012, 1.15, 8), MATS.iron)
   bolt.rotation.x = Math.PI / 2 - 0.16
   bolt.position.set(0, 0.72, 0.15)
-  g.add(base, post, rail, string, bolt)
+  g.add(base, post, rail)
+  recoil.add(string, bolt)
   g.traverse((o) => {
     if (o instanceof THREE.Mesh) o.castShadow = true
   })
-  return g
+  return { group: g, recoil, recoilDist: -0.45, reloadMs: 700 }
+}
+
+/** 병기 반동 — 발사 순간 튕겼다가 재장전 시간에 걸쳐 제자리로 (연출 전용) */
+export function animateWeapon(w: WeaponRig, attackMs: number): void {
+  if (attackMs < 0 || attackMs >= w.reloadMs) {
+    w.recoil.position.z = 0
+    return
+  }
+  const p = attackMs / w.reloadMs
+  // 앞 15%에 튕기고(급가속) 나머지 구간에 천천히 복귀 — 무게가 실려 보이게
+  const k = p < 0.15 ? p / 0.15 : 1 - (p - 0.15) / 0.85
+  w.recoil.position.z = -w.recoilDist * k * k
 }
 
 // ---------------------------------------------------------------- 괴수 (야귀·질주귀·갑주귀)
@@ -453,6 +599,7 @@ export interface MonsterRig {
   hipH: number // 골반 높이 — torso 피벗이 여기 있어 hunch가 골반 기준으로 돈다
   gait: number // 보행 주파수 — sim 이동 속도와 보폭이 맞게
   atkDur: number // 공격 스윙 길이 (ms)
+  mats: THREE.Material[] // 개체 전용 사본 — 피격 플래시·소멸 페이드
 }
 
 export function makeMonster(kind: string): MonsterRig {
@@ -816,11 +963,31 @@ export function makeMonster(kind: string): MonsterRig {
       o.castShadow = (o.geometry.boundingSphere?.radius ?? 1) > 0.16
     }
   })
-  return { root, torso, head, lArm, rArm, lLeg, rLeg, hunch: K.hunch, hipH: K.hipH, gait: K.gait, atkDur: K.atkDur }
+  return {
+    root,
+    torso,
+    head,
+    lArm,
+    rArm,
+    lLeg,
+    rLeg,
+    hunch: K.hunch,
+    hipH: K.hipH,
+    gait: K.gait,
+    atkDur: K.atkDur,
+    mats: ownMaterials(root),
+  }
 }
 
-/** 괴수 보행/대기 + 공격 스윙. attackMs = meleeHit/wallHit 이벤트로부터 경과 ms (없으면 음수) */
-export function animateMonster(rig: MonsterRig, t: number, moving: boolean, attackMs: number): void {
+/** 괴수 보행/대기 + 공격 스윙 + 피격 리액션.
+ *  attackMs = meleeHit/wallHit, hitMs = 아군 공격 착탄으로부터 경과 ms (없으면 음수) */
+export function animateMonster(
+  rig: MonsterRig,
+  t: number,
+  moving: boolean,
+  attackMs: number,
+  hitMs = -1,
+): void {
   if (moving) {
     const s = Math.sin(t * rig.gait)
     const lift = Math.abs(Math.cos(t * rig.gait))
@@ -855,6 +1022,14 @@ export function animateMonster(rig: MonsterRig, t: number, moving: boolean, atta
     rig.torso.rotation.x =
       rig.hunch +
       (p < wind ? -0.12 * (p / wind) : THREE.MathUtils.lerp(-0.12, 0.28, (p - wind) / (1 - wind)))
+  }
+  // 피격 — 상체가 뒤로 젖혀지고 머리가 튄다. 공격 모션 위에 덧씌워 "맞으면서도 친다"
+  if (hitMs >= 0 && hitMs < HIT_REACT_MS) {
+    const q = 1 - hitMs / HIT_REACT_MS
+    rig.torso.rotation.x -= 0.3 * q * q
+    rig.torso.rotation.z += 0.16 * q * Math.sin(hitMs * 0.055)
+    rig.head.rotation.x -= 0.25 * q * q
+    rig.torso.position.y -= 0.05 * q * q
   }
 }
 

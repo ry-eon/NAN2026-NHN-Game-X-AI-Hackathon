@@ -18,8 +18,22 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 import { buildAsh, buildCastle, buildEnvironment, loadSky } from './environment'
-import { animateMonster, animateRig, makeBallista, makeCannon, makeFire, makeKnight, makeMonster } from './models'
-import type { MonsterRig, Rig } from './models'
+import {
+  HIT_REACT_MS,
+  animateMonster,
+  animateRig,
+  animateWeapon,
+  disposeTree,
+  makeBallista,
+  makeCannon,
+  makeFire,
+  makeKnight,
+  makeMonster,
+  ownMaterials,
+  setFlash,
+  setOpacity,
+} from './models'
+import type { MonsterRig, Rig, WeaponRig } from './models'
 
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
@@ -118,11 +132,24 @@ const enemyGroupToId = new Map<string, number>()
 const enemyAttackT = new Map<number, number>() // meleeHit/wallHit 시각 — 내리찍기 스윙 재생용
 const enemyFacing = new Map<number, number>() // 접전 중 바라볼 방향 (기본은 서쪽 -x)
 const ENEMY_FACE_WEST = -Math.PI / 2
+/** 피격 리액션 — 착탄 시각 + 밀려날 방향(정규화 XZ) + 무게(대포·스킬은 크게) */
+interface HitReact {
+  t0: number
+  dx: number
+  dz: number
+  heavy: number
+}
+const FLASH_MS = 150 // 피격 플래시 길이 — 리액션(HIT_REACT_MS)보다 짧게 터뜨린다
+const enemyHit = new Map<number, HitReact>()
+const unitHit = new Map<number, HitReact>() // 아군 피격 (meleeHit)
+const unitAttackT = new Map<number, number>() // unitFired 시각 — 활 놓기/검 스윙/병기 반동
 
 // 아군 유닛 비주얼 풀 — 병종별 절차 모델. 그룹→유닛 id 역참조는 피킹에 사용
 interface UnitVisual {
   group: THREE.Group
-  rig?: Rig
+  rig?: Rig // 사람(궁수·영웅·병기 조작병)
+  weapon?: WeaponRig // 병기 본체 — 발사 반동
+  mats: THREE.Material[] // 개체 전용 머티리얼 — 피격 플래시·소멸 페이드
   kind: string
 }
 const unitVisuals = new Map<number, UnitVisual>()
@@ -148,6 +175,7 @@ function makeNameplate(text: string, color: string): THREE.Sprite {
   )
   s.scale.set(1.7, 0.57, 1)
   s.renderOrder = 10
+  s.material.userData.owned = true // 개체 전용 캔버스 텍스처 — 폐기 시 함께 dispose
   return s
 }
 
@@ -168,7 +196,7 @@ function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
     // 궁수 — 활·화살통 실루엣, 녹갈색 천
     const rig = makeKnight(0x3a4a2e, false, true)
     rig.root.scale.setScalar(0.88)
-    v = { group: rig.root, rig, kind: u.kind }
+    v = { group: rig.root, rig, mats: rig.mats, kind: u.kind }
   } else if (u.kind === 'hero') {
     // 영웅 — 크게, 청색+금장, 이름표, 상시 금색 링
     const rig = makeKnight(0x1d4e8c, true)
@@ -181,13 +209,13 @@ function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
     ring.rotation.x = -Math.PI / 2
     ring.position.y = 0.05
     rig.root.add(ring)
-    v = { group: rig.root, rig, kind: u.kind }
-  } else if (u.kind === 'cannon') {
-    const group = makeCannon()
-    v = { group, rig: attachCrew(group, 0.55, -1.05), kind: u.kind }
+    v = { group: rig.root, rig, mats: rig.mats, kind: u.kind }
   } else {
-    const group = makeBallista()
-    v = { group, rig: attachCrew(group, 0, -1.15), kind: u.kind }
+    // 병기: 본체 머티리얼도 개체 사본으로 (조작병과 함께 페이드·플래시되게)
+    const weapon = u.kind === 'cannon' ? makeCannon() : makeBallista()
+    const weaponMats = ownMaterials(weapon.group)
+    const crew = attachCrew(weapon.group, u.kind === 'cannon' ? 0.55 : 0, u.kind === 'cannon' ? -1.05 : -1.15)
+    v = { group: weapon.group, weapon, rig: crew, mats: [...weaponMats, ...crew.mats], kind: u.kind }
   }
   unitVisuals.set(u.id, v)
   groupToUnitId.set(v.group.uuid, u.id)
@@ -535,10 +563,36 @@ interface Projectile {
   dur: number
   arc: number
   explode: boolean
+  kind: string
+  targetId: number
+  hit: boolean // 착탄 처리 1회 보장
 }
 const projectiles: Projectile[] = []
 const flashes: { mesh: THREE.Sprite; t0: number; dur: number; grow: number }[] = []
-const dying: { obj: THREE.Object3D; t0: number; dur: number }[] = []
+/** 쓰러지는 시신 — 맞은 방향으로 넘어가며 말미에 페이드. mats는 개체 전용이라 이 개체만 사라진다 */
+interface Dying {
+  obj: THREE.Object3D
+  t0: number
+  dur: number
+  mats: THREE.Material[]
+  axis: THREE.Vector3
+  q0: THREE.Quaternion
+}
+const dying: Dying[] = []
+
+/** dir = 넘어질 방향의 헤딩각(atan2(dx, dz) 규약) */
+function startDying(obj: THREE.Object3D, mats: THREE.Material[], dur: number, dir: number): void {
+  setFlash(mats, 0)
+  dying.push({
+    obj,
+    t0: performance.now(),
+    dur,
+    mats,
+    // 넘어질 방향에 수직인 월드 축 — 이 축으로 90° 돌면 몸이 dir 쪽으로 눕는다
+    axis: new THREE.Vector3(Math.cos(dir), 0, -Math.sin(dir)),
+    q0: obj.quaternion.clone(),
+  })
+}
 const shockwaves: { mesh: THREE.Mesh; t0: number; dur: number; maxR: number }[] = []
 const fireCols: { fx: ReturnType<typeof makeFire>; t0: number; dur: number }[] = []
 const tempLights: { light: THREE.PointLight; t0: number; dur: number; peak: number }[] = []
@@ -604,53 +658,132 @@ function spawnFlash(pos: THREE.Vector3, scale: number, color = 0xffffff, dur = 2
 const arrowGeo = new THREE.BoxGeometry(0.06, 0.06, 0.75)
 const boltGeo = new THREE.BoxGeometry(0.1, 0.1, 1.15)
 const ballGeo = new THREE.SphereGeometry(0.2, 10, 8)
+// 영웅은 검을 휘두른다 — 날아가는 것도 화살이 아니라 검기(가로로 긴 발광 판)
+const slashGeo = new THREE.BoxGeometry(0.9, 0.16, 0.28)
 const projMat = new THREE.MeshBasicMaterial({ color: 0xfff2c8 })
 const ballMat = new THREE.MeshBasicMaterial({ color: 0x1a1a20 })
+const slashMat = new THREE.MeshBasicMaterial({ color: 0xffd070, transparent: true, opacity: 0.9 })
 
 /** 발사 연출 — 병종별 궤적. 피해는 sim이 이미 적용했으므로 여긴 그림뿐 */
-function spawnProjectile(kind: string, from: THREE.Vector3, to: THREE.Vector3): void {
+function spawnProjectile(kind: string, targetId: number, from: THREE.Vector3, to: THREE.Vector3): void {
   const spec =
     kind === 'cannon'
       ? { geo: ballGeo, mat: ballMat, dur: 480, arc: 4.2, explode: true }
       : kind === 'ballista'
         ? { geo: boltGeo, mat: projMat, dur: 170, arc: 0.3, explode: false }
-        : { geo: arrowGeo, mat: projMat, dur: 260, arc: 1.6, explode: false }
+        : kind === 'hero'
+          ? { geo: slashGeo, mat: slashMat, dur: 200, arc: 0.6, explode: false }
+          : { geo: arrowGeo, mat: projMat, dur: 260, arc: 1.6, explode: false }
   const mesh = new THREE.Mesh(spec.geo, spec.mat)
   mesh.position.copy(from)
   scene.add(mesh)
-  projectiles.push({ mesh, from, to, t0: performance.now(), dur: spec.dur, arc: spec.arc, explode: spec.explode })
+  projectiles.push({
+    mesh,
+    from,
+    to,
+    t0: performance.now(),
+    dur: spec.dur,
+    arc: spec.arc,
+    explode: spec.explode,
+    kind,
+    targetId,
+    hit: false,
+  })
+}
+
+// ---- 카메라 흔들림 (trauma 모델) — 폭발·충격이 화면으로 전달되게. 전화면 패스가 아니라 비용 0
+let trauma = 0
+/** amount = 0~1, 발생 지점이 화면 중심(성주)에서 멀면 감쇠 */
+function addTrauma(amount: number, x?: number, z?: number): void {
+  let k = 1
+  if (x !== undefined && z !== undefined) {
+    const d = Math.hypot(x - state.lord.pos.x, z - state.lord.pos.z)
+    k = Math.max(0, 1 - d / 42)
+  }
+  trauma = Math.min(1, trauma + amount * k)
+}
+
+/** 피격 반응 등록 — 플래시·리액션·넉백은 여기 한 곳에서 (연출 전용) */
+function hitEnemy(id: number, dx: number, dz: number, heavy: number, y = 0.9): boolean {
+  const e = state.enemies.find((x) => x.id === id)
+  if (!e) return false
+  const len = Math.hypot(dx, dz) || 1
+  enemyHit.set(id, { t0: performance.now(), dx: dx / len, dz: dz / len, heavy })
+  spawnFlash(
+    new THREE.Vector3(e.pos.x, y, e.pos.z),
+    0.55 + heavy * 0.9,
+    heavy > 0.5 ? 0xffc070 : 0xffe6c0,
+    heavy > 0.5 ? 240 : 160,
+  )
+  return true
+}
+
+/** 착탄 — 명중한 괴수(대포는 폭심 반경 전원)에 반응을 준다 */
+function impact(p: Projectile): void {
+  p.hit = true
+  const def = UNIT_KINDS[p.kind]
+  const dx = p.to.x - p.from.x
+  const dz = p.to.z - p.from.z
+  if (def?.aoe) {
+    addTrauma(0.34, p.to.x, p.to.z)
+    for (const e of state.enemies) {
+      if (Math.hypot(e.pos.x - p.to.x, e.pos.z - p.to.z) > def.aoe) continue
+      hitEnemy(e.id, e.pos.x - p.to.x, e.pos.z - p.to.z, 1, 1.1)
+    }
+  } else if (!hitEnemy(p.targetId, dx, dz, p.kind === 'ballista' ? 0.55 : 0.25)) {
+    // 표적이 착탄 전에 죽었다 — 그래도 화살이 꽂힌 자리는 보인다
+    spawnFlash(p.to.clone(), 0.6, 0xffcaa0, 150)
+  }
 }
 
 /** 병종별 총구 높이 (모델 형상 기준) */
 const MUZZLE_H: Record<string, number> = { soldier: 1.35, hero: 1.4, cannon: 0.9, ballista: 0.8 }
 
+/** 괴수 비주얼을 살아있는 풀에서 떼어낸다 (시신 연출로 넘길 때·스테일 스윕 공용) */
+function dropEnemyVisual(id: number, v: EnemyVisual): void {
+  enemyVisuals.delete(id)
+  enemyGroupToId.delete(v.group.uuid)
+  enemyAttackT.delete(id)
+  enemyFacing.delete(id)
+}
+
+let wallHitT = -1e9 // 마지막 성벽 피격 시각 — HUD 게이지 반응용
+
 function handleEvents(events: SiegeEvent[]): void {
   for (const ev of events) {
     if (ev.type === 'unitFired') {
       const from = new THREE.Vector3(ev.from.x, ev.from.h + (MUZZLE_H[ev.unitKind] ?? 1), ev.from.z)
-      spawnProjectile(ev.unitKind, from, new THREE.Vector3(ev.to.x, 0.7, ev.to.z))
+      spawnProjectile(ev.unitKind, ev.targetId, from, new THREE.Vector3(ev.to.x, 0.7, ev.to.z))
       // 발사 섬광 — 어디서 쏘는지 읽히게 (대포는 크게)
       spawnFlash(from.clone(), ev.unitKind === 'cannon' ? 2.4 : 0.8, 0xffdf9a, 200)
-      if (ev.unitKind === 'cannon') spawnLight(from.clone(), 0xffb060, 40, 300)
+      unitAttackT.set(ev.unitId, performance.now()) // 사격 모션·병기 반동
+      if (ev.unitKind === 'cannon') {
+        spawnLight(from.clone(), 0xffb060, 40, 300)
+        addTrauma(0.3, ev.from.x, ev.from.z) // 대포는 쏠 때부터 화면이 울린다
+      }
     } else if (ev.type === 'enemyDied') {
       const v = enemyVisuals.get(ev.id)
       if (v) {
-        enemyVisuals.delete(ev.id)
-        enemyGroupToId.delete(v.group.uuid)
-        enemyAttackT.delete(ev.id)
-        enemyFacing.delete(ev.id)
-        dying.push({ obj: v.group, t0: performance.now(), dur: 380 })
+        dropEnemyVisual(ev.id, v)
+        // 마지막으로 맞은 방향으로 넘어간다 — 죽음이 타격의 결과로 읽히게
+        const h = enemyHit.get(ev.id)
+        startDying(v.group, v.rig.mats, 620, h ? Math.atan2(h.dx, h.dz) : 0)
       }
+      enemyHit.delete(ev.id)
       spawnFlash(new THREE.Vector3(ev.pos.x, 0.8, ev.pos.z), 1.6, 0xff6a4a, 300)
     } else if (ev.type === 'unitDied') {
       const v = unitVisuals.get(ev.id)
       if (v) {
         unitVisuals.delete(ev.id)
         groupToUnitId.delete(v.group.uuid)
-        dying.push({ obj: v.group, t0: performance.now(), dur: 600 })
+        unitAttackT.delete(ev.id)
+        const h = unitHit.get(ev.id)
+        startDying(v.group, v.mats, 800, h ? Math.atan2(h.dx, h.dz) : 0)
       }
+      unitHit.delete(ev.id)
       selected.delete(ev.id)
       spawnFlash(new THREE.Vector3(ev.pos.x, 1.0, ev.pos.z), 1.8, 0xff3a3a, 400)
+      addTrauma(0.18, ev.pos.x, ev.pos.z)
     } else if (ev.type === 'heroSkillCast') {
       spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 8, 0xffa040, 650)
       spawnFlash(new THREE.Vector3(ev.x, 3.6, ev.z), 4.5, 0xfff0c0, 450)
@@ -661,19 +794,33 @@ function handleEvents(events: SiegeEvent[]): void {
       fx.group.position.set(ev.x, 0.1, ev.z)
       scene.add(fx.group)
       fireCols.push({ fx, t0: performance.now(), dur: 1200 })
+      addTrauma(0.75, ev.x, ev.z)
+      // 반경 안 전원이 밖으로 밀려난다 (피해는 sim이 이미 확정)
+      for (const e of state.enemies) {
+        if (Math.hypot(e.pos.x - ev.x, e.pos.z - ev.z) > HERO_SKILL.radius) continue
+        hitEnemy(e.id, e.pos.x - ev.x, e.pos.z - ev.z, 1, 1.2)
+      }
     } else if (ev.type === 'meleeHit') {
       enemyAttackT.set(ev.enemyId, performance.now())
       const u = state.units.find((x) => x.id === ev.unitId)
       const e = state.enemies.find((x) => x.id === ev.enemyId)
       if (u) {
         spawnFlash(new THREE.Vector3(u.pos.x, u.h + 1.1, u.pos.z), 0.9, 0xff5a5a, 200)
+        // 아군 피격 — 괴수가 미는 방향으로 휘청인다
+        const dx = e ? u.pos.x - e.pos.x : -1
+        const dz = e ? u.pos.z - e.pos.z : 0
+        const len = Math.hypot(dx, dz) || 1
+        unitHit.set(ev.unitId, { t0: performance.now(), dx: dx / len, dz: dz / len, heavy: 0.5 })
+        addTrauma(0.12, u.pos.x, u.pos.z)
         // 접전 대상을 바라보게 — sim에 방향 개념이 없으므로 연출 전용
         if (e) enemyFacing.set(ev.enemyId, Math.atan2(u.pos.x - e.pos.x, u.pos.z - e.pos.z))
       }
     } else if (ev.type === 'wallHit') {
       enemyAttackT.set(ev.id, performance.now())
       enemyFacing.set(ev.id, ENEMY_FACE_WEST)
+      wallHitT = performance.now() // HUD 성벽 게이지 반응
       const e = state.enemies.find((x) => x.id === ev.id)
+      if (e) addTrauma(0.16, e.pos.x, e.pos.z) // 성벽이 얻어맞으면 화면이 울린다
       if (e) spawnFlash(new THREE.Vector3(e.pos.x - 0.6, 1.4, e.pos.z), 1.1, 0xffb060, 220)
     }
   }
@@ -686,13 +833,16 @@ function updateFx(now: number): void {
     const t = (now - p.t0) / p.dur
     if (t >= 1) {
       scene.remove(p.mesh)
-      if (p.explode) spawnFlash(p.to.clone(), 3.2, 0xffc070, 380)
+      if (p.explode) {
+        spawnFlash(p.to.clone(), 3.2, 0xffc070, 380)
+        if (!p.hit) impact(p) // 포탄은 터지는 순간이 곧 타격
+      }
       projectiles.splice(i, 1)
       continue
     }
     if (t >= 0.95 && !p.explode && p.mesh.visible) {
-      // 착탄 순간 소형 임팩트 — 명중이 읽히게
-      spawnFlash(p.to.clone(), 0.6, 0xffcaa0, 150)
+      // 착탄 순간 — 명중이 읽히게 (섬광은 표적의 현재 위치에서, 발사 시점 좌표가 아니라)
+      if (!p.hit) impact(p)
       p.mesh.visible = false
     }
     const pos = p.from.clone().lerp(p.to, t)
@@ -753,14 +903,19 @@ function updateFx(now: number): void {
     const t = (now - d.t0) / d.dur
     if (t >= 1) {
       scene.remove(d.obj)
+      disposeTree(d.obj) // 지오메트리·개체 머티리얼 회수 (웨이브마다 수십 기가 죽는다)
       dying.splice(i, 1)
       continue
     }
-    d.obj.rotation.x = -t * 1.2 // 쓰러짐
-    d.obj.position.y -= 0.01
-    d.obj.scale.setScalar(Math.max(0.01, 1 - t * 0.5))
+    // 넘어짐: 초반에 빨리 기울고 바닥에서 멈춘다 (뒤로 젖혀졌다가 무너지는 느낌)
+    const fall = 1 - Math.pow(1 - Math.min(1, t * 1.5), 3)
+    tipQuat.setFromAxisAngle(d.axis, Math.PI * 0.48 * fall)
+    d.obj.quaternion.copy(tipQuat).multiply(d.q0)
+    d.obj.position.y -= 0.008
+    if (t > 0.65) setOpacity(d.mats, 1 - (t - 0.65) / 0.35) // 말미에만 사라진다
   }
 }
+const tipQuat = new THREE.Quaternion()
 
 const occlusionRay = new THREE.Raycaster()
 
@@ -949,7 +1104,7 @@ function updateSelPanel(): void {
 let renderAlpha = 1
 let frameNo = 0
 
-function syncScene(): void {
+function syncScene(now: number): void {
   fadeOccluders(frameNo % 4 === 0)
   frameNo++
   const lx = THREE.MathUtils.lerp(prevLord.x, state.lord.pos.x, renderAlpha)
@@ -968,8 +1123,18 @@ function syncScene(): void {
       scene.add(rig.root)
     }
     const prev = prevEnemies.get(e.id)
-    const ex = prev ? THREE.MathUtils.lerp(prev.x, e.pos.x, renderAlpha) : e.pos.x
-    const ez = prev ? THREE.MathUtils.lerp(prev.z, e.pos.z, renderAlpha) : e.pos.z
+    let ex = prev ? THREE.MathUtils.lerp(prev.x, e.pos.x, renderAlpha) : e.pos.x
+    let ez = prev ? THREE.MathUtils.lerp(prev.z, e.pos.z, renderAlpha) : e.pos.z
+    // 피격 넉백 — 밀렸다 제자리로. sim 좌표는 건드리지 않는다(연출 전용, 결정론 불변)
+    const hit = enemyHit.get(e.id)
+    if (hit) {
+      const q = 1 - (now - hit.t0) / HIT_REACT_MS
+      if (q > 0) {
+        const k = q * q * (0.12 + hit.heavy * 0.42)
+        ex += hit.dx * k
+        ez += hit.dz * k
+      }
+    }
     v.group.position.set(ex, 0, ez)
     // 이동 중엔 서쪽(성벽), 정지 시엔 마지막 접전 방향
     const moving = prev
@@ -980,10 +1145,9 @@ function syncScene(): void {
   for (const [id, v] of enemyVisuals) {
     if (!state.enemies.some((e) => e.id === id)) {
       scene.remove(v.group)
-      enemyGroupToId.delete(v.group.uuid)
-      enemyAttackT.delete(id)
-      enemyFacing.delete(id)
-      enemyVisuals.delete(id)
+      disposeTree(v.group)
+      dropEnemyVisual(id, v)
+      enemyHit.delete(id)
     }
   }
 
@@ -992,9 +1156,17 @@ function syncScene(): void {
   for (const u of state.units) {
     const v = ensureUnitVisual(u)
     const prev = prevUnits.get(u.id)
-    const ux = prev ? THREE.MathUtils.lerp(prev.x, u.pos.x, renderAlpha) : u.pos.x
-    const uz = prev ? THREE.MathUtils.lerp(prev.z, u.pos.z, renderAlpha) : u.pos.z
+    let ux = prev ? THREE.MathUtils.lerp(prev.x, u.pos.x, renderAlpha) : u.pos.x
+    let uz = prev ? THREE.MathUtils.lerp(prev.z, u.pos.z, renderAlpha) : u.pos.z
     const uy = prev ? THREE.MathUtils.lerp(prev.h, u.h, renderAlpha) : u.h
+    const uhit = unitHit.get(u.id)
+    if (uhit) {
+      const q = 1 - (now - uhit.t0) / HIT_REACT_MS
+      if (q > 0) {
+        ux += uhit.dx * q * q * 0.16 // 성벽 위에서도 안전하도록 아주 짧게만 민다
+        uz += uhit.dz * q * q * 0.16
+      }
+    }
     v.group.position.set(ux, uy, uz)
     v.group.rotation.y = u.facing
     if (selected.has(u.id)) {
@@ -1010,8 +1182,11 @@ function syncScene(): void {
   for (const [id, v] of unitVisuals) {
     if (!state.units.some((u) => u.id === id)) {
       scene.remove(v.group)
+      disposeTree(v.group)
       groupToUnitId.delete(v.group.uuid)
       unitVisuals.delete(id)
+      unitAttackT.delete(id)
+      unitHit.delete(id)
       selected.delete(id)
     }
   }
@@ -1021,11 +1196,22 @@ function syncScene(): void {
   // 비스듬한 앵글(약 43°) — 성벽·인물·바위의 수직면이 화면에 실린다
   camera.position.set(target.x, target.y + camDist * 0.82, target.z + camDist * 0.68)
   camera.lookAt(target.x, target.y + 1.0, target.z - 1.5)
+  // 흔들림은 lookAt 뒤에 덧붙인다 — 제곱 감쇠라 큰 충격만 확실히 느껴지고 잔진동은 빨리 사라진다
+  if (trauma > 0.002) {
+    const s = trauma * trauma
+    camera.position.x += Math.sin(now * 0.041) * s * 0.75
+    camera.position.y += Math.sin(now * 0.053 + 1.7) * s * 0.55
+    camera.position.z += Math.sin(now * 0.037 + 3.1) * s * 0.6
+    camera.rotation.z += Math.sin(now * 0.047 + 0.8) * s * 0.02
+  }
 
   // HUD
   document.getElementById('wall')!.textContent = `${state.wallHp}/${WALL_HP}`
-  ;(document.getElementById('wallbar') as HTMLDivElement).style.width =
-    `${(state.wallHp / WALL_HP) * 100}%`
+  const wallBar = document.getElementById('wallbar') as HTMLDivElement
+  wallBar.style.width = `${(state.wallHp / WALL_HP) * 100}%`
+  // 성벽이 맞은 직후엔 게이지가 붉게 튄다 — 부감 시점에서 벽 상태가 눈에 들어오게
+  const wq = 1 - (now - wallHitT) / 260
+  wallBar.style.background = wq > 0 ? `rgb(${Math.round(98 + 157 * wq)},${Math.round(196 - 120 * wq)},98)` : '#62c462'
   const counts = new Map<string, number>()
   for (const u of state.units) counts.set(u.kind, (counts.get(u.kind) ?? 0) + 1)
   document.getElementById('army')!.textContent =
@@ -1139,6 +1325,8 @@ function frame(now: number): void {
     fpsFrames = 0
     fpsT0 = now
   }
+  const dt = Math.min(now - last, 100) / 1000
+  trauma = Math.max(0, trauma - dt * 2.0) // 약 0.5초면 잦아든다
   acc = Math.min(acc + (now - last), STEP_MS * 6)
   last = now
   const frameEvents: SiegeEvent[] = []
@@ -1173,7 +1361,20 @@ function frame(now: number): void {
   animateRig(lordRig, t, state.lord.target !== null)
   for (const u of state.units) {
     const v = unitVisuals.get(u.id)
-    if (v?.rig) animateRig(v.rig, t + u.id * 0.7, u.path.length > 0)
+    if (!v) continue
+    const atk = unitAttackT.get(u.id)
+    const atkMs = atk === undefined ? -1 : now - atk
+    const hit = unitHit.get(u.id)
+    const hitMs = hit ? now - hit.t0 : -1
+    // 병기는 본체가 반동하고, 사람(궁수·영웅·조작병)은 팔이 움직인다
+    if (v.weapon) {
+      animateWeapon(v.weapon, atkMs)
+      if (v.rig) animateRig(v.rig, t + u.id * 0.7, u.path.length > 0, -1, hitMs)
+    } else if (v.rig) {
+      animateRig(v.rig, t + u.id * 0.7, u.path.length > 0, atkMs, hitMs)
+    }
+    setFlash(v.mats, hitMs >= 0 && hitMs < FLASH_MS ? 0.85 * (1 - hitMs / FLASH_MS) : 0)
+    if (hit && now - hit.t0 > HIT_REACT_MS) unitHit.delete(u.id)
   }
   for (const e of state.enemies) {
     const v = enemyVisuals.get(e.id)
@@ -1183,7 +1384,12 @@ function frame(now: number): void {
       ? Math.abs(prev.x - e.pos.x) + Math.abs(prev.z - e.pos.z) > 1e-4
       : true
     const atk = enemyAttackT.get(e.id)
-    animateMonster(v.rig, t + e.id * 0.9, moving, atk === undefined ? -1 : now - atk)
+    const hit = enemyHit.get(e.id)
+    const hitMs = hit ? now - hit.t0 : -1
+    animateMonster(v.rig, t + e.id * 0.9, moving, atk === undefined ? -1 : now - atk, hitMs)
+    // 맞은 순간 하얗게 달아올랐다 식는다 — 부감 거리에서 "맞았다"를 읽게 하는 주력 장치
+    setFlash(v.rig.mats, hitMs >= 0 && hitMs < FLASH_MS ? 0.9 * (1 - hitMs / FLASH_MS) : 0)
+    if (hit && now - hit.t0 > HIT_REACT_MS) enemyHit.delete(e.id)
   }
   for (const f of fires) f.update(t)
   decor.torchLights.forEach((l, i) => {
@@ -1204,7 +1410,7 @@ function frame(now: number): void {
   ap.needsUpdate = true
 
   renderAlpha = Math.min(1, acc / STEP_MS)
-  syncScene()
+  syncScene(now)
   composer.render()
   requestAnimationFrame(frame)
 }
