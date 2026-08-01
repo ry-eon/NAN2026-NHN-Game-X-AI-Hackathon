@@ -55,6 +55,9 @@ renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
 renderer.toneMappingExposure = 1.15
+// 통계는 프레임 단위로 누적한다 — 기본값(autoReset)이면 마지막 포스트 패스만 남아
+// "드로우콜 1"처럼 읽혀서 성능 원인 판별에 쓸 수 없다. 리셋은 frame() 첫머리에서.
+renderer.info.autoReset = false
 document.getElementById('game')!.appendChild(renderer.domElement)
 
 const scene = new THREE.Scene()
@@ -1390,6 +1393,7 @@ function adaptQuality(fps: number, now: number): void {
 }
 
 function frame(now: number): void {
+  renderer.info.reset() // 이 프레임의 드로우콜·삼각형 누적 시작 (계측용)
   fpsFrames++
   if (now - fpsT0 >= 500) {
     const fps = (fpsFrames * 1000) / (now - fpsT0)
@@ -1507,6 +1511,16 @@ requestAnimationFrame(frame)
       renderer.toneMappingExposure = v
     },
   },
+  // 성능 계측 훅 — fps만으로는 원인(드로우콜인지 fill-rate인지)을 못 가른다.
+  perf: (): Record<string, number> => ({
+    calls: renderer.info.render.calls,
+    tris: renderer.info.render.triangles,
+    geometries: renderer.info.memory.geometries,
+    textures: renderer.info.memory.textures,
+    programs: renderer.info.programs?.length ?? 0,
+    resScale,
+    enemies: state.enemies.length,
+  }),
 }
 
 window.addEventListener('resize', () => {
