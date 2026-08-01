@@ -102,19 +102,46 @@ const bloom = new UnrealBloomPass(
   0.9, // threshold
 )
 composer.addPass(bloom)
-// 비네트 (다크소울식 화면 가장자리 침잠)
-const vignette = new ShaderPass({
-  uniforms: { tDiffuse: { value: null }, strength: { value: 0.3 } },
+// 톤 그레이딩 + 비네트 — 기존 비네트 패스를 확장했다. 패스를 늘리지 않는 게 핵심:
+// 전화면 패스 하나가 곧 프레임 비용이라(SSAO를 뺀 이유) 그레이딩은 공짜로 얹는다.
+//
+// 여기는 톤매핑(OutputPass의 ACES) **이전**의 선형 HDR 공간이다. 그래서
+// 화이트밸런스·노출성 조작은 자연스럽게 먹고, 대비는 중간 회색(0.18) 피벗 기준으로 건다.
+// 방향: 그림자는 하늘빛으로 식히고 하이라이트는 햇빛으로 데운다 + 채도를 살짝 빼
+// 돌·금속의 명암이 색보다 먼저 읽히게 (사용자 기준 "다크소울 = 렌더링 퀄리티").
+const grade = new ShaderPass({
+  uniforms: {
+    tDiffuse: { value: null },
+    vignette: { value: 0.3 },
+    // 강도는 A/B 스크린샷으로 고른 중간값 — 더 세게(1.16/0.85) 가면 안뜰이 푸르게 잠겨
+    // "밤 같다"는 기존 반려 사유에 가까워진다. 가독성 우선.
+    contrast: { value: 1.12 },
+    saturation: { value: 0.88 },
+    lift: { value: new THREE.Vector3(0.92, 0.965, 1.1) }, // 그림자 — 푸른 하늘 반사
+    gain: { value: new THREE.Vector3(1.1, 1.0, 0.87) }, // 하이라이트 — 오전 햇살
+  },
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
-  fragmentShader: `uniform sampler2D tDiffuse; uniform float strength; varying vec2 vUv;
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float vignette, contrast, saturation;
+    uniform vec3 lift, gain;
+    varying vec2 vUv;
+    const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
     void main(){
-      vec4 c = texture2D(tDiffuse, vUv);
-      float d = distance(vUv, vec2(0.5));
-      c.rgb *= smoothstep(0.95, 0.42, d * (1.0 + strength));
-      gl_FragColor = c;
+      vec3 c = max(texture2D(tDiffuse, vUv).rgb, 0.0);
+      // 1) 스플릿 톤 — HDR이라 밝기를 0~1로 정규화해서 섞는다
+      float l = dot(c, LUMA);
+      c *= mix(lift, gain, l / (l + 0.35));
+      // 2) 대비 (중간 회색 피벗)
+      c = pow(c / 0.18, vec3(contrast)) * 0.18;
+      // 3) 채도
+      c = mix(vec3(dot(c, LUMA)), c, saturation);
+      // 4) 비네트 — 가장자리를 침잠시켜 시선을 성주 쪽에 묶는다
+      c *= smoothstep(0.95, 0.42, distance(vUv, vec2(0.5)) * (1.0 + vignette));
+      gl_FragColor = vec4(c, 1.0);
     }`,
 })
-composer.addPass(vignette)
+composer.addPass(grade)
 composer.addPass(new OutputPass())
 
 // 성주 — 절차 조형 풀아머 기사 (금장, 검증 슬라이스 v2)
@@ -1471,6 +1498,14 @@ requestAnimationFrame(frame)
     stepSiege(state, spawns, input)
     for (let i = 1; i < n; i++) stepSiege(state, spawns, {})
     snapshotPrev()
+  },
+  // 톤 그레이딩 라이브 조절 — 색감은 말로 합의가 안 되므로 빌드 없이 수치를 만져보는 개발 훅.
+  // 예) __siege.grade.u.saturation.value = 1.0 / __siege.grade.exposure(1.3)
+  grade: {
+    u: grade.uniforms,
+    exposure: (v: number): void => {
+      renderer.toneMappingExposure = v
+    },
   },
 }
 
