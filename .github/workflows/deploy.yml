@@ -1,8 +1,9 @@
-name: Deploy to GitHub Pages
+name: Build & Deploy to GitHub Pages
 
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -15,10 +16,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # 빌드·테스트는 **리포가 private인 동안에도** 돈다.
+  # 이유: 배포 스텝만 조건부로 막아두면 public 전환 후 첫 push가 곧 워크플로의 첫 실행이 된다.
+  # 그때 lockfile·Node 버전·에셋 경로 중 하나라도 어긋나면 제출 링크가 없는 채로 마감을 맞는다.
+  # (2026-08-01 실검증에서 실제로 에셋 절대경로 버그가 나왔다 — Pages 하위 경로에서 전부 404)
   build:
-    # 무료 플랜의 Pages는 public 리포 전용 — private인 동안은 스킵해서 커밋에
-    # 실패(빨간 X)가 안 붙게 한다. public 전환 후 첫 push부터 자동 재개.
-    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,27 +30,43 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
+          # vite 8은 ^20.19 || >=22.12 를 요구한다 (20.x 최신이 설치되므로 충족)
           node-version: 20
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
 
+      # sim 결정론·봇 검증 하네스 단언 — 렌더 없이 도는 것들
+      - run: pnpm test
+
       - run: pnpm build
         env:
-          # Pages는 /<repo>/ 하위 경로에서 서빙 — 리포 이름이 바뀌어도 따라가도록 동적 주입
+          # Pages는 /<repo>/ 하위 경로에서 서빙 — 리포 이름이 바뀌어도 따라가도록 동적 주입.
+          # 코드 쪽은 import.meta.env.BASE_URL로 에셋을 참조해야 한다(절대경로 금지).
           GHPAGES_BASE: /${{ github.event.repository.name }}/
 
+      # 산출물이 실제로 만들어졌는지 — 조용히 빈 dist가 올라가는 사고 방지
+      - name: dist 점검
+        run: |
+          test -f dist/index.html
+          test -d dist/assets/tex/bricks
+          echo "dist 크기: $(du -sh dist | cut -f1)"
+
+      # ---- 여기부터는 public 리포에서만 (무료 플랜 Pages는 public 전용)
       - uses: actions/configure-pages@v5
+        if: ${{ github.event_name != 'pull_request' && !github.event.repository.private }}
         with:
           # 리포에서 Pages를 아직 켜지 않았어도 워크플로가 직접 활성화
           enablement: true
 
       - uses: actions/upload-pages-artifact@v3
+        if: ${{ github.event_name != 'pull_request' && !github.event.repository.private }}
         with:
           path: dist
 
   deploy:
     needs: build
+    if: ${{ github.event_name != 'pull_request' && !github.event.repository.private }}
     runs-on: ubuntu-latest
     environment:
       name: github-pages

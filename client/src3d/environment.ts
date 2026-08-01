@@ -15,6 +15,14 @@ const rand01 = (i: number, salt: number): number =>
 // 충돌·높이 지형과 렌더 지오메트리가 반드시 일치해야 하기 때문.
 export { CASTLE }
 
+// ---------------------------------------------------------------- 에셋 경로
+//
+// GitHub Pages는 `https://<user>.github.io/<repo>/` **하위 경로**에서 서빙된다.
+// `/assets/...`처럼 절대 경로로 요청하면 도메인 루트를 찌르므로 전부 404가 나고,
+// 게임은 텍스처·HDRI·소품 없이 민무늬로 뜬다(제출 링크를 여는 심사자가 그 화면을 본다).
+// Vite가 주입하는 BASE_URL(로컬 '/', CI '/<repo>/')을 붙여 상대적으로 해석되게 한다.
+const asset = (path: string): string => `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`
+
 // ---------------------------------------------------------------- PBR 재질
 
 const texLoader = new THREE.TextureLoader()
@@ -26,7 +34,7 @@ function pbr(
   extra: Partial<THREE.MeshStandardMaterialParameters> = {},
 ): THREE.MeshStandardMaterial {
   const load = (file: string, srgb = false): THREE.Texture => {
-    const t = texLoader.load(`/assets/tex/${name}/${file}.jpg`)
+    const t = texLoader.load(asset(`assets/tex/${name}/${file}.jpg`))
     t.wrapS = THREE.RepeatWrapping
     t.wrapT = THREE.RepeatWrapping
     t.repeat.set(repeatX, repeatY)
@@ -51,7 +59,7 @@ function pbrDisplaced(
   extra: Partial<THREE.MeshStandardMaterialParameters> = {},
 ): THREE.MeshStandardMaterial {
   const mat = pbr(name, repeatX, repeatY, extra)
-  const t = texLoader.load(`/assets/tex/${name}/disp.jpg`)
+  const t = texLoader.load(asset(`assets/tex/${name}/disp.jpg`))
   t.wrapS = THREE.RepeatWrapping
   t.wrapT = THREE.RepeatWrapping
   t.repeat.set(repeatX, repeatY)
@@ -65,7 +73,7 @@ function pbrDisplaced(
 
 export function loadSky(scene: THREE.Scene, renderer: THREE.WebGLRenderer): void {
   // 낮 씬 (2026-07-27 사용자 피드백: "밤이 생각보다 안 보인다 — 낮이 낫겠다")
-  new RGBELoader().load('/assets/hdr/dusk_1k.hdr', (hdr) => {
+  new RGBELoader().load(asset('assets/hdr/dusk_1k.hdr'), (hdr) => {
     hdr.mapping = THREE.EquirectangularReflectionMapping
     scene.environment = hdr // PBR 미세 간접광·반사 디테일용 (강도만 낮 기준으로)
     scene.environmentIntensity = 0.55
@@ -432,7 +440,7 @@ export function buildCastle(scene: THREE.Scene): WorldDecor {
   scene.add(wellRoof)
   {
     const crateLoader = new GLTFLoader()
-    crateLoader.load('/assets/models/wooden_crate_01/wooden_crate_01.gltf', (g) => {
+    crateLoader.load(asset('assets/models/wooden_crate_01/wooden_crate_01.gltf'), (g) => {
       g.scene.traverse((o) => {
         if (o instanceof THREE.Mesh) {
           o.castShadow = true
@@ -622,7 +630,7 @@ export function buildEnvironment(scene: THREE.Scene): void {
     if (Math.abs(z) < 4.5) continue
     rockPlaces.push({ x, z, s: 0.35 + rand01(i, 33) * 0.55, ry: rand01(i, 34) * Math.PI * 2 })
   }
-  scatter('/assets/models/rock_moss_set_01/rock_moss_set_01.gltf', rockPlaces)
+  scatter(asset('assets/models/rock_moss_set_01/rock_moss_set_01.gltf'), rockPlaces)
 
   const treePlaces = []
   for (let i = 0; i < 6; i++) {
@@ -631,5 +639,5 @@ export function buildEnvironment(scene: THREE.Scene): void {
     if (Math.abs(z) < 5) continue
     treePlaces.push({ x, z, s: 0.9 + rand01(i, 43) * 0.6, ry: rand01(i, 44) * Math.PI * 2 })
   }
-  scatter('/assets/models/dead_tree_trunk/dead_tree_trunk.gltf', treePlaces)
+  scatter(asset('assets/models/dead_tree_trunk/dead_tree_trunk.gltf'), treePlaces)
 }
