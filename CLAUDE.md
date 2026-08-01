@@ -16,7 +16,11 @@ AI가 만든 콘텐츠를 봇 시뮬레이션이 검증하여 통과분만 출�
 
 ## 기술 스택 (확정)
 - Three.js + TypeScript + Vite (v5 3D). 레거시 2D는 Phaser 3 (`legacy-2d` 브랜치)
-- 배포: GitHub Pages (심사자가 링크 클릭만으로 플레이) — 리포 private 동안 워크플로 자동 스킵, 제출 전 public 전환
+- 배포: GitHub Pages (심사자가 링크 클릭만으로 플레이). 빌드·테스트는 private인 지금도 매 push마다 돌고, 배포 스텝만 public 전환 후 켜진다
+- **제출 리포 (단일 원천)**: `origin` = https://github.com/ry-eon/NAN2026-NHN-Game-X-AI-Hackathon
+  → Pages 주소: https://ry-eon.github.io/NAN2026-NHN-Game-X-AI-Hackathon/
+  (2026-08-01 확정. 과거 `nan2026-Game-x-AI-Hackathon` 리포에 7/25 단 1회 push된 흔적이 있었으나 미사용 — 로컬 원격에서 제거함.
+  **다른 원격을 추가하지 말 것**; 리포 이름이 곧 Pages 경로라 바뀌면 제출 링크가 바뀐다)
 - 패키지 매니저: pnpm
 - 런타임에 유료 API/라이선스 사용 금지 (심사 요건). AI 생성은 전부 빌드 타임.
 

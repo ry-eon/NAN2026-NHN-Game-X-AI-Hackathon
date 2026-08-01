@@ -154,6 +154,8 @@ core/ bots/ pipeline/  # 레거시 2D (main에도 남아있지만 미사용)
 5. 플레이 영상 30~60초 (실제 플레이 화면만, 합성 불가) → YouTube
 6. 게임 소개서 PDF / AI 활용 기술 문서 PDF (원재료: 이 문서 + docs/logs/*)
 7. 리포 public 전환 + GitHub Pages 확인.
+   **제출 리포**: `origin` = https://github.com/ry-eon/NAN2026-NHN-Game-X-AI-Hackathon
+   → Pages: https://ry-eon.github.io/NAN2026-NHN-Game-X-AI-Hackathon/ (2026-08-01 확정)
    **08-01 실검증 완료분**: 에셋을 `/assets/...` 절대경로로 요청하고 있어 Pages 하위 경로에서
    전량 404가 날 상태였다(민무늬 화면으로 제출될 뻔함) → `import.meta.env.BASE_URL` 기반
    `asset()` 헬퍼로 수정하고, dist를 실제 하위 경로로 서빙해 **리소스 30건 전부 200** 확인.
