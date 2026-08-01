@@ -65,6 +65,52 @@ scene.fog = new THREE.Fog(0xc9d4e2, 75, 235) // 낮 대기 원근 — 지평선�
 
 const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 240)
 
+// ---------------------------------------------------------------- 로딩 화면
+// HDRI·PBR 텍스처·GLTF는 전부 비동기라 씬이 "덜 지어진 채" 먼저 뜬다. 개발기에선 순간이지만
+// 회선이 느리면 검은 들판·민무늬 성벽이 그대로 보인다(제출 링크로 처음 여는 심사자가 그 경우다).
+// 로더 등록보다 먼저 콜백을 걸어야 해서 에셋 호출부(loadSky/buildCastle) 위에 둔다.
+const loadingEl = document.createElement('div')
+loadingEl.style.cssText =
+  'position:fixed;inset:0;z-index:50;background:#0b0d12;color:#c8d0e0;font-family:monospace;' +
+  'display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;transition:opacity .5s'
+loadingEl.innerHTML = `
+  <div style="font-size:15px;letter-spacing:2px;color:#8fa4c8">성을 세우는 중…</div>
+  <div style="width:260px;height:4px;background:#1c2130;border-radius:2px;overflow:hidden">
+    <div id="load-bar" style="height:100%;width:6%;background:#5b7fb8;transition:width .25s"></div>
+  </div>
+  <div id="load-text" style="font-size:11px;color:#5a6478"></div>`
+document.body.appendChild(loadingEl)
+{
+  let started = false
+  let done = false
+  const finish = (): void => {
+    if (done) return
+    done = true
+    loadingEl.style.opacity = '0'
+    setTimeout(() => loadingEl.remove(), 600)
+  }
+  const mgr = THREE.DefaultLoadingManager
+  mgr.onStart = (): void => {
+    started = true
+  }
+  mgr.onProgress = (_url, loaded, total): void => {
+    started = true
+    const pct = Math.max(6, Math.round((loaded / Math.max(1, total)) * 100))
+    ;(document.getElementById('load-bar') as HTMLDivElement).style.width = `${pct}%`
+    document.getElementById('load-text')!.textContent = `${loaded} / ${total}`
+  }
+  mgr.onLoad = finish
+  mgr.onError = (url): void => {
+    // 에셋 하나가 실패해도 게임은 성립한다(절차 생성이 본체) — 로딩 화면에 갇히지 않게
+    console.warn('[load] 실패:', url)
+  }
+  // 안전장치: 로드가 아예 시작되지 않거나(캐시 전량 적중) 에러로 onLoad가 안 뜰 때
+  setTimeout(() => {
+    if (!started) finish()
+  }, 1500)
+  setTimeout(finish, 20000)
+}
+
 loadSky(scene, renderer)
 const hemi = new THREE.HemisphereLight(0xa8c0e0, 0x6b6f62, 1.15)
 scene.add(hemi)
@@ -512,6 +558,11 @@ function triggerSkill(hero: FriendlyUnit): void {
 }
 
 window.addEventListener('keydown', (e) => {
+  // 재시작은 판이 끝난 뒤에만 — 전투 중 오타로 판이 날아가면 안 된다
+  if (e.code === 'KeyR' && (state.status === 'won' || state.status === 'lost')) {
+    resetGame()
+    return
+  }
   if (e.code === 'KeyT') skillAuto = !skillAuto
   if (e.code !== 'KeyE') return
   // 선택 중인 영웅 우선, 없으면 첫 영웅
@@ -575,13 +626,23 @@ hud.innerHTML = `
   </div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
     드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~5</b>: 부대 지정 / <b>1~5</b>: 호출 · 우클릭: 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공
+  </div>
+  <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+       background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
+    <div style="text-align:center">
+      <div id="end-title" style="font-size:34px;font-weight:bold;letter-spacing:4px;margin-bottom:10px"></div>
+      <div id="end-sub" style="font-size:13px;color:#b8c0d0;line-height:1.8;margin-bottom:18px"></div>
+      <div id="end-btn" style="pointer-events:auto;cursor:pointer;display:inline-block;padding:9px 22px;
+           border:1px solid #5b7fb8;border-radius:5px;color:#dce6f5;font-size:14px;background:#16203058">
+        다시 하기 <b>(R)</b></div>
+    </div>
   </div>`
-const startBtn = document.createElement('div')
 document.body.appendChild(hud)
-void startBtn
 
 // ---------------------------------------------------------------- 루프
-const { state, spawns } = createSiege(20260725)
+// 재시작 때 새 판으로 갈아끼우므로 let (모듈 스코프라 아래 클로저들이 새 참조를 그대로 본다)
+const SEED = 20260725
+let { state, spawns } = createSiege(SEED)
 let acc = 0
 let last = performance.now()
 
@@ -1345,6 +1406,22 @@ function syncScene(now: number): void {
         : state.status === 'won'
           ? '성을 지켜냈다!'
           : '성이 함락됐다'
+
+  // 종료 카드 — 결과 요약 + 재시작. 없으면 심사자가 새로고침 말고는 두 번째 판을 못 본다
+  const endcard = document.getElementById('endcard') as HTMLDivElement
+  const ended = state.status === 'won' || state.status === 'lost'
+  if (ended && endcard.style.display === 'none') {
+    const won = state.status === 'won'
+    const title = document.getElementById('end-title')!
+    title.textContent = won ? '성을 지켜냈다' : '성이 함락됐다'
+    title.style.color = won ? '#ffd870' : '#e06a5a'
+    document.getElementById('end-sub')!.innerHTML =
+      `버틴 시간 ${(state.tick / TICKS_PER_SECOND).toFixed(1)}초` +
+      ` · 성벽 ${state.wallHp}/${WALL_HP}<br>생존 병력 ${state.units.length}`
+    endcard.style.display = 'flex'
+  } else if (!ended && endcard.style.display !== 'none') {
+    endcard.style.display = 'none'
+  }
 }
 
 // 렌더 보간용 이전 틱 위치 (30Hz 시뮬 ↔ 60fps+ 렌더의 버벅임 제거)
@@ -1361,6 +1438,71 @@ function snapshotPrev(): void {
   prevUnits.clear()
   for (const u of state.units) prevUnits.set(u.id, { x: u.pos.x, z: u.pos.z, h: u.h })
 }
+
+/**
+ * 재시작 — 같은 시드로 새 판을 만든다.
+ * sim은 `createSiege`로 통째로 새로 만들면 끝이지만(결정론이라 이전 판의 흔적이 남을 수 없다),
+ * 렌더 쪽은 풀·시신·FX·선택 상태가 전부 이전 판의 것이라 여기서 직접 회수해야 한다.
+ * 배경·성채·입자 풀은 판과 무관하므로 그대로 재사용한다(다시 짓지 않는다).
+ */
+function resetGame(): void {
+  for (const [, v] of enemyVisuals) {
+    scene.remove(v.group)
+    disposeTree(v.group)
+  }
+  enemyVisuals.clear()
+  enemyGroupToId.clear()
+  enemyAttackT.clear()
+  enemyFacing.clear()
+  enemyHit.clear()
+  for (const [, v] of unitVisuals) {
+    scene.remove(v.group)
+    disposeTree(v.group)
+  }
+  unitVisuals.clear()
+  groupToUnitId.clear()
+  unitAttackT.clear()
+  unitHit.clear()
+  for (const d of dying) {
+    scene.remove(d.obj)
+    disposeTree(d.obj)
+  }
+  dying.length = 0
+  for (const p of projectiles) scene.remove(p.mesh)
+  projectiles.length = 0
+  for (const f of flashes) scene.remove(f.mesh)
+  flashes.length = 0
+  for (const w of shockwaves) scene.remove(w.mesh)
+  shockwaves.length = 0
+  for (const f of fireCols) scene.remove(f.fx.group)
+  fireCols.length = 0
+  for (const l of tempLights) scene.remove(l.light)
+  tempLights.length = 0
+  for (const [, card] of heroCards) card.root.remove()
+  heroCards.clear()
+  for (const ring of selectionRings) ring.visible = false
+
+  selected.clear()
+  ctrlGroups.clear()
+  inspectedEnemy = null
+  aimingHeroId = null
+  aimReticle.visible = false
+  trauma = 0
+  wallHitT = -1e9
+  spaceLatch = false
+  pendingMove = undefined
+  pendingUnitMove = undefined
+  pendingHeroSkill = undefined
+
+  const fresh = createSiege(SEED)
+  state = fresh.state
+  spawns = fresh.spawns
+  snapshotPrev()
+  acc = 0
+  last = performance.now()
+  document.getElementById('endcard')!.style.display = 'none'
+}
+document.getElementById('end-btn')!.addEventListener('click', resetGame)
 
 let fpsFrames = 0
 let fpsT0 = performance.now()
@@ -1497,7 +1639,11 @@ requestAnimationFrame(frame)
 // 자동 검증 훅 — headless 스크린샷 테스트가 sim을 빨리감기(결정론이라 안전).
 // FX 이벤트는 버리고 상태만 전진한다. 게임 플레이 입력 경로와 무관.
 ;(window as unknown as Record<string, unknown>).__siege = {
-  state,
+  // 게터 — 재시작하면 state가 새 객체로 갈아끼워지므로 스냅샷을 잡아두면 안 된다
+  get state() {
+    return state
+  },
+  restart: resetGame,
   fastForward: (n: number, input: SiegeInput = {}): void => {
     stepSiege(state, spawns, input)
     for (let i = 1; i < n; i++) stepSiege(state, spawns, {})
