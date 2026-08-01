@@ -1511,6 +1511,8 @@ requestAnimationFrame(frame)
       renderer.toneMappingExposure = v
     },
   },
+  // 성능 계측용 핸들 — 그림자 패스/배경/캐릭터의 몫을 따로 끄고 재보기 위해서만 쓴다.
+  dbg: { scene, renderer, sun, composer },
   // 성능 계측 훅 — fps만으로는 원인(드로우콜인지 fill-rate인지)을 못 가른다.
   perf: (): Record<string, number> => ({
     calls: renderer.info.render.calls,

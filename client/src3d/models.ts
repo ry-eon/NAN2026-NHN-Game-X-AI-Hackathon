@@ -3,6 +3,7 @@
 // 기사는 풀헬름으로 얼굴 문제를 회피 — 하드서피스만으로 성립하는 디자인.
 
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 
 // ---------------------------------------------------------------- 재질
 
@@ -43,6 +44,90 @@ export function bevelBox(
   const mesh = new THREE.Mesh(geo, mat)
   mesh.castShadow = true
   return mesh
+}
+
+// ---------------------------------------------------------------- 드로우콜 절감 (정적 부품 병합)
+
+/**
+ * 본 그룹 안의 **정적** 부품들을 머티리얼별 메시 1개로 합친다.
+ *
+ * 왜: 08-01 실플레이 계측에서 병목이 fill-rate가 아니라 **드로우콜**로 판명됐다
+ * (기본 씬만으로 934콜, 전투 중 1240콜, 동적 해상도는 이미 하한). 기사 1기가 메시 ~30개라
+ * 리그 수가 곧 프레임 예산이었다. 애니메이션은 본 그룹(몸통·팔·다리) 단위로 도니까
+ * 그 안쪽은 서로 움직이지 않는다 — 즉 실루엣·동작을 하나도 잃지 않고 합칠 수 있다.
+ *
+ * exclude에는 따로 애니메이션되는 자식(머리·망토·반동 부품)을 넘긴다.
+ * 병합 실패(속성 불일치) 시 원본을 그대로 두므로 모델이 사라지는 일은 없다.
+ */
+function mergeStatic(group: THREE.Group, exclude: THREE.Object3D[] = []): void {
+  const skip = new Set<THREE.Object3D>(exclude)
+  const byMat = new Map<THREE.Material, { geos: THREE.BufferGeometry[]; src: THREE.Mesh[] }>()
+
+  const walk = (o: THREE.Object3D, m: THREE.Matrix4): void => {
+    for (const child of o.children) {
+      if (skip.has(child)) continue
+      child.updateMatrix()
+      const cm = m.clone().multiply(child.matrix)
+      if (child instanceof THREE.Mesh && !Array.isArray(child.material)) {
+        // 인덱스 유무가 섞여 있으면 mergeGeometries가 거부한다 → 전부 비인덱스로 통일
+        const g = child.geometry.index ? child.geometry.toNonIndexed() : child.geometry.clone()
+        // 속성 집합도 통일 (position/normal/uv 외에는 버린다)
+        for (const name of Object.keys(g.attributes)) {
+          if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name)
+        }
+        g.applyMatrix4(cm)
+        g.clearGroups()
+        const mat = child.material as THREE.Material
+        const bucket = byMat.get(mat)
+        if (bucket) {
+          bucket.geos.push(g)
+          bucket.src.push(child)
+        } else {
+          byMat.set(mat, { geos: [g], src: [child] })
+        }
+      } else {
+        walk(child, cm)
+      }
+    }
+  }
+  walk(group, new THREE.Matrix4())
+
+  for (const [mat, { geos, src }] of byMat) {
+    if (geos.length < 2) {
+      geos[0]?.dispose()
+      continue // 혼자면 합칠 게 없다 — 원본 유지
+    }
+    const merged = mergeGeometries(geos, false)
+    geos.forEach((g) => g.dispose())
+    if (!merged) continue // 실패 — 원본을 그대로 둔다
+    for (const s of src) {
+      s.parent?.remove(s)
+      s.geometry.dispose()
+    }
+    const mesh = new THREE.Mesh(merged, mat)
+    // 그림자는 실루엣을 만드는 덩어리만 — 합쳐진 결과가 작으면(활·발톱·가시류) 그림자 패스에서 뺀다.
+    // 그림자 패스가 드로우콜의 절반이라 이 판정이 곧 프레임 예산이다.
+    merged.computeBoundingSphere()
+    mesh.castShadow = (merged.boundingSphere?.radius ?? 1) > 0.3
+    group.add(mesh)
+  }
+  // 부품을 다 내준 빈 그룹은 씬 그래프에서 치운다 (행렬 갱신 비용도 공짜가 아니다)
+  for (const child of [...group.children]) {
+    if (!skip.has(child) && child.type === 'Group' && child.children.length === 0) {
+      group.remove(child)
+    }
+  }
+}
+
+/**
+ * 그림자 캐스터 지정 — 부감 카메라에서 바닥 그림자의 형태를 만드는 건 사실상 몸통·다리다.
+ * 팔·머리·장비까지 그림자 패스에 넣으면 캐릭터 1기당 드로우콜이 배로 든다
+ * (08-01 계측: 그림자 패스가 전체 드로우콜의 45%, 그중 리그가 182/286).
+ */
+function setCast(o: THREE.Object3D, on: boolean): void {
+  o.traverse((c) => {
+    if (c instanceof THREE.Mesh) c.castShadow = on
+  })
 }
 
 // ---------------------------------------------------------------- 개체별 머티리얼 (피격 플래시·소멸 페이드용)
@@ -353,13 +438,25 @@ export function makeKnight(accent = 0x4a1414, gilded = false, archer = false): R
   }
 
   root.add(lLeg, rLeg, torso, lArm, rArm)
-  // 그림자는 실루엣을 만드는 큰 부품만 — 기사 1기당 그림자 패스 드로우콜 절반 이하
+  // 그림자는 실루엣을 만드는 큰 부품만 — 병합 전에 판정해야 부품 크기를 볼 수 있다
   root.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       o.geometry.computeBoundingSphere()
       o.castShadow = (o.geometry.boundingSphere?.radius ?? 1) > 0.16
     }
   })
+  // 본 그룹별 정적 병합 — 망토는 따로 흔들리므로 제외
+  mergeStatic(torso, cloak ? [cloak] : [])
+  mergeStatic(lArm)
+  mergeStatic(rArm)
+  mergeStatic(lLeg)
+  mergeStatic(rLeg)
+  // 그림자는 몸통·다리만 (팔·활·검은 그림자 패스에서 제외)
+  setCast(torso, true)
+  setCast(lLeg, true)
+  setCast(rLeg, true)
+  setCast(lArm, false)
+  setCast(rArm, false)
   return {
     root,
     lArm,
@@ -519,6 +616,8 @@ export function makeCannon(): WeaponRig {
   g.traverse((o) => {
     if (o instanceof THREE.Mesh) o.castShadow = true
   })
+  mergeStatic(g, [recoil]) // 포가·바퀴는 한 덩어리, 포신은 따로 밀린다
+  mergeStatic(recoil)
   return { group: g, recoil, recoilDist: 0.34, reloadMs: 900 }
 }
 
@@ -557,6 +656,8 @@ export function makeBallista(): WeaponRig {
   g.traverse((o) => {
     if (o instanceof THREE.Mesh) o.castShadow = true
   })
+  mergeStatic(g, [recoil]) // 받침대·활대는 한 덩어리, 시위·볼트는 따로 튕긴다
+  mergeStatic(recoil)
   return { group: g, recoil, recoilDist: -0.45, reloadMs: 700 }
 }
 
@@ -956,13 +1057,27 @@ export function makeMonster(kind: string): MonsterRig {
 
   torso.add(head, lArm, rArm)
   root.add(lLeg, rLeg, torso)
-  // 그림자는 실루엣 부품만 — 기사와 동일한 드로우콜 절약 규칙
+  // 그림자는 실루엣 부품만 — 병합 전에 판정 (병합 후엔 부품 크기를 알 수 없다)
   root.traverse((o) => {
     if (o instanceof THREE.Mesh) {
       o.geometry.computeBoundingSphere()
       o.castShadow = (o.geometry.boundingSphere?.radius ?? 1) > 0.16
     }
   })
+  // 본 그룹별 정적 병합 — 머리·팔은 따로 도는 자식이라 제외하고 각자 병합
+  mergeStatic(torso, [head, lArm, rArm])
+  mergeStatic(head)
+  mergeStatic(lArm)
+  mergeStatic(rArm)
+  mergeStatic(lLeg)
+  mergeStatic(rLeg)
+  // 그림자는 몸통·다리만 — 괴수는 덩치가 곧 실루엣이라 팔·머리를 빼도 바닥 그림자는 유지된다
+  setCast(torso, true) // torso 하위(머리·팔)까지 켠 뒤 아래에서 다시 끈다
+  setCast(lLeg, true)
+  setCast(rLeg, true)
+  setCast(head, false)
+  setCast(lArm, false)
+  setCast(rArm, false)
   return {
     root,
     torso,

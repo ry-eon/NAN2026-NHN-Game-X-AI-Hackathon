@@ -585,22 +585,32 @@ export function buildEnvironment(scene: THREE.Scene): void {
     tint?: number,
   ): void => {
     gltf.load(url, (g) => {
+      // 같은 모델을 N번 놓는 것은 인스턴싱의 정확한 용례 — 배치마다 그룹을 복제하면
+      // 부품 수 × 배치 수만큼 드로우콜이 늘어난다 (바위 6부품 × 9곳 = 54콜 + 그림자 54콜).
+      // InstancedMesh로 바꾸면 부품 수만큼(6+6)으로 떨어지고 지오메트리도 한 벌만 쓴다.
+      g.scene.updateMatrixWorld(true)
+      const parts: { geo: THREE.BufferGeometry; mat: THREE.Material; local: THREE.Matrix4 }[] = []
       g.scene.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
-          o.castShadow = true
-          o.receiveShadow = true
-          if (tint) {
-            const m = o.material as THREE.MeshStandardMaterial
-            m.color.multiplyScalar(1)
-            m.color.setHex(tint).multiply(new THREE.Color(1, 1, 1))
-          }
-        }
+        if (!(o instanceof THREE.Mesh) || Array.isArray(o.material)) return
+        const m = o.material as THREE.MeshStandardMaterial
+        if (tint) m.color.setHex(tint)
+        parts.push({ geo: o.geometry, mat: m, local: o.matrixWorld.clone() })
       })
-      for (const p of placements) {
-        const inst = g.scene.clone(true)
-        inst.position.set(p.x, 0, p.z)
-        inst.scale.setScalar(p.s)
-        inst.rotation.y = p.ry
+      const mtx = new THREE.Matrix4()
+      const place = new THREE.Matrix4()
+      const quat = new THREE.Quaternion()
+      const euler = new THREE.Euler()
+      for (const part of parts) {
+        const inst = new THREE.InstancedMesh(part.geo, part.mat, placements.length)
+        inst.castShadow = true
+        inst.receiveShadow = true
+        placements.forEach((p, i) => {
+          euler.set(0, p.ry, 0)
+          quat.setFromEuler(euler)
+          place.compose(new THREE.Vector3(p.x, 0, p.z), quat, new THREE.Vector3(p.s, p.s, p.s))
+          inst.setMatrixAt(i, mtx.multiplyMatrices(place, part.local))
+        })
+        inst.instanceMatrix.needsUpdate = true
         scene.add(inst)
       }
     })
