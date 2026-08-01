@@ -3,10 +3,7 @@
 
 import * as THREE from 'three'
 import {
-  ENEMY_KINDS,
   HERO_SKILL,
-  UNIT_KINDS,
-  WALL_HP,
   createSiege,
   stepSiege,
   TICKS_PER_SECOND,
@@ -816,7 +813,7 @@ function hitEnemy(id: number, dx: number, dz: number, heavy: number, y = 0.9): b
 /** 착탄 — 명중한 괴수(대포는 폭심 반경 전원)에 반응을 준다 */
 function impact(p: Projectile): void {
   p.hit = true
-  const def = UNIT_KINDS[p.kind]
+  const def = state.kinds.units[p.kind]
   const dx = p.to.x - p.from.x
   const dz = p.to.z - p.from.z
   if (def?.aoe) {
@@ -1173,7 +1170,7 @@ function updateHeroBar(): void {
       card = buildHeroCard(h.id, i)
       heroCards.set(h.id, card)
     }
-    const maxHp = UNIT_KINDS.hero!.hp
+    const maxHp = state.kinds.units.hero!.hp
     card.hpText.textContent = `${h.hp}/${maxHp}`
     card.hpBar.style.width = `${Math.max(0, (h.hp / maxHp) * 100)}%`
     card.hpBar.style.background = h.hp / maxHp > 0.35 ? '#62c462' : '#d05050'
@@ -1232,10 +1229,10 @@ function updateSelPanel(): void {
   const counts = new Map<string, number>()
   for (const u of sel) counts.set(u.kind, (counts.get(u.kind) ?? 0) + 1)
   document.getElementById('selcount')!.textContent =
-    `선택 ${sel.length} — ` + [...counts].map(([k, n]) => `${UNIT_KINDS[k]!.name} ${n}`).join(' · ')
+    `선택 ${sel.length} — ` + [...counts].map(([k, n]) => `${state.kinds.units[k]!.name} ${n}`).join(' · ')
   for (const u of sel) {
     const chip = selChips.get(u.id)
-    if (chip) chip.hp.style.width = `${Math.max(0, (u.hp / UNIT_KINDS[u.kind]!.hp) * 100)}%`
+    if (chip) chip.hp.style.width = `${Math.max(0, (u.hp / state.kinds.units[u.kind]!.hp) * 100)}%`
   }
 }
 
@@ -1310,7 +1307,7 @@ function syncScene(now: number): void {
     if (selected.has(u.id)) {
       const ring = getSelectionRing(ringIdx++)
       ring.visible = true
-      const r = UNIT_KINDS[u.kind]!.radius
+      const r = state.kinds.units[u.kind]!.radius
       ring.scale.setScalar(0.8 + r)
       ring.position.set(ux, uy + 0.06, uz)
     }
@@ -1344,16 +1341,16 @@ function syncScene(now: number): void {
   }
 
   // HUD
-  document.getElementById('wall')!.textContent = `${state.wallHp}/${WALL_HP}`
+  document.getElementById('wall')!.textContent = `${state.wallHp}/${state.wallHpMax}`
   const wallBar = document.getElementById('wallbar') as HTMLDivElement
-  wallBar.style.width = `${(state.wallHp / WALL_HP) * 100}%`
+  wallBar.style.width = `${(state.wallHp / state.wallHpMax) * 100}%`
   // 성벽이 맞은 직후엔 게이지가 붉게 튄다 — 부감 시점에서 벽 상태가 눈에 들어오게
   const wq = 1 - (now - wallHitT) / 260
   wallBar.style.background = wq > 0 ? `rgb(${Math.round(98 + 157 * wq)},${Math.round(196 - 120 * wq)},98)` : '#62c462'
   const counts = new Map<string, number>()
   for (const u of state.units) counts.set(u.kind, (counts.get(u.kind) ?? 0) + 1)
   document.getElementById('army')!.textContent =
-    `병력 ${state.units.length} (${[...counts].map(([k, n]) => `${UNIT_KINDS[k]!.name} ${n}`).join(' · ')})` +
+    `병력 ${state.units.length} (${[...counts].map(([k, n]) => `${state.kinds.units[k]!.name} ${n}`).join(' · ')})` +
     (selected.size > 0 ? ` — 선택 ${selected.size}` : '')
 
   updateHeroBar()
@@ -1365,7 +1362,7 @@ function syncScene(now: number): void {
   if (selected.size > 0) {
     const first = state.units.filter((u) => selected.has(u.id)).sort((a, b) => a.id - b.id)[0]
     if (first) {
-      const def = UNIT_KINDS[first.kind]!
+      const def = state.kinds.units[first.kind]!
       document.getElementById('p-name')!.textContent =
         def.name + (selected.size > 1 ? ` 외 ${selected.size - 1}` : '')
       document.getElementById('p-hptext')!.textContent = `HP ${first.hp}/${def.hp}`
@@ -1381,7 +1378,7 @@ function syncScene(now: number): void {
   } else if (inspectedEnemy !== null) {
     const e = state.enemies.find((x) => x.id === inspectedEnemy)
     if (e) {
-      const def = ENEMY_KINDS[e.kind]!
+      const def = state.kinds.enemies[e.kind]!
       document.getElementById('p-name')!.textContent = def.name
       document.getElementById('p-hptext')!.textContent = `HP ${Math.max(0, e.hp)}/${def.hp}`
       ;(document.getElementById('p-hpbar') as HTMLDivElement).style.width =
@@ -1417,7 +1414,7 @@ function syncScene(now: number): void {
     title.style.color = won ? '#ffd870' : '#e06a5a'
     document.getElementById('end-sub')!.innerHTML =
       `버틴 시간 ${(state.tick / TICKS_PER_SECOND).toFixed(1)}초` +
-      ` · 성벽 ${state.wallHp}/${WALL_HP}<br>생존 병력 ${state.units.length}`
+      ` · 성벽 ${state.wallHp}/${state.wallHpMax}<br>생존 병력 ${state.units.length}`
     endcard.style.display = 'flex'
   } else if (!ended && endcard.style.display !== 'none') {
     endcard.style.display = 'none'

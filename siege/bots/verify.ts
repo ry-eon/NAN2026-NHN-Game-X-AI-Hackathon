@@ -17,7 +17,9 @@
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { WALL_HP } from '../sim/world'
+import { DEFAULT_LOADOUT, WALL_HP } from '../sim/world'
+import type { Loadout } from '../sim/world'
+import { LOADOUTS, describeLoadout, findLoadout } from '../sim/loadouts'
 import { POLICIES, afk, greedy, random } from './policy'
 import { playout, replay } from './runner'
 import type { Playout } from './runner'
@@ -41,9 +43,9 @@ export interface SeedVerdict {
   reasons: string[] // 반려 사유 (통과면 빈 배열)
 }
 
-export function verifySeed(seed: number): SeedVerdict {
+export function verifySeed(seed: number, loadout: Loadout = DEFAULT_LOADOUT): SeedVerdict {
   const runs: Record<string, Playout> = {}
-  for (const p of POLICIES) runs[p.name] = playout(seed, p)
+  for (const p of POLICIES) runs[p.name] = playout(seed, p, loadout)
   const a = runs[afk.name]!
   const g = runs[greedy.name]!
   const r = runs[random.name]!
@@ -68,7 +70,7 @@ export function verifySeed(seed: number): SeedVerdict {
   // 리플레이 재현성 — 봇이 남긴 커맨드로 같은 판이 나오지 않으면 검증 자체가 무의미하다
   for (const p of POLICIES) {
     const run = runs[p.name]!
-    const rep = replay(seed, run.commands)
+    const rep = replay(seed, run.commands, loadout)
     if (rep.status !== run.status || rep.ticks !== run.ticks || rep.wallHp !== run.wallHp) {
       reasons.push(`리플레이 불일치 (${p.name}) — 결정론이 깨졌다`)
     }
@@ -124,9 +126,41 @@ function toMarkdown(verdicts: SeedVerdict[]): string {
   return L.join('\n')
 }
 
-export function runVerification(seeds: number[]): { verdicts: SeedVerdict[]; markdown: string } {
-  const verdicts = seeds.map(verifySeed)
+export function runVerification(
+  seeds: number[],
+  loadout: Loadout = DEFAULT_LOADOUT,
+): { verdicts: SeedVerdict[]; markdown: string } {
+  const verdicts = seeds.map((s) => verifySeed(s, loadout))
   return { verdicts, markdown: toMarkdown(verdicts) }
+}
+
+/**
+ * 편성 비교 — 로드아웃 전부를 같은 시드·같은 봇으로 돌려 표로 뽑는다.
+ * "대포를 늘리면 실제로 나아지는가" 같은 기획 질문에 손감이 아니라 판정으로 답하기 위한 도구.
+ */
+export function compareLoadouts(seeds: number[]): string {
+  const L: string[] = []
+  L.push('# 편성 비교')
+  L.push('')
+  L.push(`시드 ${seeds.join(', ')} × 봇 3등급. 같은 웨이브에 편성만 바꿔 돌린 결과.`)
+  L.push('')
+  L.push('| 편성 | 구성 | 봇 | 승률 | 평균 잔존 성벽 | 판정 |')
+  L.push('|---|---|---|---|---|---|')
+  for (const lo of LOADOUTS) {
+    const verdicts = seeds.map((s) => verifySeed(s, lo))
+    for (const p of POLICIES) {
+      const runs = verdicts.map((v) => v.runs[p.name]!)
+      const wins = runs.filter((r) => r.status === 'won').length
+      const avgWall = Math.round(runs.reduce((a, r) => a + r.wallHp, 0) / runs.length)
+      const passed = verdicts.filter((v) => v.pass).length
+      L.push(
+        `| ${lo.name}${lo.name === DEFAULT_LOADOUT.name ? ' (출고)' : ''} | ${describeLoadout(lo)} | ${p.name} | ` +
+          `${wins}/${runs.length} | ${avgWall} | ${p === POLICIES[0] ? `통과 ${passed}/${verdicts.length}` : ''} |`,
+      )
+    }
+  }
+  L.push('')
+  return L.join('\n')
 }
 
 // ---------------------------------------------------------------- CLI
@@ -137,10 +171,24 @@ if (isMain) {
     arg >= 0 && process.argv[arg + 1]
       ? process.argv[arg + 1]!.split(',').map((s) => Number(s.trim()))
       : CANDIDATE_SEEDS
-  const { verdicts, markdown } = runVerification(seeds)
-
   const outDir = resolve(dirname(fileURLToPath(import.meta.url)), '../reports')
   mkdirSync(outDir, { recursive: true })
+
+  // 편성 비교 모드 — 판정 대신 편성별 표를 뽑는다 (기획 시험용)
+  if (process.argv.includes('--compare')) {
+    const md = compareLoadouts(seeds)
+    writeFileSync(resolve(outDir, 'loadouts.md'), md)
+    console.log(md)
+    process.exit(0)
+  }
+
+  const loArg = process.argv.indexOf('--loadout')
+  const loadout = loArg >= 0 ? findLoadout(process.argv[loArg + 1] ?? '') : DEFAULT_LOADOUT
+  if (!loadout) {
+    console.error(`알 수 없는 편성: ${process.argv[loArg + 1]} (가능: ${LOADOUTS.map((l) => l.name).join(', ')})`)
+    process.exit(2)
+  }
+  const { verdicts, markdown } = runVerification(seeds, loadout)
   // 커맨드 시퀀스는 JSON에만 (리포트를 읽는 사람에겐 길이만 있으면 된다)
   writeFileSync(resolve(outDir, 'latest.json'), `${JSON.stringify(verdicts, null, 2)}\n`)
   writeFileSync(resolve(outDir, 'latest.md'), markdown)

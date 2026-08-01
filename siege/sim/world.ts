@@ -323,6 +323,12 @@ export interface SiegeState {
   tick: number
   status: SiegeStatus
   wallHp: number
+  /** 성벽 최대치 — 로드아웃마다 다를 수 있으므로 state가 들고 있는다 (HUD 게이지 기준) */
+  wallHpMax: number
+  /** 이 판의 유닛·몬스터 정의 (로드아웃 주입) — sim도 렌더러도 모듈 상수가 아니라 이걸 본다 */
+  kinds: { units: Record<string, UnitKindDef>; enemies: Record<string, EnemyKindDef> }
+  /** 로드아웃 이름 (리포트·디버그 표시용) */
+  loadout: string
   lord: LordState
   units: FriendlyUnit[]
   enemies: ActiveEnemy[]
@@ -356,56 +362,118 @@ export function mulberry32(seed: number) {
   }
 }
 
-/** 침공 시나리오 — 시드에서 결정론 생성 (후일 파이프라인 생성·검증 대상) */
-export function buildSpawnTable(seed: number): EnemySpawn[] {
+// ---------------------------------------------------------------- 로드아웃 (콘텐츠 데이터)
+//
+// 유닛 정의·몬스터 정의·초기 배치·웨이브 구성을 sim 로직에서 떼어낸 데이터 묶음.
+// 로직을 건드리지 않고 "대포를 늘려본다 / 유닛을 하나 추가한다 / 웨이브를 바꾼다"를 할 수 있어야
+// 기획을 빠르게 시험하고, 그 결과를 봇 검증(`pnpm verify`)이 바로 판정해준다.
+//
+// 규칙: sim 내부는 모듈 상수(UNIT_KINDS/ENEMY_KINDS)를 직접 보지 않고 **state.kinds**를 본다.
+// 그래야 한 프로세스에서 서로 다른 로드아웃을 동시에 돌려 비교할 수 있다(봇 스윕이 그렇게 돈다).
+
+/** 초기 배치 한 자리 */
+export interface UnitPlacement {
+  kind: string
+  x: number
+  z: number
+  h: number
+}
+
+/** 웨이브 한 덩어리 — `count`기를 `at`초부터 `every`초 간격으로 */
+export interface WaveDef {
+  wave: number
+  kind: string
+  count: number
+  at: number // 초
+  every?: number // 초 간격 (기본 0 = 동시)
+  /** z 배치: 숫자면 고정, 생략하면 시드 기반 산개 */
+  z?: number
+  /** 짝수번째만 다른 종류로 (양익 속공처럼 섞을 때) */
+  altKind?: string
+}
+
+export interface Loadout {
+  name: string
+  wallHp: number
+  unitKinds: Record<string, UnitKindDef>
+  enemyKinds: Record<string, EnemyKindDef>
+  placements: UnitPlacement[]
+  waves: WaveDef[]
+}
+
+/** 현재 출고 중인 구성 — 동벽 보도(궁수 6·대포 2), 성문 위 다리(발리스타 2), 지상(영웅 1) */
+export const DEFAULT_LOADOUT: Loadout = {
+  name: 'default',
+  wallHp: WALL_HP,
+  unitKinds: UNIT_KINDS,
+  enemyKinds: ENEMY_KINDS,
+  placements: [
+    ...[-15, -9, -5, 5, 9, 15].map((z) => ({ kind: 'soldier', x: WALL_X, z, h: C.wallH })),
+    { kind: 'cannon', x: WALL_X, z: -12, h: C.wallH },
+    { kind: 'cannon', x: WALL_X, z: 12, h: C.wallH },
+    { kind: 'ballista', x: WALL_X, z: -1.6, h: C.wallH }, // 성문 위 다리
+    { kind: 'ballista', x: WALL_X, z: 1.6, h: C.wallH },
+    { kind: 'hero', x: WALL_X - 6, z: 0, h: 0 }, // 성문 안쪽 지상 — 출격 가능
+  ],
+  waves: [
+    { wave: 1, kind: 'grunt', count: 6, at: 4, every: 2.5 }, // 정찰
+    { wave: 2, kind: 'grunt', altKind: 'runner', count: 7, at: 28, every: 1.6 }, // 양익 속공
+    { wave: 3, kind: 'tank', count: 1, at: 52, z: -4 }, // 중장
+    { wave: 3, kind: 'tank', count: 1, at: 55, z: 6 },
+    { wave: 3, kind: 'grunt', count: 8, at: 54, every: 1.2 }, // 무리
+  ],
+}
+
+/** 침공 시나리오 — 로드아웃의 웨이브 정의 + 시드로 결정론 생성 */
+export function buildSpawnTable(seed: number, waves: WaveDef[] = DEFAULT_LOADOUT.waves): EnemySpawn[] {
   const rand = mulberry32(seed)
   const spawns: EnemySpawn[] = []
-  const zSpread = () => FIELD.minZ + 2 + rand() * (FIELD.maxZ - FIELD.minZ - 4)
-  const sec = (s: number) => Math.round(s * TICKS_PER_SECOND)
-  // W1 정찰 6
-  for (let i = 0; i < 6; i++) spawns.push({ tick: sec(4 + i * 2.5), kind: 'grunt', z: zSpread(), wave: 1 })
-  // W2 양익 속공
-  for (let i = 0; i < 7; i++)
-    spawns.push({ tick: sec(28 + i * 1.6), kind: i % 2 ? 'runner' : 'grunt', z: zSpread(), wave: 2 })
-  // W3 중장 + 무리
-  spawns.push({ tick: sec(52), kind: 'tank', z: -4, wave: 3 })
-  spawns.push({ tick: sec(55), kind: 'tank', z: 6, wave: 3 })
-  for (let i = 0; i < 8; i++) spawns.push({ tick: sec(54 + i * 1.2), kind: 'grunt', z: zSpread(), wave: 3 })
+  const zSpread = (): number => FIELD.minZ + 2 + rand() * (FIELD.maxZ - FIELD.minZ - 4)
+  const sec = (s: number): number => Math.round(s * TICKS_PER_SECOND)
+  for (const w of waves) {
+    for (let i = 0; i < w.count; i++) {
+      const kind = w.altKind && i % 2 ? w.altKind : w.kind
+      spawns.push({
+        tick: sec(w.at + i * (w.every ?? 0)),
+        kind,
+        z: w.z ?? zSpread(),
+        wave: w.wave,
+      })
+    }
+  }
   return spawns.sort((a, b) => a.tick - b.tick)
 }
 
-/** 초기 배치 — 동벽 보도(궁수·대포), 성문 위 다리(발리스타), 지상(영웅). 재배치는 부대 명령으로 */
-function initialUnits(nextId: () => number): FriendlyUnit[] {
-  const mk = (kind: string, x: number, z: number, h: number): FriendlyUnit => ({
+/** 초기 배치를 실제 유닛으로 — 재배치는 부대 명령으로 */
+function initialUnits(loadout: Loadout, nextId: () => number): FriendlyUnit[] {
+  return loadout.placements.map((p) => ({
     id: nextId(),
-    kind,
-    pos: { x, z },
-    h,
-    hp: UNIT_KINDS[kind]!.hp,
+    kind: p.kind,
+    pos: { x: p.x, z: p.z },
+    h: p.h,
+    hp: loadout.unitKinds[p.kind]!.hp,
     facing: Math.PI / 2, // 동쪽(적 방향)을 본다
     target: null,
     path: [],
     cooldown: 0,
     skillCd: 0,
-  })
-  const u: FriendlyUnit[] = []
-  for (const z of [-15, -9, -5, 5, 9, 15]) u.push(mk('soldier', WALL_X, z, C.wallH))
-  u.push(mk('cannon', WALL_X, -12, C.wallH))
-  u.push(mk('cannon', WALL_X, 12, C.wallH))
-  u.push(mk('ballista', WALL_X, -1.6, C.wallH)) // 성문 위 다리
-  u.push(mk('ballista', WALL_X, 1.6, C.wallH))
-  u.push(mk('hero', WALL_X - 6, 0, 0)) // 성문 안쪽 지상 — 출격 가능
-  return u
+  }))
 }
 
-export function createSiege(seed: number): { state: SiegeState; spawns: EnemySpawn[] } {
+export function createSiege(
+  seed: number,
+  loadout: Loadout = DEFAULT_LOADOUT,
+): { state: SiegeState; spawns: EnemySpawn[] } {
   let id = 1
-  const units = initialUnits(() => id++)
+  const units = initialUnits(loadout, () => id++)
   return {
     state: {
       tick: 0,
       status: 'prep',
-      wallHp: WALL_HP,
+      wallHp: loadout.wallHp,
+      wallHpMax: loadout.wallHp,
+      kinds: { units: loadout.unitKinds, enemies: loadout.enemyKinds },
+      loadout: loadout.name,
       lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null, path: [], h: 0 },
       units,
       enemies: [],
@@ -413,7 +481,7 @@ export function createSiege(seed: number): { state: SiegeState; spawns: EnemySpa
       nextId: id,
       events: [],
     },
-    spawns: buildSpawnTable(seed),
+    spawns: buildSpawnTable(seed, loadout.waves),
   }
 }
 
@@ -527,7 +595,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   }
   for (const u of state.units) {
     if (u.skillCd > 0) u.skillCd--
-    stepMover(u, UNIT_KINDS[u.kind]!.speed)
+    stepMover(u, state.kinds.units[u.kind]!.speed)
   }
 
   // 영웅 스킬 「업화」 — 지점 광역. 사거리 밖·쿨다운 중이면 무시 (결정론 검증)
@@ -554,7 +622,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       const a = state.units[i]!
       const b = state.units[j]!
       if (Math.abs(a.h - b.h) > 1.5) continue
-      const minD = UNIT_KINDS[a.kind]!.radius + UNIT_KINDS[b.kind]!.radius + 0.15
+      const minD = state.kinds.units[a.kind]!.radius + state.kinds.units[b.kind]!.radius + 0.15
       let dx = b.pos.x - a.pos.x
       let dz = b.pos.z - a.pos.z
       let d = Math.hypot(dx, dz)
@@ -590,7 +658,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   // 스폰
   while (state.spawnCursor < spawns.length && spawns[state.spawnCursor]!.tick <= state.tick) {
     const s = spawns[state.spawnCursor++]!
-    const def = ENEMY_KINDS[s.kind]!
+    const def = state.kinds.enemies[s.kind]!
     const e: ActiveEnemy = {
       id: state.nextId++,
       kind: s.kind,
@@ -608,7 +676,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   for (const u of state.units) {
     if (u.cooldown > 0) u.cooldown--
     if (u.path.length > 0 || u.cooldown > 0) continue
-    const def = UNIT_KINDS[u.kind]!
+    const def = state.kinds.units[u.kind]!
     const tgt = acquireTarget(u, state.enemies, def.range)
     if (!tgt) continue
     u.facing = Math.atan2(tgt.pos.x - u.pos.x, tgt.pos.z - u.pos.z)
@@ -632,7 +700,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
 
   // 괴수: 지상 아군과 접전 > 성벽 공격 > 성벽으로 직진
   for (const e of state.enemies) {
-    const def = ENEMY_KINDS[e.kind]!
+    const def = state.kinds.enemies[e.kind]!
     if (e.cooldown > 0) e.cooldown--
     // 접전 판정 — 지상(h<1) 아군만 (보도 위는 닿지 못한다)
     let victim: FriendlyUnit | null = null
@@ -640,7 +708,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     for (const u of state.units) {
       if (u.h >= 1) continue
       const d = Math.hypot(u.pos.x - e.pos.x, u.pos.z - e.pos.z)
-      const engage = def.radius + UNIT_KINDS[u.kind]!.radius + 0.9
+      const engage = def.radius + state.kinds.units[u.kind]!.radius + 0.9
       if (d <= engage && d < victimD) {
         victim = u
         victimD = d

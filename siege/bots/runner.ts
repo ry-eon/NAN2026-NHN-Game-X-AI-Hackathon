@@ -4,8 +4,8 @@
 // 누구든 같은 판을 재현할 수 있다 — `replay()`가 그 재현이 실제로 일치하는지 확인한다.
 // "봇이 검증했다"는 주장이 말이 되려면 검증 결과를 다시 돌려볼 수 있어야 한다.
 
-import { TICKS_PER_SECOND, createSiege, mulberry32, stepSiege } from '../sim/world'
-import type { SiegeInput, SiegeStatus } from '../sim/world'
+import { DEFAULT_LOADOUT, TICKS_PER_SECOND, createSiege, mulberry32, stepSiege } from '../sim/world'
+import type { Loadout, SiegeInput, SiegeStatus } from '../sim/world'
 import type { BotPolicy } from './policy'
 
 /**
@@ -25,6 +25,7 @@ export interface Command {
 export interface Playout {
   seed: number
   policy: string
+  loadout: string
   status: SiegeStatus
   ticks: number
   seconds: number
@@ -39,8 +40,13 @@ export interface Playout {
 /** 무한 루프 방지 — 어떤 정책도 이 안에 끝나야 한다 (기준 판이 90초) */
 const MAX_TICKS = TICKS_PER_SECOND * 300
 
-export function playout(seed: number, policy: BotPolicy, botSeed = seed ^ 0x5eed): Playout {
-  const { state, spawns } = createSiege(seed)
+export function playout(
+  seed: number,
+  policy: BotPolicy,
+  loadout: Loadout = DEFAULT_LOADOUT,
+  botSeed = seed ^ 0x5eed,
+): Playout {
+  const { state, spawns } = createSiege(seed, loadout)
   const rand = mulberry32(botSeed)
   const commands: Command[] = []
   let killed = 0
@@ -62,6 +68,7 @@ export function playout(seed: number, policy: BotPolicy, botSeed = seed ^ 0x5eed
   return {
     seed,
     policy: policy.name,
+    loadout: loadout.name,
     status: state.status,
     ticks: state.tick,
     seconds: +(state.tick / TICKS_PER_SECOND).toFixed(1),
@@ -77,8 +84,9 @@ export function playout(seed: number, policy: BotPolicy, botSeed = seed ^ 0x5eed
 export function replay(
   seed: number,
   commands: Command[],
+  loadout: Loadout = DEFAULT_LOADOUT,
 ): { status: SiegeStatus; ticks: number; wallHp: number; unitsAlive: number } {
-  const { state, spawns } = createSiege(seed)
+  const { state, spawns } = createSiege(seed, loadout)
   const byStep = new Map<number, SiegeInput>()
   for (const c of commands) byStep.set(c.step, c.input)
   let step = 0
