@@ -9,6 +9,7 @@
     "build": "pnpm typecheck && vite build",
     "preview": "vite preview",
     "test": "vitest run",
+    "verify": "tsx siege/bots/verify.ts",
     "pipeline": "tsx pipeline/src/run.ts",
     "pipeline:chars": "tsx pipeline/src/run-chars.ts",
     "campaign-sim": "tsx pipeline/src/run-campaign-sim.ts",
