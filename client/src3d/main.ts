@@ -34,6 +34,7 @@ import {
   setOpacity,
 } from './models'
 import type { MonsterRig, Rig, WeaponRig } from './models'
+import { createParticles } from './particles'
 
 const STEP_MS = 1000 / TICKS_PER_SECOND
 
@@ -691,6 +692,9 @@ function spawnProjectile(kind: string, targetId: number, from: THREE.Vector3, to
   })
 }
 
+// 연기·파편 입자 풀 (고정 크기 — 프레임 예산이 늘지 않는다)
+const fx = createParticles(scene)
+
 // ---- 카메라 흔들림 (trauma 모델) — 폭발·충격이 화면으로 전달되게. 전화면 패스가 아니라 비용 0
 let trauma = 0
 /** amount = 0~1, 발생 지점이 화면 중심(성주)에서 멀면 감쇠 */
@@ -726,6 +730,10 @@ function impact(p: Projectile): void {
   const dz = p.to.z - p.from.z
   if (def?.aoe) {
     addTrauma(0.34, p.to.x, p.to.z)
+    // 포탄 착탄 — 흙먼지 기둥 + 파헤쳐진 흙덩이
+    fx.smoke(p.to.x, 0.5, p.to.z, { count: 5, scale: 1.5, rise: 1.6, spread: 0.7, dur: 1300, tint: 0x9a8f7c, opacity: 0.6 })
+    fx.debris(p.to.x, 0.2, p.to.z, { count: 9, speed: 6, kind: 'dirt' })
+    fx.debris(p.to.x, 0.3, p.to.z, { count: 3, speed: 5, kind: 'ember' })
     for (const e of state.enemies) {
       if (Math.hypot(e.pos.x - p.to.x, e.pos.z - p.to.z) > def.aoe) continue
       hitEnemy(e.id, e.pos.x - p.to.x, e.pos.z - p.to.z, 1, 1.1)
@@ -760,6 +768,19 @@ function handleEvents(events: SiegeEvent[]): void {
       if (ev.unitKind === 'cannon') {
         spawnLight(from.clone(), 0xffb060, 40, 300)
         addTrauma(0.3, ev.from.x, ev.from.z) // 대포는 쏠 때부터 화면이 울린다
+        // 포연 — 포구 앞(사격 방향)으로 뭉게뭉게. 성벽 위 대포라 rise는 낮게(보도를 덮지 않게)
+        const mdx = ev.to.x - ev.from.x
+        const mdz = ev.to.z - ev.from.z
+        const mlen = Math.hypot(mdx, mdz) || 1
+        fx.smoke(ev.from.x + (mdx / mlen) * 1.1, from.y, ev.from.z + (mdz / mlen) * 1.1, {
+          count: 4,
+          scale: 1.1,
+          rise: 0.7,
+          spread: 0.4,
+          dur: 1400,
+          tint: 0xa9a49c,
+          opacity: 0.55,
+        })
       }
     } else if (ev.type === 'enemyDied') {
       const v = enemyVisuals.get(ev.id)
@@ -771,6 +792,8 @@ function handleEvents(events: SiegeEvent[]): void {
       }
       enemyHit.delete(ev.id)
       spawnFlash(new THREE.Vector3(ev.pos.x, 0.8, ev.pos.z), 1.6, 0xff6a4a, 300)
+      // 쓰러지며 이는 흙먼지 — 시신이 바닥에 닿는 쪽이라 낮고 넓게
+      fx.smoke(ev.pos.x, 0.3, ev.pos.z, { count: 3, scale: 1, rise: 0.35, spread: 0.6, dur: 900, tint: 0x9c9184, opacity: 0.4 })
     } else if (ev.type === 'unitDied') {
       const v = unitVisuals.get(ev.id)
       if (v) {
@@ -784,17 +807,25 @@ function handleEvents(events: SiegeEvent[]): void {
       selected.delete(ev.id)
       spawnFlash(new THREE.Vector3(ev.pos.x, 1.0, ev.pos.z), 1.8, 0xff3a3a, 400)
       addTrauma(0.18, ev.pos.x, ev.pos.z)
+      // 아군은 성벽 위에서도 죽는다 — 먼지는 그 층 바닥에서 (sim에선 이미 지워진 유닛이라
+      // 마지막 렌더 위치의 y를 쓴다)
+      const uy = v ? v.group.position.y : 0
+      fx.smoke(ev.pos.x, uy + 0.3, ev.pos.z, { count: 3, scale: 0.9, rise: 0.4, spread: 0.5, dur: 850, tint: 0xa8a196, opacity: 0.4 })
     } else if (ev.type === 'heroSkillCast') {
       spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 8, 0xffa040, 650)
       spawnFlash(new THREE.Vector3(ev.x, 3.6, ev.z), 4.5, 0xfff0c0, 450)
       spawnShockwave(ev.x, ev.z, HERO_SKILL.radius + 1.2)
       spawnLight(new THREE.Vector3(ev.x, 2.5, ev.z), 0xff8030, 90, 700)
       // 화염 기둥 — 1.2초간 타오른다
-      const fx = makeFire(2.6)
-      fx.group.position.set(ev.x, 0.1, ev.z)
-      scene.add(fx.group)
-      fireCols.push({ fx, t0: performance.now(), dur: 1200 })
+      const fire = makeFire(2.6)
+      fire.group.position.set(ev.x, 0.1, ev.z)
+      scene.add(fire.group)
+      fireCols.push({ fx: fire, t0: performance.now(), dur: 1200 })
       addTrauma(0.75, ev.x, ev.z)
+      // 업화 뒤에 남는 검은 연기와 튀어오르는 잔해 — 폭심이 오래 읽히게
+      fx.smoke(ev.x, 1.2, ev.z, { count: 6, scale: 2.2, rise: 2.2, spread: 1.6, dur: 2000, tint: 0x6b6259, opacity: 0.5 })
+      fx.debris(ev.x, 0.4, ev.z, { count: 10, speed: 7, kind: 'ember' })
+      fx.debris(ev.x, 0.3, ev.z, { count: 6, speed: 5.5, kind: 'dirt' })
       // 반경 안 전원이 밖으로 밀려난다 (피해는 sim이 이미 확정)
       for (const e of state.enemies) {
         if (Math.hypot(e.pos.x - ev.x, e.pos.z - ev.z) > HERO_SKILL.radius) continue
@@ -812,6 +843,8 @@ function handleEvents(events: SiegeEvent[]): void {
         const len = Math.hypot(dx, dz) || 1
         unitHit.set(ev.unitId, { t0: performance.now(), dx: dx / len, dz: dz / len, heavy: 0.5 })
         addTrauma(0.12, u.pos.x, u.pos.z)
+        // 갑주에 부딪히는 불똥 — 접전이 어디서 벌어지는지 원거리에서도 보이게
+        fx.debris(u.pos.x, u.h + 1.1, u.pos.z, { count: 3, speed: 2.6, kind: 'ember', floorY: u.h })
         // 접전 대상을 바라보게 — sim에 방향 개념이 없으므로 연출 전용
         if (e) enemyFacing.set(ev.enemyId, Math.atan2(u.pos.x - e.pos.x, u.pos.z - e.pos.z))
       }
@@ -820,14 +853,28 @@ function handleEvents(events: SiegeEvent[]): void {
       enemyFacing.set(ev.id, ENEMY_FACE_WEST)
       wallHitT = performance.now() // HUD 성벽 게이지 반응
       const e = state.enemies.find((x) => x.id === ev.id)
-      if (e) addTrauma(0.16, e.pos.x, e.pos.z) // 성벽이 얻어맞으면 화면이 울린다
-      if (e) spawnFlash(new THREE.Vector3(e.pos.x - 0.6, 1.4, e.pos.z), 1.1, 0xffb060, 220)
+      if (e) {
+        addTrauma(0.16, e.pos.x, e.pos.z) // 성벽이 얻어맞으면 화면이 울린다
+        spawnFlash(new THREE.Vector3(e.pos.x - 0.6, 1.4, e.pos.z), 1.1, 0xffb060, 220)
+        // 돌 부스러기가 벽에서 바깥(괴수 쪽)으로 튀고 석분이 인다
+        fx.debris(e.pos.x - 0.7, 1.5, e.pos.z, { count: 4, speed: 3.4, kind: 'stone', dirX: 1 })
+        fx.smoke(e.pos.x - 0.7, 1.5, e.pos.z, {
+          count: 2,
+          scale: 0.75,
+          rise: 0.5,
+          spread: 0.3,
+          dur: 800,
+          tint: 0xbfb8ad,
+          opacity: 0.45,
+        })
+      }
     }
   }
 }
 
 /** FX 갱신 — 매 프레임 */
 function updateFx(now: number): void {
+  fx.update(now)
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const p = projectiles[i]!
     const t = (now - p.t0) / p.dur
