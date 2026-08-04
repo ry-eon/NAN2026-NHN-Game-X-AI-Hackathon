@@ -341,6 +341,33 @@ const aimReticle = new THREE.Group()
   aimReticle.visible = false
   scene.add(aimReticle)
 }
+
+// 고정 병기의 조준선 — 화망이 어디에 그려져 있는지 보이지 않으면 유도 규칙 자체가 안 읽힌다.
+// 선택한 병기에 대해서만 그린다(전부 그리면 화면이 선으로 덮인다).
+const AIM_MAX = 24 // 동시에 그릴 선 개수 상한 = 병기 수 여유
+const aimLineGeo = new THREE.BufferGeometry()
+aimLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(AIM_MAX * 6), 3))
+const aimLines = new THREE.LineSegments(
+  aimLineGeo,
+  new THREE.LineBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.5, depthWrite: false }),
+)
+aimLines.frustumCulled = false
+scene.add(aimLines)
+
+/** 선택된 고정 병기 → 조준점 선분을 갱신 (프레임마다, 할당 없이 버퍼만 덮어쓴다) */
+function updateAimLines(): void {
+  const pos = aimLineGeo.getAttribute('position') as THREE.BufferAttribute
+  let n = 0
+  for (const u of state.units) {
+    if (n >= AIM_MAX || !u.aim || !selected.has(u.id)) continue
+    pos.setXYZ(n * 2, u.pos.x, u.h + 1.2, u.pos.z)
+    pos.setXYZ(n * 2 + 1, u.aim.x, 0.35, u.aim.z)
+    n++
+  }
+  pos.needsUpdate = true
+  aimLineGeo.setDrawRange(0, n * 2)
+  aimLines.visible = n > 0
+}
 let aiming = false
 let aimingHeroId: number | null = null // 수동 조준 중인 영웅
 let skillAuto = true // 자동/수동 토글 (T)
@@ -380,6 +407,7 @@ function pickPoint(clientX: number, clientY: number): { x: number; z: number; h:
 // ---- 스타크래프트식 부대 선택 (좌클릭 드래그) + 명령 (우클릭)
 let pendingMove: { x: number; z: number; h?: number } | undefined
 let pendingUnitMove: { ids: number[]; to: { x: number; z: number; h?: number } } | undefined
+let pendingUnitAim: { ids: number[]; to: { x: number; z: number } } | undefined
 const selected = new Set<number>()
 let inspectedEnemy: number | null = null // 클릭 조사 대상 (상태창)
 let lastClickUnit = -1 // 더블클릭 판정
@@ -412,8 +440,23 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   const p = pickPoint(e.clientX, e.clientY)
   if (!p) return
   if (selected.size > 0) {
-    pendingUnitMove = { ids: [...selected], to: p }
-    showMoveMarker(p.x, p.z, p.h, 0x53d6a2)
+    // 고정 병기(대포·발리스타)는 못 옮긴다 — 같은 우클릭이 **조준 명령**이 된다.
+    // 한 번의 명령으로 둘이 섞여도 각자 맞는 쪽으로 간다.
+    const guns: number[] = []
+    const movers: number[] = []
+    for (const id of selected) {
+      const u = state.units.find((v) => v.id === id)
+      if (!u) continue
+      ;(state.kinds.units[u.kind]?.emplaced ? guns : movers).push(id)
+    }
+    if (guns.length > 0) {
+      pendingUnitAim = { ids: guns, to: { x: p.x, z: p.z } }
+      showMoveMarker(p.x, p.z, p.h, 0xffb347) // 조준은 주황 — 이동(녹색)과 구분
+    }
+    if (movers.length > 0) {
+      pendingUnitMove = { ids: movers, to: p }
+      if (guns.length === 0) showMoveMarker(p.x, p.z, p.h, 0x53d6a2)
+    }
   } else {
     pendingMove = p
     showMoveMarker(p.x, p.z, p.h)
@@ -628,7 +671,7 @@ hud.innerHTML = `
     <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
   </div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~5</b>: 부대 지정 / <b>1~5</b>: 호출 · 우클릭: 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공
+    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~5</b>: 부대 지정 / <b>1~5</b>: 호출 · 우클릭: <b>병기 조준</b> / 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공
   </div>
   <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
        background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
@@ -1498,6 +1541,7 @@ function resetGame(): void {
   spaceLatch = false
   pendingMove = undefined
   pendingUnitMove = undefined
+  pendingUnitAim = undefined
   pendingHeroSkill = undefined
 
   const fresh = createSiege(SEED)
@@ -1573,6 +1617,10 @@ function frame(now: number): void {
       input.unitMove = pendingUnitMove
       pendingUnitMove = undefined
     }
+    if (pendingUnitAim) {
+      input.unitAim = pendingUnitAim
+      pendingUnitAim = undefined
+    }
     if (pendingHeroSkill) {
       input.heroSkill = pendingHeroSkill
       pendingHeroSkill = undefined
@@ -1637,6 +1685,7 @@ function frame(now: number): void {
 
   renderAlpha = Math.min(1, acc / STEP_MS)
   syncScene(now)
+  updateAimLines()
   composer.render()
   requestAnimationFrame(frame)
 }

@@ -45,7 +45,7 @@ describe('봇 러너', () => {
   it('출고 시드는 무개입으로도 방어에 성공한다 (기본 배치가 성립한다)', () => {
     const run = playout(SHIPPING_SEED, afk)
     expect(run.status).toBe('won')
-    expect(run.wallHp).toBe(640) // 2026-08-04: 유도 도입 + 대포 6 + 웨이브 재조정 (500 → 1550 → 640)
+    expect(run.wallHp).toBe(1190) // 2026-08-04: 유도 → 궁수 폐지 → 조준 → 증원·재조정 (500 → 1190)
     expect(run.seconds).toBeGreaterThan(60)
   })
 
@@ -61,12 +61,15 @@ describe('봇 러너', () => {
 })
 
 describe('판정', () => {
-  it('출고 시드 판정이 사유와 함께 나온다', () => {
+  it('출고 시드가 판정을 통과한다', () => {
+    // 2026-08-04: 반려 → **통과**. 이전 단언은 "무작위 조작에서 패배"라는 반려 사유를
+    // 고정하고 있었고, 통과로 바뀌면 먼저 깨지도록 설계돼 있었다 — 그 설계대로 깨져서
+    // 언제 통과하게 됐는지가 커밋에 남았다.
+    // 통과에 이르기까지: 위협 회피 유도 → 궁수 폐지(대포 6) → 대포 고정·조준 지정 →
+    // 병기 증원(8·4) + 개체당 벽 피해 하향·수 증가로 절벽 완화.
     const v = verifySeed(SHIPPING_SEED)
     expect(v.seed).toBe(SHIPPING_SEED)
-    // 현재는 무작위 조작에서 패배해 반려 상태 — 밸런스 조정 전까지 이 단언이 현황을 고정한다.
-    // 통과로 바뀌면 이 테스트가 먼저 깨져서 "언제 통과하게 됐는지"가 커밋에 남는다.
-    expect(v.reasons.some((r) => r.includes('무작위 조작에서 패배'))).toBe(true)
-    expect(v.pass).toBe(false)
+    expect(v.reasons).toEqual([])
+    expect(v.pass).toBe(true)
   })
 })

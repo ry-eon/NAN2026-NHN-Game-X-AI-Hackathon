@@ -59,14 +59,15 @@ export const afk: BotPolicy = {
 // 1차 검증에서 2초마다 재배치하는 greedy가 무개입보다 크게 지는 것으로 이 대가가 드러났다.
 // 아래 두 정책은 그 사실을 반영해 "가끔, 값어치 있을 때만" 움직인다.
 
-// 「위협 회피 유도」 도입(2026-08-04) 이후 적극 플레이의 실체가 바뀌었다.
-// 성벽 위 화력을 쫓아 옮기는 건 오히려 손해다 — 옮기는 동안 사격을 멈추는 데다,
-// 화망을 몰면 다음 웨이브는 그 반대편으로 흐르기 때문에 늘 한 박자 늦게 도착한다.
-// 대신 성벽 위 배치는 고정해 화망을 유지하고, **위협 계산에 잡히지 않는 지상 영웅**을
-// 흐름이 몰리는 쪽으로 옮겨 킬존을 지킨다. 그게 이 설계가 의도한 플레이다.
+// 2026-08-04 두 번 고쳤다. 「위협 회피 유도」로 화력을 쫓아 옮기는 게 손해가 됐고(늘 한 박자 늦다),
+// 이어서 「대포 고정 + 조준」으로 옮기는 것 자체가 불가능해졌다. 이제 손잡이는 둘뿐이다:
+//   - 조준 (화망을 어디에 그리나 = 괴수를 어디로 흘리나)
+//   - 영웅 (위협 계산에 안 잡히는 지상 전력 = 킬존의 실탄)
+const clampWallZ = (z: number): number => Math.max(CASTLE.north + 2, Math.min(CASTLE.south - 2, z))
+
 export const greedy: BotPolicy = {
   name: 'greedy',
-  desc: '화망은 고정한 채, 흐름이 몰리는 구간으로 영웅을 옮겨 업화로 끊는다 — 적극 플레이',
+  desc: '전선 쪽으로 병기를 겨누고, 흐름이 몰리는 구간으로 영웅을 옮겨 업화로 끊는다 — 적극 플레이',
   act(s) {
     if (s.status === 'prep') return { startAssault: true }
     if (s.status !== 'assault') return undefined
@@ -82,29 +83,47 @@ export const greedy: BotPolicy = {
       }
     }
 
-    // 2) 영웅 재배치 — 6초에 한 번, 흐름이 크게 어긋났을 때만. 성벽 안쪽 지상을 따라 움직여
-    //    업화 사거리(18) 안에 전선을 넣는다. 성벽 위 유닛은 건드리지 않는다.
-    if (s.tick % sec(6) !== 0) return undefined
     const tz = threatZ(s)
-    if (tz === null || Math.abs(hero.pos.z - tz) <= 6) return undefined
-    const z = Math.max(CASTLE.north + 2, Math.min(CASTLE.south - 2, tz))
-    return { unitMove: { ids: [hero.id], to: { x: WALL_X - 6, z } } }
+    if (tz === null) return undefined
+
+    // 2) 조준 — 4초에 한 번 전선 쪽으로 화망을 다시 그린다. 이동이 아니라 조준이라 즉시 먹는다.
+    //    전부 한 점에 몰지는 않는다: 몰면 반대편이 완전히 비어 다음 웨이브가 통째로 그리로 흐른다.
+    if (s.tick % sec(4) === 0) {
+      const aimAt = clampWallZ(tz)
+      const stale = s.units.filter((u) => u.aim !== null && Math.abs(u.aim.z - aimAt) > 8)
+      if (stale.length > 0) {
+        const send = stale.slice(0, Math.max(1, Math.ceil(stale.length * 0.6)))
+        return { unitAim: { ids: send.map((u) => u.id), to: { x: WALL_X + 8, z: aimAt } } }
+      }
+    }
+
+    // 3) 영웅 — 성벽 안쪽 지상을 따라 움직여 업화 사거리(18) 안에 전선을 넣는다
+    if (s.tick % sec(6) !== 0) return undefined
+    if (Math.abs(hero.pos.z - tz) <= 6) return undefined
+    return { unitMove: { ids: [hero.id], to: { x: WALL_X - 6, z: clampWallZ(tz) } } }
   },
 }
 
 export const random: BotPolicy = {
   name: 'random',
-  desc: '5초마다 30% 확률로 아무 부대나 성벽 아무 곳으로 보낸다 — 심사자가 대충 만지는 경우',
+  desc: '5초마다 30% 확률로 아무 병기나 엉뚱한 곳에 겨누고 영웅을 아무 데로 보낸다 — 심사자가 대충 만지는 경우',
   act(s, rand) {
     if (s.status === 'prep') return { startAssault: true }
     if (s.status !== 'assault') return undefined
     if (s.tick % sec(5) !== 0) return undefined
     if (rand() > 0.3) return undefined // 계속 만지작대지는 않는다
-    const movable = s.units.filter((u) => u.kind !== 'hero')
-    const ids = movable.filter(() => rand() < 0.5).map((u) => u.id)
-    if (ids.length === 0) return undefined
-    const z = FIELD.minZ + rand() * (FIELD.maxZ - FIELD.minZ)
-    return { unitMove: { ids, to: { x: WALL_X, z, h: CASTLE.wallH } } }
+    // 대포가 고정된 뒤로 "대충 만진다"의 실체는 이동이 아니라 **엉뚱한 조준**이다.
+    // 이동 명령만 무작위로 넣으면 고정 병기가 전부 무시해서 사실상 무개입과 같아진다 —
+    // 그러면 이 봇은 통과하지만 검증은 시늉이 된다. 손잡이가 바뀌면 봇도 따라 바뀌어야 한다.
+    const ids = s.units.filter((u) => u.aim !== null && rand() < 0.5).map((u) => u.id)
+    if (ids.length > 0) {
+      const z = FIELD.minZ + rand() * (FIELD.maxZ - FIELD.minZ)
+      return { unitAim: { ids, to: { x: WALL_X + 4 + rand() * 20, z } } }
+    }
+    const hero = s.units.find((u) => u.kind === 'hero')
+    if (!hero) return undefined
+    const hz = clampWallZ(FIELD.minZ + rand() * (FIELD.maxZ - FIELD.minZ))
+    return { unitMove: { ids: [hero.id], to: { x: WALL_X - 4 - rand() * 8, z: hz } } }
   },
 }
 

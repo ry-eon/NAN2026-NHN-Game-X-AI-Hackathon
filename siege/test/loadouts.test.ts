@@ -13,13 +13,13 @@ import { SHIPPING_SEED } from '../bots/verify'
 
 describe('로드아웃', () => {
   it('기본 로드아웃은 출고 중인 판 그대로다', () => {
-    // 2026-08-04 갱신: 위협 회피 유도 + 궁수 폐지(대포 6) + 웨이브 재조정. 잔존 500 → 640.
+    // 2026-08-04 갱신: 위협 회피 유도 → 궁수 폐지 → 대포 고정·조준 → 병기 증원·웨이브 재조정.
     // 이 수치는 "지금 출고 중인 판"을 고정하는 단언이라, 밸런스를 손대면 여기가 먼저 깨진다.
     const run = playout(SHIPPING_SEED, afk, DEFAULT_LOADOUT)
     expect(run.status).toBe('won')
-    expect(run.wallHp).toBe(640)
-    expect(run.seconds).toBe(94.2)
-    expect(describeLoadout(DEFAULT_LOADOUT)).toBe('대포 6 · 발리스타 2 · 영웅 1')
+    expect(run.wallHp).toBe(1190)
+    expect(run.seconds).toBe(101.8)
+    expect(describeLoadout(DEFAULT_LOADOUT)).toBe('대포 8 · 발리스타 4 · 영웅 1')
   })
 
   it('편성을 주입하면 배치와 결과가 실제로 바뀐다', () => {
@@ -54,7 +54,7 @@ describe('로드아웃', () => {
     const { spawns } = createSiege(SHIPPING_SEED, DEFAULT_LOADOUT)
     const total = DEFAULT_LOADOUT.waves.reduce((n, w) => n + w.count, 0)
     expect(spawns).toHaveLength(total)
-    expect(spawns.filter((s) => s.kind === 'tank')).toHaveLength(2)
+    expect(spawns.filter((s) => s.kind === 'tank')).toHaveLength(5)
     // 시간순 정렬이 보장돼야 스폰 커서가 성립한다
     for (let i = 1; i < spawns.length; i++) expect(spawns[i]!.tick).toBeGreaterThanOrEqual(spawns[i - 1]!.tick)
   })

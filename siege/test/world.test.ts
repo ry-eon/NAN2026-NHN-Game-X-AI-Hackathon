@@ -94,13 +94,35 @@ describe('M2b 전투', () => {
     expect(end.enemies).toHaveLength(0)
   })
 
-  it('부대 명령: 성벽 위 유닛이 계단을 거쳐 지상 목표로 이동한다', () => {
+  it('고정 병기는 옮길 수 없고 조준만 받는다', () => {
+    // 「대포 고정 + 조준」 [확정 2026-08-04]. 이동 명령 한 번이 곧 영구 침묵이던 문제를
+    // 룰 차원에서 없앤다 — 플레이어의 손잡이가 "어디로 옮기나"에서 "어디를 겨누나"로 바뀐다.
     const { state, spawns } = createSiege(SEED)
-    // 계단(동벽 안쪽 z∈±[4.5,15])에 가까운 대포로 — 이동 속도 1.0이라 여유 틱을 크게 준다
-    const unit = state.units.find((u) => u.kind === 'cannon' && u.pos.z === -6)!
+    const gun = state.units.find((u) => u.kind === 'cannon')!
+    const at = { ...gun.pos }
+    stepSiege(state, spawns, { unitMove: { ids: [gun.id], to: { x: -14, z: -8 } } })
+    for (let i = 0; i < 60; i++) stepSiege(state, spawns, {})
+    expect(gun.pos).toEqual(at) // 꿈쩍도 안 한다
+    expect(gun.h).toBe(11)
+    expect(gun.path).toHaveLength(0)
+    // 조준은 즉시 먹는다 (이동 시간이 없다 = 화망을 빠르게 다시 그릴 수 있다)
+    stepSiege(state, spawns, { unitAim: { ids: [gun.id], to: { x: 6, z: -15 } } })
+    expect(gun.aim).toEqual({ x: 6, z: -15 })
+  })
+
+  it('부대 명령: 성벽 위 유닛이 계단을 거쳐 지상 목표로 이동한다', () => {
+    // 이동 가능한 병종(궁수)으로 계단 경유 하강을 확인한다. 출고 편성은 전부 고정 병기라
+    // 이 기능을 쓰지 않지만, 규칙 자체는 살아 있어야 프리셋을 바꿔도 판이 성립한다.
+    const withArcher: Loadout = {
+      ...DEFAULT_LOADOUT,
+      name: 'test-archer',
+      placements: [{ kind: 'soldier', x: CASTLE.east, z: -8, h: CASTLE.wallH }, ...DEFAULT_LOADOUT.placements],
+    }
+    const { state, spawns } = createSiege(SEED, withArcher)
+    const unit = state.units.find((u) => u.kind === 'soldier')!
     expect(unit.h).toBe(11)
     stepSiege(state, spawns, { unitMove: { ids: [unit.id], to: { x: -14, z: -8 } } })
-    for (let i = 0; i < 4000 && unit.path.length > 0; i++) stepSiege(state, spawns, {})
+    for (let i = 0; i < 1200 && unit.path.length > 0; i++) stepSiege(state, spawns, {})
     expect(unit.h).toBe(0)
     expect(Math.hypot(unit.pos.x - -14, unit.pos.z - -8)).toBeLessThan(2.5)
   })
@@ -133,7 +155,8 @@ describe('M2b 전투', () => {
     state.units = []
     stepSiege(state, spawns, { startAssault: true })
     for (let i = 0; i < 30 * 40; i++) stepSiege(state, spawns, {})
-    const atWall = state.enemies.filter((e) => e.atWall)
+    // 회절 레인으로 북/남벽에 붙은 개체는 동벽 기준으로 재면 안 된다 (자기가 치는 면으로 판정)
+    const atWall = state.enemies.filter((e) => e.atWall && SEGMENTS[e.seg]!.face === 'east')
     expect(atWall.length).toBeGreaterThan(0)
     for (const e of atWall) {
       expect(e.pos.x).toBeGreaterThanOrEqual(outerFace + ENEMY_KINDS[e.kind]!.radius)
@@ -153,8 +176,9 @@ describe('M2b 전투', () => {
     // 생존 편향이 끼어서 유도 자체의 세기를 측정할 수 없다.
     const countSouth = (clusterZ: number): { south: number; far: number; near: number } => {
       const { state, spawns } = createSiege(SEED, manyGrunts)
-      // 성벽 위 유닛을 전부 한쪽으로 — 지상 유닛(영웅)은 그대로 둔다
-      for (const u of state.units) if (u.h >= 1) u.pos.z = clusterZ
+      // 성벽 위 병기를 전부 한쪽으로 **겨눈다** — 대포는 고정이라 화망은 조준으로만 그린다
+      const ids = state.units.filter((u) => u.h >= 1).map((u) => u.id)
+      stepSiege(state, spawns, { unitAim: { ids, to: { x: 4, z: clusterZ } } })
       stepSiege(state, spawns, { startAssault: true })
       const seen = new Map<number, number>()
       for (let i = 0; i < 30 * 12; i++) {
@@ -182,8 +206,9 @@ describe('M2b 전투', () => {
     for (let i = 0; i < 30 * 6; i++) stepSiege(state, spawns, {})
     const before = state.enemies.map((e) => [e.id, e.seg] as const)
     expect(before.length).toBeGreaterThan(0)
-    // 성벽 위 유닛을 전부 한쪽 끝으로 몰아도 이미 달려든 무리는 목표를 안 바꾼다
-    for (const u of state.units) if (u.h >= 1) u.pos.z = -16
+    // 화망을 한쪽 끝으로 다시 그려도 이미 달려든 무리는 목표를 안 바꾼다
+    const wallIds = state.units.filter((u) => u.h >= 1).map((u) => u.id)
+    stepSiege(state, spawns, { unitAim: { ids: wallIds, to: { x: 4, z: -16 } } })
     for (let i = 0; i < 30 * 5; i++) stepSiege(state, spawns, {})
     for (const [id, seg] of before) {
       const e = state.enemies.find((x) => x.id === id)

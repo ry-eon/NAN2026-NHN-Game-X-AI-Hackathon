@@ -249,19 +249,24 @@ export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
   // 되살아난 병사 — 생전의 기억으로 화망을 제대로 피한다. 유도가 가장 잘 먹히는 표준 개체
   grunt: {
     kind: 'grunt', name: '야귀', hp: 660, dmg: 70, atkInterval: 1.5, speed: 2.4, radius: 0.55,
-    wallDamage: 60, threatAvoidance: 1.0, flankBias: 0.25,
+    wallDamage: 21, threatAvoidance: 1.0, flankBias: 0.25,
   },
   // 되살린 짐승 — 겁이 많아 회피 폭이 크고, 크게 돌아 모서리로 파고든다
   runner: {
     kind: 'runner', name: '질주귀', hp: 300, dmg: 50, atkInterval: 1.0, speed: 4.6, radius: 0.45,
-    wallDamage: 40, threatAvoidance: 1.6, flankBias: 0.9,
+    wallDamage: 14, threatAvoidance: 1.6, flankBias: 0.9,
   },
   // 속이 빈 판금 갑옷 — 두려움이 없다. 화망을 무시하고 정면으로 밀고 온다
   tank: {
     kind: 'tank', name: '갑주귀', hp: 2050, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 0.8,
-    wallDamage: 130, threatAvoidance: 0, flankBias: 0.05,
+    wallDamage: 46, threatAvoidance: 0, flankBias: 0.05,
   },
 }
+// 개체당 벽 피해는 2026-08-04에 크게 낮췄다(60/40/130 → 21/14/46). 대신 수를 34 → 62로 늘렸다.
+// 이유는 절벽이다: 성벽 HP가 공유 풀이라 벽에 붙은 수가 임계를 넘으면 초당 800+ 피해로
+// 한순간에 무너졌고, 그래서 웨이브를 조금만 올려도 판정이 통째로 뒤집혔다(51기 4/6 → 61기 0/6).
+// 개체를 약하게·수를 많게 바꾸자 성벽이 완만하게 깎여 플레이어가 판단할 시간이 생겼고,
+// 그제서야 "일부러 한 구간을 비우는" 유도 도박이 성립한다.
 
 export interface ActiveEnemy {
   id: number
@@ -322,13 +327,27 @@ export const SEGMENTS: ApproachSegment[] = (() => {
   return out
 })()
 
-/** 이 구간에 도달했을 때 나를 쏠 수 있는 성벽 위 화력의 합 (dps). 지상 유닛은 세지 않는다 */
+/**
+ * 이 구간을 겨누고 있는 성벽 위 화력의 합 (dps) = 괴수가 읽는 위협.
+ *
+ * 두 가지를 세지 않는다:
+ *  - 지상 유닛 (가시성 규칙) — 안뜰·성문 안쪽은 괴수에게 보이지 않는다. 그래서 킬존이 성립한다.
+ *  - **조준이 다른 곳을 향한 병기** — 대포가 고정된 뒤로 화망을 그리는 수단은 조준뿐이다.
+ *    포구가 북쪽을 향하면 북쪽이 위험해지고, 괴수는 남쪽으로 흐른다.
+ *
+ * 조준의 영향은 벽면을 따라가는 **가로 거리**로 잰다 — 동쪽 멀리를 겨눠도 z가 맞으면
+ * 그 구간을 덮고 있는 것이다(포구가 향한 방향이 곧 위협).
+ */
 function segmentThreat(state: SiegeState, seg: ApproachSegment): number {
   let dps = 0
   for (const u of state.units) {
-    if (u.h < 1) continue // 가시성 규칙 — 안뜰·성문 안쪽은 괴수에게 보이지 않는다
+    if (u.h < 1) continue
     const def = state.kinds.units[u.kind]!
     if (Math.hypot(u.pos.x - seg.probe.x, u.pos.z - seg.probe.z) > def.range) continue
+    if (u.aim && def.aimRadius) {
+      const lateral = seg.face === 'east' ? Math.abs(u.aim.z - seg.probe.z) : Math.abs(u.aim.x - seg.probe.x)
+      if (lateral > def.aimRadius) continue
+    }
     dps += def.dmg / def.atkInterval
   }
   return dps
@@ -378,12 +397,26 @@ export interface UnitKindDef {
   radius: number
   /** 폭발 반경 — 지정 시 착탄점 주변 광역 피해 (대포) */
   aoe?: number
+  /**
+   * 고정 병기 — 옮길 수 없고 **조준만** 지정한다 (기획 확정 2026-08-04, §4-3).
+   * 이동 명령 한 번이 곧 영구 침묵이던 문제(무작위 조작 0/6)를 룰 차원에서 없앤다.
+   * 플레이어의 개입 수단은 "어디로 옮기나"에서 "어디를 겨누나"로 바뀐다.
+   */
+  emplaced?: boolean
+  /** 조준점 주변 이 반경 안의 적을 우선 노린다 (없으면 사거리 내 최근접으로 폴백) */
+  aimRadius?: number
 }
 
 export const UNIT_KINDS: Record<string, UnitKindDef> = {
   soldier: { kind: 'soldier', name: '궁수', hp: 260, dmg: 33, atkInterval: 1.3, range: 14, speed: 3.5, radius: 0.4 },
-  ballista: { kind: 'ballista', name: '발리스타', hp: 420, dmg: 200, atkInterval: 2.8, range: 21, speed: 1.2, radius: 0.8 },
-  cannon: { kind: 'cannon', name: '대포', hp: 500, dmg: 140, atkInterval: 3.8, range: 24, speed: 1.0, radius: 0.9, aoe: 2.8 },
+  ballista: {
+    kind: 'ballista', name: '발리스타', hp: 420, dmg: 200, atkInterval: 2.8, range: 21, speed: 1.2,
+    radius: 0.8, emplaced: true, aimRadius: 7,
+  },
+  cannon: {
+    kind: 'cannon', name: '대포', hp: 500, dmg: 140, atkInterval: 3.8, range: 24, speed: 1.0,
+    radius: 0.9, aoe: 2.8, emplaced: true, aimRadius: 9,
+  },
   hero: { kind: 'hero', name: '영웅', hp: 900, dmg: 110, atkInterval: 0.9, range: 13, speed: HERO_SPEED, radius: 0.5 },
 }
 
@@ -399,6 +432,8 @@ export interface FriendlyUnit {
   cooldown: number // 틱
   /** 영웅 전용 — 스킬 남은 쿨다운 (틱) */
   skillCd: number
+  /** 고정 병기 전용 — 겨누고 있는 지점. 화망의 실체이자 괴수가 읽는 위협의 출처 */
+  aim: Vec2 | null
 }
 
 /** 영웅 스킬 「업화」 — 지점 지정 광역 화염. 조준(자동/수동)은 클라이언트 보조,
@@ -424,6 +459,8 @@ export interface SiegeInput {
   moveTo?: Vec2 & { h?: number }
   /** 부대 이동 명령 (스타크래프트식 선택 → 우클릭). 대형은 sim이 결정론으로 분산 */
   unitMove?: { ids: number[]; to: Vec2 & { h?: number } }
+  /** 고정 병기 조준 명령 — 옮기는 대신 겨눈다. 이게 화망을 그리는 유일한 수단이다 */
+  unitAim?: { ids: number[]; to: Vec2 }
   /** 영웅 스킬 시전 지점 — 사거리·쿨다운은 sim이 검증. heroId 생략 시 첫 영웅 (다영웅 대비) */
   heroSkill?: Vec2 & { heroId?: number }
   /** 준비 종료 → 침공 개시 */
@@ -528,20 +565,24 @@ export const DEFAULT_LOADOUT: Loadout = {
   wallHp: WALL_HP,
   unitKinds: UNIT_KINDS,
   enemyKinds: ENEMY_KINDS,
+  // 증원 [2026-08-04]: 병기 8 → 12. "성을 지키기엔 대포와 발리스타가 너무 적다"(사용자).
+  // 북/남벽에 발리스타를 둔 게 핵심이다 — 모서리 회절 레인이 그전까지 완전 무방비였다.
   placements: [
-    ...[-18, -12, -6, 6, 12, 18].map((z) => ({ kind: 'cannon', x: WALL_X, z, h: C.wallH })),
+    ...[-18, -13, -8, -3, 3, 8, 13, 18].map((z) => ({ kind: 'cannon', x: WALL_X, z, h: C.wallH })),
     { kind: 'ballista', x: WALL_X, z: -1.6, h: C.wallH }, // 성문 위 다리
     { kind: 'ballista', x: WALL_X, z: 1.6, h: C.wallH },
+    { kind: 'ballista', x: -14, z: C.north, h: C.wallH }, // 북벽 동쪽 끝 — 회절 레인 대응
+    { kind: 'ballista', x: -14, z: C.south, h: C.wallH }, // 남벽 동쪽 끝
     { kind: 'hero', x: WALL_X - 6, z: 0, h: 0 }, // 성문 안쪽 지상 — 출격 가능
   ],
   // 난이도 재조정 [2026-08-04]. 유도 도입 + 대포 6으로 무개입이 너무 쉬워졌다(잔존 1550 > 상한 1400).
   // 봇 스윕으로 후보 11종을 돌려 고른 구성 — 무개입 6/6·여유 대역 6/6·개입 보상 6/6, 평균 93초.
   // 웨이브 성격도 언데드 서사에 맞췄다: 짐승 무리가 먼저 밀려오고, 그 뒤에 갑옷과 병사가 온다.
   waves: [
-    { wave: 1, kind: 'grunt', count: 8, at: 4, every: 2.2 }, // 정찰 — 되살아난 병사들
-    { wave: 2, kind: 'runner', count: 10, at: 26, every: 1.0 }, // 짐승 무리 (회절 레인으로 크게 돈다)
-    { wave: 3, kind: 'tank', count: 2, at: 50, every: 3 }, // 중장 — 빈 갑옷
-    { wave: 3, kind: 'grunt', altKind: 'runner', count: 14, at: 52, every: 0.9 }, // 본대
+    { wave: 1, kind: 'grunt', count: 14, at: 4, every: 1.8 }, // 정찰 — 되살아난 병사들
+    { wave: 2, kind: 'runner', count: 18, at: 26, every: 0.8 }, // 짐승 무리 (회절 레인으로 크게 돈다)
+    { wave: 3, kind: 'tank', count: 5, at: 50, every: 2.5 }, // 중장 — 빈 갑옷
+    { wave: 3, kind: 'grunt', altKind: 'runner', count: 25, at: 52, every: 0.6 }, // 본대
   ],
 }
 
@@ -567,18 +608,25 @@ export function buildSpawnTable(seed: number, waves: WaveDef[] = DEFAULT_LOADOUT
 
 /** 초기 배치를 실제 유닛으로 — 재배치는 부대 명령으로 */
 function initialUnits(loadout: Loadout, nextId: () => number): FriendlyUnit[] {
-  return loadout.placements.map((p) => ({
-    id: nextId(),
-    kind: p.kind,
-    pos: { x: p.x, z: p.z },
-    h: p.h,
-    hp: loadout.unitKinds[p.kind]!.hp,
-    facing: Math.PI / 2, // 동쪽(적 방향)을 본다
-    target: null,
-    path: [],
-    cooldown: 0,
-    skillCd: 0,
-  }))
+  return loadout.placements.map((p) => {
+    const def = loadout.unitKinds[p.kind]!
+    return {
+      id: nextId(),
+      kind: p.kind,
+      pos: { x: p.x, z: p.z },
+      h: p.h,
+      hp: def.hp,
+      facing: Math.PI / 2, // 동쪽(적 방향)을 본다
+      target: null,
+      path: [],
+      cooldown: 0,
+      skillCd: 0,
+      // 초기값은 **자동 조준**(null = 사거리 내 최근접). 플레이어가 겨눠야 비로소 화망이
+      // 좁아지고 흐름이 생긴다. 처음부터 좁게 겨눈 상태로 시작하면 손대지 않은 판이
+      // 성립하지 않아서(무개입 0/6으로 측정됨) "조준은 선택적 개선"이라는 전제가 깨진다.
+      aim: null,
+    }
+  })
 }
 
 export function createSiege(
@@ -679,17 +727,30 @@ const FORMATION: [number, number][] = [
 ]
 
 /** 사거리 내 최근접 적 (동거리 → 낮은 id — 결정론) */
-function acquireTarget(u: FriendlyUnit, enemies: ActiveEnemy[], range: number): ActiveEnemy | null {
-  let best: ActiveEnemy | null = null
-  let bestD = Infinity
-  for (const e of enemies) {
-    const d = Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z)
-    if (d <= range && (d < bestD || (d === bestD && best !== null && e.id < best.id))) {
-      best = e
-      bestD = d
+/**
+ * 표적 선택. 고정 병기는 **조준점 근처를 우선**하고, 거기에 아무도 없으면 사거리 내 최근접으로
+ * 폴백한다. 완전 침묵시키지 않는 이유: 그러면 "한 번의 잘못된 명령이 곧 패배"라는,
+ * 이동 규칙에서 막 걷어낸 문제가 조준으로 되살아난다. 빗나간 조준은 손해지 사형이 아니다.
+ */
+function acquireTarget(u: FriendlyUnit, enemies: ActiveEnemy[], def: UnitKindDef): ActiveEnemy | null {
+  const pick = (near: Vec2, limit: number): ActiveEnemy | null => {
+    let best: ActiveEnemy | null = null
+    let bestD = Infinity
+    for (const e of enemies) {
+      if (Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z) > def.range) continue // 사거리는 절대 조건
+      const d = Math.hypot(e.pos.x - near.x, e.pos.z - near.z)
+      if (d <= limit && (d < bestD || (d === bestD && best !== null && e.id < best.id))) {
+        best = e
+        bestD = d
+      }
     }
+    return best
   }
-  return best
+  if (u.aim && def.aimRadius) {
+    const aimed = pick(u.aim, def.aimRadius)
+    if (aimed) return aimed
+  }
+  return pick(u.pos, def.range)
 }
 
 /** 고정 1틱 전진. 결정론 — 입력 외 외부 상태 없음 */
@@ -710,9 +771,21 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     for (const id of ids) {
       const u = state.units.find((v) => v.id === id)
       if (!u) continue
+      if (state.kinds.units[u.kind]!.emplaced) continue // 고정 병기는 못 옮긴다 — 조준만
       const off = FORMATION[Math.min(slot, FORMATION.length - 1)]!
       commandMove(u, { x: to.x + off[0], z: to.z + off[1] }, to.h ?? 0)
       slot++
+    }
+  }
+
+  // 조준 — 고정 병기에만. 즉시 반영되고 이동 시간이 없다(그래서 화망을 다시 그리는 게 빠르다)
+  if (input.unitAim) {
+    const to = input.unitAim.to
+    for (const id of [...input.unitAim.ids].sort((a, b) => a - b)) {
+      const u = state.units.find((v) => v.id === id)
+      if (!u || !state.kinds.units[u.kind]!.emplaced) continue
+      u.aim = { x: to.x, z: to.z }
+      u.facing = Math.atan2(to.x - u.pos.x, to.z - u.pos.z)
     }
   }
   for (const u of state.units) {
@@ -807,7 +880,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     if (u.cooldown > 0) u.cooldown--
     if (u.path.length > 0 || u.cooldown > 0) continue
     const def = state.kinds.units[u.kind]!
-    const tgt = acquireTarget(u, state.enemies, def.range)
+    const tgt = acquireTarget(u, state.enemies, def)
     if (!tgt) continue
     u.facing = Math.atan2(tgt.pos.x - u.pos.x, tgt.pos.z - u.pos.z)
     u.cooldown = Math.round(def.atkInterval * TICKS_PER_SECOND)
