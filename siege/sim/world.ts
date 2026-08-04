@@ -534,12 +534,14 @@ export const DEFAULT_LOADOUT: Loadout = {
     { kind: 'ballista', x: WALL_X, z: 1.6, h: C.wallH },
     { kind: 'hero', x: WALL_X - 6, z: 0, h: 0 }, // 성문 안쪽 지상 — 출격 가능
   ],
+  // 난이도 재조정 [2026-08-04]. 유도 도입 + 대포 6으로 무개입이 너무 쉬워졌다(잔존 1550 > 상한 1400).
+  // 봇 스윕으로 후보 11종을 돌려 고른 구성 — 무개입 6/6·여유 대역 6/6·개입 보상 6/6, 평균 93초.
+  // 웨이브 성격도 언데드 서사에 맞췄다: 짐승 무리가 먼저 밀려오고, 그 뒤에 갑옷과 병사가 온다.
   waves: [
-    { wave: 1, kind: 'grunt', count: 6, at: 4, every: 2.5 }, // 정찰
-    { wave: 2, kind: 'grunt', altKind: 'runner', count: 7, at: 28, every: 1.6 }, // 양익 속공
-    { wave: 3, kind: 'tank', count: 1, at: 52, z: -4 }, // 중장
-    { wave: 3, kind: 'tank', count: 1, at: 55, z: 6 },
-    { wave: 3, kind: 'grunt', count: 8, at: 54, every: 1.2 }, // 무리
+    { wave: 1, kind: 'grunt', count: 8, at: 4, every: 2.2 }, // 정찰 — 되살아난 병사들
+    { wave: 2, kind: 'runner', count: 10, at: 26, every: 1.0 }, // 짐승 무리 (회절 레인으로 크게 돈다)
+    { wave: 3, kind: 'tank', count: 2, at: 50, every: 3 }, // 중장 — 빈 갑옷
+    { wave: 3, kind: 'grunt', altKind: 'runner', count: 14, at: 52, every: 0.9 }, // 본대
   ],
 }
 
