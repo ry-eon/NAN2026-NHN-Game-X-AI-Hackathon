@@ -826,7 +826,13 @@ const ballMat = new THREE.MeshBasicMaterial({ color: 0x1a1a20 })
 const slashMat = new THREE.MeshBasicMaterial({ color: 0xffd070, transparent: true, opacity: 0.9 })
 
 /** 발사 연출 — 병종별 궤적. 피해는 sim이 이미 적용했으므로 여긴 그림뿐 */
-function spawnProjectile(kind: string, targetId: number, from: THREE.Vector3, to: THREE.Vector3): void {
+function spawnProjectile(
+  kind: string,
+  targetId: number,
+  from: THREE.Vector3,
+  to: THREE.Vector3,
+  flightMs = 0,
+): void {
   const spec =
     kind === 'cannon'
       ? { geo: ballGeo, mat: ballMat, dur: 480, arc: 4.2, explode: true }
@@ -835,6 +841,9 @@ function spawnProjectile(kind: string, targetId: number, from: THREE.Vector3, to
         : kind === 'hero'
           ? { geo: slashGeo, mat: slashMat, dur: 200, arc: 0.6, explode: false }
           : { geo: arrowGeo, mat: projMat, dur: 260, arc: 1.6, explode: false }
+  // sim이 비행 시간을 확정한 병기는 그 시간에 맞춘다 — 연출이 sim보다 먼저·나중에
+  // 터지면 "보이는 것"과 "일어난 일"이 어긋난다 (이 프로젝트에서 그건 버그다)
+  if (flightMs > 0) spec.dur = flightMs
   const mesh = new THREE.Mesh(spec.geo, spec.mat)
   mesh.position.copy(from)
   scene.add(mesh)
@@ -921,7 +930,7 @@ function handleEvents(events: SiegeEvent[]): void {
   for (const ev of events) {
     if (ev.type === 'unitFired') {
       const from = new THREE.Vector3(ev.from.x, ev.from.h + (MUZZLE_H[ev.unitKind] ?? 1), ev.from.z)
-      spawnProjectile(ev.unitKind, ev.targetId, from, new THREE.Vector3(ev.to.x, 0.7, ev.to.z))
+      spawnProjectile(ev.unitKind, ev.targetId, from, new THREE.Vector3(ev.to.x, 0.7, ev.to.z), (ev.flight / TICKS_PER_SECOND) * 1000)
       // 발사 섬광 — 어디서 쏘는지 읽히게 (대포는 크게)
       spawnFlash(from.clone(), ev.unitKind === 'cannon' ? 2.4 : 0.8, 0xffdf9a, 200)
       unitAttackT.set(ev.unitId, performance.now()) // 사격 모션·병기 반동

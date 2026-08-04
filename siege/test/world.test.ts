@@ -251,6 +251,48 @@ describe('M2b 전투', () => {
     }
   })
 
+  describe('투사체 비행', () => {
+    it('포탄은 날아가는 동안 피해가 없고, 도착해서야 터진다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const gun = state.units.find((u) => u.kind === 'cannon')!
+      state.units = [gun]
+      // 정지한 표적 — 예측이 개입하지 않게
+      const tgt = placeEnemy(state, 'grunt', gun.pos.x + 14, gun.pos.z, 660)
+      tgt.atWall = true
+      gun.cooldown = 0
+      stepSiege(state, spawns, {})
+      const fired = state.events.find((e) => e.type === 'unitFired')
+      expect(fired && fired.type === 'unitFired' && fired.flight).toBeGreaterThan(1)
+      expect(tgt.hp).toBe(660) // 아직 안 맞았다
+      expect(state.shots).toHaveLength(1)
+      const flight = state.shots[0]!.flight
+      for (let i = 0; i < flight - 1; i++) stepSiege(state, spawns, {})
+      expect(tgt.hp).toBe(660) // 비행 중에는 여전히 무사하다
+      stepSiege(state, spawns, {})
+      expect(tgt.hp).toBeLessThan(660) // 착탄
+      expect(state.shots).toHaveLength(0)
+      expect(state.events.some((e) => e.type === 'shotLanded')).toBe(true)
+    })
+
+    it('발사 시점의 지점에 터진다 — 비켜선 개체는 흘린다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const gun = state.units.find((u) => u.kind === 'ballista')!
+      state.units = [gun]
+      const tgt = placeEnemy(state, 'grunt', gun.pos.x + 12, gun.pos.z, 660)
+      tgt.atWall = true
+      gun.cooldown = 0
+      stepSiege(state, spawns, {})
+      expect(state.shots).toHaveLength(1)
+      // 날아가는 동안 표적을 착탄점 밖으로 순간이동시킨다
+      const flight = state.shots[0]!.flight // 착탄하면 배열이 비므로 먼저 잡아둔다
+      tgt.pos.x += 9
+      for (let i = 0; i < flight + 1; i++) stepSiege(state, spawns, {})
+      expect(tgt.hp).toBe(660) // 헛맞았다
+    })
+  })
+
   describe('성문 돌파', () => {
     /** 성벽 위 병기를 전부 한쪽 끝으로 겨눠 성문 화망을 비운다 */
     const run = (emptyGate: boolean) => {

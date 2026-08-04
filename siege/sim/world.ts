@@ -309,6 +309,24 @@ export interface ActiveEnemy {
   mode: 'wall' | 'breach'
 }
 
+/**
+ * 비행 중인 투사체. **발사 지점이 아니라 착탄 지점이 확정돼 있다** —
+ * 발사 순간의 표적 위치로 날아가므로, 그 사이 움직인 개체는 흘린다.
+ */
+export interface Projectile {
+  id: number
+  unitKind: string
+  from: Vec2 & { h: number }
+  to: Vec2
+  /** 이 틱에 착탄한다 */
+  hitTick: number
+  /** 비행 총 길이 (틱) — 렌더러가 보간에 쓴다 */
+  flight: number
+  dmg: number
+  /** 광역 반경. 없으면 착탄점 근처 1기만 */
+  aoe?: number
+}
+
 /** 쓰러진 자리 — 네크로맨서가 다시 세울 수 있는 대상. 되살아나면 소모된다 */
 export interface Corpse {
   kind: string
@@ -438,18 +456,29 @@ export interface UnitKindDef {
   emplaced?: boolean
   /** 조준점 주변 이 반경 안의 적을 우선 노린다 (없으면 사거리 내 최근접으로 폴백) */
   aimRadius?: number
+  /**
+   * 투사체 속도 (유닛/초). 지정하면 **히트스캔이 아니라 비행**한다 —
+   * 발사 시점의 표적 위치로 날아가고, 도착해서야 피해가 들어간다.
+   * 그래서 빠른 개체는 포탄을 흘릴 수 있고, 대포는 예측 사격이 필요해진다.
+   */
+  projectileSpeed?: number
 }
 
 export const UNIT_KINDS: Record<string, UnitKindDef> = {
   soldier: { kind: 'soldier', name: '궁수', hp: 260, dmg: 33, atkInterval: 1.3, range: 14, speed: 3.5, radius: 0.4 },
   ballista: {
-    kind: 'ballista', name: '발리스타', hp: 420, dmg: 200, atkInterval: 2.8, range: 21, speed: 1.2,
+    kind: 'ballista', name: '발리스타', hp: 420, dmg: 260, atkInterval: 2.8, range: 21, speed: 1.2,
     radius: 0.8, emplaced: true, aimRadius: 7,
+    projectileSpeed: 46, // 볼트 — 빠르지만 즉시는 아니다
   },
   cannon: {
-    kind: 'cannon', name: '대포', hp: 500, dmg: 140, atkInterval: 3.8, range: 24, speed: 1.0,
+    kind: 'cannon', name: '대포', hp: 500, dmg: 182, atkInterval: 3.8, range: 24, speed: 1.0,
     radius: 0.9, aoe: 2.8, emplaced: true, aimRadius: 9,
+    projectileSpeed: 22, // 포탄 — 느리다. 최대 사거리에서 1초 넘게 난다
   },
+  // 피해 상향은 비행 도입의 대가다. 실측 명중률 65% — 35%가 빗나가므로 그만큼 화력이 준다.
+  // 속도로 우겨 히트스캔에 가깝게 만드는 대신, **맞으면 무겁게** 해서 상쇄했다(×1.3).
+  // 대포 140 → 182, 발리스타 200 → 260.
   hero: { kind: 'hero', name: '영웅', hp: 900, dmg: 110, atkInterval: 0.9, range: 13, speed: HERO_SPEED, radius: 0.5 },
 }
 
@@ -517,6 +546,8 @@ export interface SiegeState {
   enemies: ActiveEnemy[]
   /** 아직 삭지 않은 시체 — 네크로맨서의 재료 */
   corpses: Corpse[]
+  /** 비행 중인 투사체 (히트스캔이 아닌 병기) */
+  shots: Projectile[]
   spawnCursor: number
   nextId: number
   /** 이번 틱 이벤트 (렌더러 소비) */
@@ -526,7 +557,17 @@ export interface SiegeState {
 export type SiegeEvent =
   | { type: 'spawned'; id: number; kind: string; wave: number }
   | { type: 'wallHit'; id: number; damage: number; wallHp: number }
-  | { type: 'unitFired'; unitId: number; unitKind: string; targetId: number; from: Vec2 & { h: number }; to: Vec2 }
+  | {
+      type: 'unitFired'
+      unitId: number
+      unitKind: string
+      targetId: number
+      from: Vec2 & { h: number }
+      to: Vec2
+      /** 비행 틱 수. 0이면 히트스캔(즉시 명중) — 렌더러가 궤적 길이를 여기에 맞춘다 */
+      flight: number
+    }
+  | { type: 'shotLanded'; x: number; z: number; unitKind: string; aoe?: number }
   | { type: 'heroSkillCast'; x: number; z: number }
   | { type: 'meleeHit'; enemyId: number; unitId: number }
   | { type: 'enemyDied'; id: number; kind: string; pos: Vec2 }
@@ -687,6 +728,7 @@ export function createSiege(
       units,
       enemies: [],
       corpses: [],
+      shots: [],
       spawnCursor: 0,
       nextId: id,
       events: [],
@@ -857,6 +899,30 @@ function wantsBreach(state: SiegeState, def: EnemyKindDef, id: number): boolean 
   return hashRand(state.seed ^ 0x5bf03635, id) < def.breach! * slack
 }
 
+/** 개체의 현재 속도 벡터 (유닛/초). 벽에 붙었거나 목표가 없으면 0 */
+function enemyVelocity(state: SiegeState, e: ActiveEnemy): Vec2 {
+  if (e.atWall) return { x: 0, z: 0 }
+  const wp = e.via ?? e.aim
+  const dx = wp.x - e.pos.x
+  const dz = wp.z - e.pos.z
+  const d = Math.hypot(dx, dz)
+  if (d < 1e-4) return { x: 0, z: 0 }
+  const sp = state.kinds.enemies[e.kind]!.speed
+  return { x: (dx / d) * sp, z: (dz / d) * sp }
+}
+
+/** 예측 사격 — 포탄이 도착할 시점의 표적 위치. 고정점 반복 2회면 수렴한다 */
+function leadTarget(state: SiegeState, from: Vec2, tgt: ActiveEnemy, projSpeed: number): Vec2 {
+  const v = enemyVelocity(state, tgt)
+  let t = Math.hypot(tgt.pos.x - from.x, tgt.pos.z - from.z) / projSpeed
+  for (let i = 0; i < 2; i++) {
+    const px = tgt.pos.x + v.x * t
+    const pz = tgt.pos.z + v.z * t
+    t = Math.hypot(px - from.x, pz - from.z) / projSpeed
+  }
+  return { x: tgt.pos.x + v.x * t, z: tgt.pos.z + v.z * t }
+}
+
 /** 안뜰에서 쫓을 지상 아군 (결정론 — 거리 동률이면 id 순) */
 function nearestGround(state: SiegeState, e: ActiveEnemy): FriendlyUnit | null {
   let best: FriendlyUnit | null = null
@@ -985,7 +1051,36 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     state.events.push({ type: 'spawned', id: e.id, kind: e.kind, wave: e.wave })
   }
 
-  // 아군 사격 — 정지 상태에서만 (이동 중 발사 불가). 히트스캔: 피해는 즉시, 투사체는 연출
+  // 착탄 처리 — 이번 틱에 도착한 포탄. 발사 시점의 지점에 터지므로 그 사이 움직인 개체는 흘린다
+  if (state.shots.length > 0) {
+    const landed = state.shots.filter((p) => p.hitTick <= state.tick)
+    if (landed.length > 0) {
+      state.shots = state.shots.filter((p) => p.hitTick > state.tick)
+      for (const p of landed) {
+        if (p.aoe) {
+          for (const e of state.enemies) {
+            if (Math.hypot(e.pos.x - p.to.x, e.pos.z - p.to.z) <= p.aoe) e.hp -= p.dmg
+          }
+        } else {
+          // 단일 표적 — 착탄점에 가장 가까운 1기만. 비켜섰으면 헛맞는다
+          let best: ActiveEnemy | null = null
+          let bestD = Infinity
+          for (const e of state.enemies) {
+            const d = Math.hypot(e.pos.x - p.to.x, e.pos.z - p.to.z)
+            const reach = state.kinds.enemies[e.kind]!.radius + 0.5
+            if (d <= reach && (d < bestD || (d === bestD && best !== null && e.id < best.id))) {
+              best = e
+              bestD = d
+            }
+          }
+          if (best) best.hp -= p.dmg
+        }
+        state.events.push({ type: 'shotLanded', x: p.to.x, z: p.to.z, unitKind: p.unitKind, aoe: p.aoe })
+      }
+    }
+  }
+
+  // 아군 사격 — 정지 상태에서만 (이동 중 발사 불가)
   for (const u of state.units) {
     if (u.cooldown > 0) u.cooldown--
     if (u.path.length > 0 || u.cooldown > 0) continue
@@ -994,9 +1089,28 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     if (!tgt) continue
     u.facing = Math.atan2(tgt.pos.x - u.pos.x, tgt.pos.z - u.pos.z)
     u.cooldown = Math.round(def.atkInterval * TICKS_PER_SECOND)
-    if (def.aoe) {
+    let to = { x: tgt.pos.x, z: tgt.pos.z }
+    let flight = 0
+    if (def.projectileSpeed) {
+      // 비행 — 도착할 때까지 피해가 없다. 표적의 **현재 위치**로 쏘면 항상 뒤에 떨어지므로
+      // (실측: 전 시드 패배) 포수처럼 예측해서 쏜다. 두 번 되풀이하면 충분히 수렴한다.
+      // 직진하는 개체는 맞고, **방향을 트는 개체는 흘린다** — 그게 이 규칙이 만드는 차이다.
+      to = leadTarget(state, u.pos, tgt, def.projectileSpeed)
+      const d = Math.hypot(to.x - u.pos.x, to.z - u.pos.z)
+      flight = Math.max(1, Math.round((d / def.projectileSpeed) * TICKS_PER_SECOND))
+      state.shots.push({
+        id: state.nextId++,
+        unitKind: u.kind,
+        from: { x: u.pos.x, z: u.pos.z, h: u.h },
+        to,
+        hitTick: state.tick + flight,
+        flight,
+        dmg: def.dmg,
+        aoe: def.aoe,
+      })
+    } else if (def.aoe) {
       for (const e of state.enemies) {
-        if (Math.hypot(e.pos.x - tgt.pos.x, e.pos.z - tgt.pos.z) <= def.aoe) e.hp -= def.dmg
+        if (Math.hypot(e.pos.x - to.x, e.pos.z - to.z) <= def.aoe) e.hp -= def.dmg
       }
     } else {
       tgt.hp -= def.dmg
@@ -1007,7 +1121,8 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       unitKind: u.kind,
       targetId: tgt.id,
       from: { x: u.pos.x, z: u.pos.z, h: u.h },
-      to: { x: tgt.pos.x, z: tgt.pos.z },
+      to,
+      flight,
     })
   }
 
