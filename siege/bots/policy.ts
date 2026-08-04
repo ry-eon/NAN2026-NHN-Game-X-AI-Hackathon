@@ -39,7 +39,8 @@ function threatZ(state: SiegeState): number | null {
   let wsum = 0
   let w = 0
   for (const e of state.enemies) {
-    const closeness = Math.max(0, 1 - (e.pos.x - WALL_X) / 30) // 벽에 가까울수록 1
+    // 벽에 가까울수록 1. 회절 레인으로 돌아 벽보다 서쪽에 선 적이 과대평가되지 않게 상한을 둔다
+    const closeness = Math.min(1, Math.max(0, 1 - (e.pos.x - WALL_X) / 30))
     if (closeness <= 0) continue
     wsum += e.pos.z * closeness
     w += closeness
@@ -58,33 +59,36 @@ export const afk: BotPolicy = {
 // 1차 검증에서 2초마다 재배치하는 greedy가 무개입보다 크게 지는 것으로 이 대가가 드러났다.
 // 아래 두 정책은 그 사실을 반영해 "가끔, 값어치 있을 때만" 움직인다.
 
+// 「위협 회피 유도」 도입(2026-08-04) 이후 적극 플레이의 실체가 바뀌었다.
+// 성벽 위 화력을 쫓아 옮기는 건 오히려 손해다 — 옮기는 동안 사격을 멈추는 데다,
+// 화망을 몰면 다음 웨이브는 그 반대편으로 흐르기 때문에 늘 한 박자 늦게 도착한다.
+// 대신 성벽 위 배치는 고정해 화망을 유지하고, **위협 계산에 잡히지 않는 지상 영웅**을
+// 흐름이 몰리는 쪽으로 옮겨 킬존을 지킨다. 그게 이 설계가 의도한 플레이다.
 export const greedy: BotPolicy = {
   name: 'greedy',
-  desc: '영웅 스킬을 밀집점에 쓰고, 전선이 크게 쏠릴 때만 궁수를 옮긴다 — 적극 플레이',
+  desc: '화망은 고정한 채, 흐름이 몰리는 구간으로 영웅을 옮겨 업화로 끊는다 — 적극 플레이',
   act(s) {
     if (s.status === 'prep') return { startAssault: true }
     if (s.status !== 'assault') return undefined
 
-    // 1) 스킬 — 쿨이 돌고 반경 안에 2기 이상 몰렸을 때만 (한 마리에 쓰면 낭비)
     const hero = s.units.find((u) => u.kind === 'hero')
-    if (hero && hero.skillCd === 0 && s.enemies.length > 0) {
+    if (!hero) return undefined
+
+    // 1) 스킬 — 쿨이 돌고 반경 안에 2기 이상 몰렸을 때만 (한 마리에 쓰면 낭비)
+    if (hero.skillCd === 0 && s.enemies.length > 0) {
       const spot = densestPoint(s, HERO_SKILL.radius)
       if (spot && spot.n >= 2 && dist(hero.pos, spot) <= HERO_SKILL.range) {
         return { heroSkill: { x: spot.x, z: spot.z, heroId: hero.id } }
       }
     }
 
-    // 2) 재배치 — 8초에 한 번, 그것도 정말 멀리 떨어진 궁수만. 사격을 멈출 값어치가 있어야 한다.
-    //    (전부 한 점에 모으지 않는다 — 겹치면 사거리 밖 구간이 그대로 비어버린다)
-    if (s.tick % sec(8) !== 0) return undefined
+    // 2) 영웅 재배치 — 6초에 한 번, 흐름이 크게 어긋났을 때만. 성벽 안쪽 지상을 따라 움직여
+    //    업화 사거리(18) 안에 전선을 넣는다. 성벽 위 유닛은 건드리지 않는다.
+    if (s.tick % sec(6) !== 0) return undefined
     const tz = threatZ(s)
-    if (tz === null) return undefined
-    const archers = s.units.filter((u) => u.kind === 'soldier')
-    const far = archers.filter((u) => Math.abs(u.pos.z - tz) > 12)
-    if (far.length === 0) return undefined
-    // 절반만 보낸다 — 나머지는 계속 쏜다
-    const send = far.slice(0, Math.max(1, Math.floor(far.length / 2)))
-    return { unitMove: { ids: send.map((u) => u.id), to: { x: WALL_X, z: tz, h: CASTLE.wallH } } }
+    if (tz === null || Math.abs(hero.pos.z - tz) <= 6) return undefined
+    const z = Math.max(CASTLE.north + 2, Math.min(CASTLE.south - 2, tz))
+    return { unitMove: { ids: [hero.id], to: { x: WALL_X - 6, z } } }
   },
 }
 

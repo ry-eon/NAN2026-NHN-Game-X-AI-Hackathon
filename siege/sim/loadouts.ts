@@ -30,12 +30,14 @@ const CANNON_HEAVY: Loadout = {
   ],
 }
 
-/** 대포만 — 축을 끝까지 밀어본 대조군 (광역 화력의 상한을 본다) */
-const CANNON_ONLY: Loadout = {
+/** 폐지된 구 출고 편성 — 궁수를 뺀 결정이 옳았는지 계속 재는 대조군 (2026-08-04까지 출고) */
+const MIXED_LINE: Loadout = {
   ...DEFAULT_LOADOUT,
-  name: 'cannon-only',
+  name: 'mixed-line',
   placements: [
-    ...[-18, -12, -6, 6, 12, 18].map((z) => at('cannon', z)),
+    ...[-15, -9, -5, 5, 9, 15].map((z) => at('soldier', z)),
+    at('cannon', -12),
+    at('cannon', 12),
     at('ballista', -1.6),
     at('ballista', 1.6),
     hero,
@@ -61,7 +63,7 @@ const THICK_WALL: Loadout = {
   wallHp: 3000,
 }
 
-export const LOADOUTS: Loadout[] = [DEFAULT_LOADOUT, CANNON_HEAVY, CANNON_ONLY, ARCHER_LINE, THICK_WALL]
+export const LOADOUTS: Loadout[] = [DEFAULT_LOADOUT, CANNON_HEAVY, MIXED_LINE, ARCHER_LINE, THICK_WALL]
 
 export function findLoadout(name: string): Loadout | undefined {
   return LOADOUTS.find((l) => l.name === name)

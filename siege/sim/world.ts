@@ -8,7 +8,8 @@ export const TICKS_PER_SECOND = 30
 const DT = 1 / TICKS_PER_SECOND
 
 // ---------------------------------------------------------------- 월드 상수 [초안]
-export const FIELD = { minX: -34, maxX: 42, minZ: -22, maxZ: 22 }
+// z 폭은 성벽(±18)보다 넓어야 한다 — 모서리를 돌아 북/남벽을 치는 회절 레인의 통로.
+export const FIELD = { minX: -34, maxX: 42, minZ: -30, maxZ: 30 }
 /** 성벽 평면 x — 이 서쪽이 성 내부 */
 export const WALL_X = -6
 export const WALL_HP = 2000
@@ -237,12 +238,29 @@ export interface EnemyKindDef {
   speed: number // 유닛/초
   radius: number
   wallDamage: number
+  /** 위협 회피 성향 — 0이면 화망을 무시하고 온다, 클수록 빈 구간으로 흐른다 */
+  threatAvoidance: number
+  /** 모서리 회절 레인(북/남벽) 선호도 — 1이 동벽 정면과 동등, 0이면 절대 안 돈다 */
+  flankBias: number
 }
 
+// 언데드 군세 — 네크로맨서가 일으킨 것들 (기획 확정 2026-08-04, docs/02-game-design.md §4-2)
 export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
-  grunt: { kind: 'grunt', name: '야귀', hp: 660, dmg: 70, atkInterval: 1.5, speed: 2.4, radius: 0.55, wallDamage: 60 },
-  runner: { kind: 'runner', name: '질주귀', hp: 300, dmg: 50, atkInterval: 1.0, speed: 4.6, radius: 0.45, wallDamage: 40 },
-  tank: { kind: 'tank', name: '갑주귀', hp: 2050, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 0.8, wallDamage: 130 },
+  // 되살아난 병사 — 생전의 기억으로 화망을 제대로 피한다. 유도가 가장 잘 먹히는 표준 개체
+  grunt: {
+    kind: 'grunt', name: '야귀', hp: 660, dmg: 70, atkInterval: 1.5, speed: 2.4, radius: 0.55,
+    wallDamage: 60, threatAvoidance: 1.0, flankBias: 0.25,
+  },
+  // 되살린 짐승 — 겁이 많아 회피 폭이 크고, 크게 돌아 모서리로 파고든다
+  runner: {
+    kind: 'runner', name: '질주귀', hp: 300, dmg: 50, atkInterval: 1.0, speed: 4.6, radius: 0.45,
+    wallDamage: 40, threatAvoidance: 1.6, flankBias: 0.9,
+  },
+  // 속이 빈 판금 갑옷 — 두려움이 없다. 화망을 무시하고 정면으로 밀고 온다
+  tank: {
+    kind: 'tank', name: '갑주귀', hp: 2050, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 0.8,
+    wallDamage: 130, threatAvoidance: 0, flankBias: 0.05,
+  },
 }
 
 export interface ActiveEnemy {
@@ -253,6 +271,99 @@ export interface ActiveEnemy {
   cooldown: number // 틱
   atWall: boolean
   wave: number
+  /** 목표 접근 구간 id — 스폰 시 한 번 정해지고 이후 불변 (지연 규칙, §4-2) */
+  seg: number
+  /** 최종 정지 지점 = 벽 바깥 면 + 자기 반경 */
+  aim: Vec2
+  /** 회절 레인 경유점 (성 동쪽 바깥). 통과하면 null이 되고 aim으로 향한다 */
+  via: Vec2 | null
+}
+
+// ---------------------------------------------------------------- 접근 구간 (침공 설계)
+//
+// 「위협 회피 유도」— 괴수는 스폰 시 목표 구간을 하나 고르고, 그 뒤로는 바꾸지 않는다.
+// 구간 선택은 **성벽 위 유닛의 화력만** 위협으로 센다(가시성 규칙). 안뜰·성문 안쪽의
+// 지상 병력과 영웅은 계산에서 빠지므로, 플레이어가 화망을 한쪽에 몰아 비워둔 구간은
+// 괴수 눈에 "무방비"로 보인다 — 그게 킬존이 성립하는 이유다.
+// 자세한 근거는 docs/02-game-design.md §2 「침공 설계」.
+
+export interface ApproachSegment {
+  id: number
+  face: 'east' | 'north' | 'south'
+  /** 위협을 재는 기준점 — 벽 바깥 면 위의 대표 지점 */
+  probe: Vec2
+  /** 벽면 바깥 방향 단위 벡터 (aim = probe + normal * (반경 + 여유)) */
+  normal: Vec2
+  /** 회절 레인 경유점 — 성 동쪽 바깥을 돌아 들어오게 한다. 동벽은 null */
+  via: Vec2 | null
+}
+
+/** 동벽 정면 6구간 + 북/남벽 동쪽 끝 회절 레인 2구간 */
+export const SEGMENTS: ApproachSegment[] = (() => {
+  const out: ApproachSegment[] = []
+  const eastFace = C.east + halfT
+  const span = C.south - C.north
+  const n = 6
+  for (let i = 0; i < n; i++) {
+    const z = C.north + (span * (i + 0.5)) / n
+    out.push({ id: out.length, face: 'east', probe: { x: eastFace, z }, normal: { x: 1, z: 0 }, via: null })
+  }
+  // 회절 레인 — 북/남벽의 동쪽 끝. 성 동쪽 바깥(x=6)을 경유해 벽 모서리를 돌아 붙는다
+  const flankX = C.east - 10
+  const viaX = C.east + 12
+  out.push({
+    id: out.length, face: 'north',
+    probe: { x: flankX, z: C.north - halfT }, normal: { x: 0, z: -1 }, via: { x: viaX, z: C.north - halfT - 4 },
+  })
+  out.push({
+    id: out.length, face: 'south',
+    probe: { x: flankX, z: C.south + halfT }, normal: { x: 0, z: 1 }, via: { x: viaX, z: C.south + halfT + 4 },
+  })
+  return out
+})()
+
+/** 이 구간에 도달했을 때 나를 쏠 수 있는 성벽 위 화력의 합 (dps). 지상 유닛은 세지 않는다 */
+function segmentThreat(state: SiegeState, seg: ApproachSegment): number {
+  let dps = 0
+  for (const u of state.units) {
+    if (u.h < 1) continue // 가시성 규칙 — 안뜰·성문 안쪽은 괴수에게 보이지 않는다
+    const def = state.kinds.units[u.kind]!
+    if (Math.hypot(u.pos.x - seg.probe.x, u.pos.z - seg.probe.z) > def.range) continue
+    dps += def.dmg / def.atkInterval
+  }
+  return dps
+}
+
+/** 개체별 결정론 난수 — 상태를 늘리지 않기 위해 (시드, 개체 id) 해시로 뽑는다 */
+function hashRand(seed: number, id: number): number {
+  let t = (seed ^ Math.imul(id, 0x9e3779b9)) | 0
+  t = Math.imul(t ^ (t >>> 15), t | 1)
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+  return ((t ^ (t >>> 14)) >>> 0) / 0x1_0000_0000
+}
+
+/**
+ * 목표 구간 선택 — 위협이 낮은 구간일수록 뽑힐 확률이 높다.
+ * 위협은 구간 평균으로 정규화해서 로드아웃(총 화력)이 바뀌어도 성향이 그대로 유지되게 한다.
+ * 화력을 고르게 펴면 모든 구간이 평균이라 유도가 안 생기고, 한쪽에 몰아야 비로소 흐름이 생긴다.
+ */
+function pickSegment(state: SiegeState, def: EnemyKindDef, id: number): ApproachSegment {
+  const threats = SEGMENTS.map((s) => segmentThreat(state, s))
+  const mean = threats.reduce((a, b) => a + b, 0) / threats.length
+  const weights = SEGMENTS.map((s, i) => {
+    const base = s.face === 'east' ? 1 : def.flankBias
+    const ratio = mean > 0 ? threats[i]! / mean : 1
+    // 제곱 응답 — 선형이면 유닛 사거리가 길어(대포 24) 구간 간 위협 차이가 뭉개져서
+    // 플레이어가 화망을 몰아도 흐름이 눈에 안 보인다. 제곱하면 "몰았다"가 읽힌다.
+    return base / (1 + def.threatAvoidance * ratio * ratio)
+  })
+  const total = weights.reduce((a, b) => a + b, 0)
+  let r = hashRand(state.seed, id) * total
+  for (let i = 0; i < SEGMENTS.length; i++) {
+    r -= weights[i]!
+    if (r <= 0) return SEGMENTS[i]!
+  }
+  return SEGMENTS[0]!
 }
 
 // ---------------------------------------------------------------- 아군 유닛 (M2b)
@@ -321,6 +432,8 @@ export interface SiegeInput {
 
 export interface SiegeState {
   tick: number
+  /** 이 판의 시드 — 스폰 시 구간 선택을 (시드, 개체 id) 해시로 뽑기 위해 state가 들고 있는다 */
+  seed: number
   status: SiegeStatus
   wallHp: number
   /** 성벽 최대치 — 로드아웃마다 다를 수 있으므로 state가 들고 있는다 (HUD 게이지 기준) */
@@ -401,16 +514,22 @@ export interface Loadout {
   waves: WaveDef[]
 }
 
-/** 현재 출고 중인 구성 — 동벽 보도(궁수 6·대포 2), 성문 위 다리(발리스타 2), 지상(영웅 1) */
+/**
+ * 현재 출고 중인 구성 — 동벽 보도(대포 6), 성문 위 다리(발리스타 2), 지상(영웅 1).
+ *
+ * 궁수 폐지 [기획 확정 2026-08-04]. 유도 규칙을 넣은 뒤 봇으로 재보니 궁수 편성은
+ * 적을 밀어내기만 하고 못 죽여서 무너졌다(궁수 6 편성 무개입 3/6 · 궁수 8 편성 0/6).
+ * 대포 6은 무개입 6/6(잔존 1297)에 더해 **적극 플레이가 무개입을 앞지른 유일한 편성**
+ * (1372 > 1297) — 판정 기준 "개입이 보상되는가"를 처음 만족한다.
+ * 궁수 정의는 UNIT_KINDS에 남아 있으므로 프리셋 한 줄로 되살릴 수 있다.
+ */
 export const DEFAULT_LOADOUT: Loadout = {
   name: 'default',
   wallHp: WALL_HP,
   unitKinds: UNIT_KINDS,
   enemyKinds: ENEMY_KINDS,
   placements: [
-    ...[-15, -9, -5, 5, 9, 15].map((z) => ({ kind: 'soldier', x: WALL_X, z, h: C.wallH })),
-    { kind: 'cannon', x: WALL_X, z: -12, h: C.wallH },
-    { kind: 'cannon', x: WALL_X, z: 12, h: C.wallH },
+    ...[-18, -12, -6, 6, 12, 18].map((z) => ({ kind: 'cannon', x: WALL_X, z, h: C.wallH })),
     { kind: 'ballista', x: WALL_X, z: -1.6, h: C.wallH }, // 성문 위 다리
     { kind: 'ballista', x: WALL_X, z: 1.6, h: C.wallH },
     { kind: 'hero', x: WALL_X - 6, z: 0, h: 0 }, // 성문 안쪽 지상 — 출격 가능
@@ -469,6 +588,7 @@ export function createSiege(
   return {
     state: {
       tick: 0,
+      seed,
       status: 'prep',
       wallHp: loadout.wallHp,
       wallHpMax: loadout.wallHp,
@@ -659,14 +779,22 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   while (state.spawnCursor < spawns.length && spawns[state.spawnCursor]!.tick <= state.tick) {
     const s = spawns[state.spawnCursor++]!
     const def = state.kinds.enemies[s.kind]!
+    const id = state.nextId++
+    // 목표 구간은 지금 한 번만 정해진다 — 뒤늦게 옮긴 대포는 이 무리에 안 통하고
+    // 다음 웨이브부터 통한다. 그래서 웨이브 사이가 판단 지점이 된다.
+    const seg = pickSegment(state, def, id)
+    const gap = def.radius + 0.2
     const e: ActiveEnemy = {
-      id: state.nextId++,
+      id,
       kind: s.kind,
       pos: { x: FIELD.maxX - 1, z: s.z },
       hp: def.hp,
       cooldown: 0,
       atWall: false,
       wave: s.wave,
+      seg: seg.id,
+      aim: { x: seg.probe.x + seg.normal.x * gap, z: seg.probe.z + seg.normal.z * gap },
+      via: seg.via ? { ...seg.via } : null,
     }
     state.enemies.push(e)
     state.events.push({ type: 'spawned', id: e.id, kind: e.kind, wave: e.wave })
@@ -721,13 +849,22 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
         state.events.push({ type: 'meleeHit', enemyId: e.id, unitId: victim.id })
       }
     } else if (!e.atWall) {
-      e.pos.x -= def.speed * DT
-      // 성벽 "바깥 면"에서 정지 — WALL_X는 벽 중심선이라 두께 절반을 더한다
-      // (벽 속으로 파고들어 보이지 않는 채 공격하던 문제)
-      const wallFace = WALL_X + C.wallT / 2 + def.radius + 0.2
-      if (e.pos.x <= wallFace) {
-        e.pos.x = wallFace
-        e.atWall = true
+      // 목표 구간의 정지점(aim)으로 향한다. 회절 레인은 성 동쪽 바깥의 경유점(via)을 먼저
+      // 지나 모서리를 돌아 들어온다 — 직선으로 가면 성벽 모서리를 뚫고 지나간다.
+      // aim은 이미 "벽 바깥 면 + 자기 반경"이라 벽 속으로 파고들지 않는다.
+      const wp = e.via ?? e.aim
+      const dx = wp.x - e.pos.x
+      const dz = wp.z - e.pos.z
+      const d = Math.hypot(dx, dz)
+      const step = def.speed * DT
+      if (d <= step) {
+        e.pos.x = wp.x
+        e.pos.z = wp.z
+        if (e.via) e.via = null
+        else e.atWall = true
+      } else {
+        e.pos.x += (dx / d) * step
+        e.pos.z += (dz / d) * step
       }
     } else if (e.cooldown <= 0) {
       state.wallHp -= def.wallDamage

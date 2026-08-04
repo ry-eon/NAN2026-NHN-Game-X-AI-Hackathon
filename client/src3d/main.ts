@@ -4,6 +4,7 @@
 import * as THREE from 'three'
 import {
   HERO_SKILL,
+  SEGMENTS,
   createSiege,
   stepSiege,
   TICKS_PER_SECOND,
@@ -206,6 +207,11 @@ const enemyGroupToId = new Map<string, number>()
 const enemyAttackT = new Map<number, number>() // meleeHit/wallHit 시각 — 내리찍기 스윙 재생용
 const enemyFacing = new Map<number, number>() // 접전 중 바라볼 방향 (기본은 서쪽 -x)
 const ENEMY_FACE_WEST = -Math.PI / 2
+/** 자기가 치는 벽면을 바라보는 각 — 회절 레인으로 북/남벽에 붙은 개체는 서쪽이 아니다 */
+function faceWall(e: { seg: number }): number {
+  const n = SEGMENTS[e.seg]?.normal
+  return n ? Math.atan2(-n.x, -n.z) : ENEMY_FACE_WEST
+}
 /** 피격 리액션 — 착탄 시각 + 밀려날 방향(정규화 XZ) + 무게(대포·스킬은 크게) */
 interface HitReact {
   t0: number
@@ -938,7 +944,8 @@ function handleEvents(events: SiegeEvent[]): void {
       }
     } else if (ev.type === 'wallHit') {
       enemyAttackT.set(ev.id, performance.now())
-      enemyFacing.set(ev.id, ENEMY_FACE_WEST)
+      const we = state.enemies.find((x) => x.id === ev.id)
+      enemyFacing.set(ev.id, we ? faceWall(we) : ENEMY_FACE_WEST)
       wallHitT = performance.now() // HUD 성벽 게이지 반응
       const e = state.enemies.find((x) => x.id === ev.id)
       if (e) {
@@ -1271,11 +1278,13 @@ function syncScene(now: number): void {
       }
     }
     v.group.position.set(ex, 0, ez)
-    // 이동 중엔 서쪽(성벽), 정지 시엔 마지막 접전 방향
-    const moving = prev
-      ? Math.abs(prev.x - e.pos.x) + Math.abs(prev.z - e.pos.z) > 1e-4
-      : true
-    v.group.rotation.y = moving ? ENEMY_FACE_WEST : (enemyFacing.get(e.id) ?? ENEMY_FACE_WEST)
+    // 이동 중엔 실제 진행 방향(회절 레인은 서쪽이 아니다), 정지 시엔 마지막 접전 방향
+    const dx = prev ? e.pos.x - prev.x : 0
+    const dz = prev ? e.pos.z - prev.z : 0
+    const moving = Math.abs(dx) + Math.abs(dz) > 1e-4
+    v.group.rotation.y = moving
+      ? Math.atan2(dx, dz)
+      : (enemyFacing.get(e.id) ?? faceWall(e))
   }
   for (const [id, v] of enemyVisuals) {
     if (!state.enemies.some((e) => e.id === id)) {

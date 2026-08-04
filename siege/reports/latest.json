@@ -7,10 +7,10 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 2694,
-        "seconds": 89.8,
-        "wallHp": 500,
-        "unitsAlive": 11,
+        "ticks": 2774,
+        "seconds": 92.5,
+        "wallHp": 1550,
+        "unitsAlive": 9,
         "enemiesKilled": 23,
         "unitsLost": 0,
         "commands": [
@@ -28,10 +28,10 @@
         "policy": "greedy",
         "loadout": "default",
         "status": "won",
-        "ticks": 2686,
-        "seconds": 89.5,
-        "wallHp": 630,
-        "unitsAlive": 11,
+        "ticks": 2769,
+        "seconds": 92.3,
+        "wallHp": 1550,
+        "unitsAlive": 9,
         "enemiesKilled": 23,
         "unitsLost": 0,
         "commands": [
@@ -43,66 +43,31 @@
             }
           },
           {
-            "step": 481,
-            "tick": 480,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  4
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -9.496929806946653,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
             "step": 721,
             "tick": 720,
             "input": {
               "unitMove": {
                 "ids": [
-                  1
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -0.4110090603356004,
-                  "h": 11
+                  "x": -12,
+                  "z": 9.141494176411678
                 }
               }
             }
           },
           {
-            "step": 961,
-            "tick": 960,
+            "step": 1081,
+            "tick": 1080,
             "input": {
               "unitMove": {
                 "ids": [
-                  1,
-                  2
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 19.440062176436186,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1201,
-            "tick": 1200,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  3
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 15.002139512635424,
-                  "h": 11
+                  "x": -12,
+                  "z": 16
                 }
               }
             }
@@ -113,72 +78,41 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  4
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 9.909046092793425,
-                  "h": 11
+                  "x": -12,
+                  "z": 9.85175327407255
                 }
               }
             }
           },
           {
-            "step": 2161,
-            "tick": 2160,
+            "step": 1981,
+            "tick": 1980,
             "input": {
               "unitMove": {
                 "ids": [
-                  1,
-                  2
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -0.007483635945693234,
-                  "h": 11
+                  "x": -12,
+                  "z": 0.50360687136098
                 }
               }
             }
           },
           {
-            "step": 2314,
-            "tick": 2313,
-            "input": {
-              "heroSkill": {
-                "x": -1.25,
-                "z": 9.31011974811554,
-                "heroId": 11
-              }
-            }
-          },
-          {
-            "step": 2401,
-            "tick": 2400,
+            "step": 2701,
+            "tick": 2700,
             "input": {
               "unitMove": {
                 "ids": [
-                  5
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 1.646357931070128,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2641,
-            "tick": 2640,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  6
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 6,
-                  "h": 11
+                  "x": -12,
+                  "z": -15
                 }
               }
             }
@@ -190,11 +124,11 @@
         "policy": "random",
         "loadout": "default",
         "status": "lost",
-        "ticks": 2428,
-        "seconds": 80.9,
+        "ticks": 2343,
+        "seconds": 78.1,
         "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 15,
+        "unitsAlive": 9,
+        "enemiesKilled": 16,
         "unitsLost": 0,
         "commands": [
           {
@@ -212,13 +146,45 @@
                 "ids": [
                   1,
                   4,
-                  5,
-                  9,
-                  10
+                  5
                 ],
                 "to": {
                   "x": -6,
-                  "z": 19.347546755336225,
+                  "z": -10.076303835958242,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 901,
+            "tick": 900,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  6,
+                  8
+                ],
+                "to": {
+                  "x": -6,
+                  "z": 17.748479302972555,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 1351,
+            "tick": 1350,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  5,
+                  7
+                ],
+                "to": {
+                  "x": -6,
+                  "z": 15.018760501407087,
                   "h": 11
                 }
               }
@@ -231,50 +197,47 @@
               "unitMove": {
                 "ids": [
                   2,
-                  4,
-                  6
+                  3
                 ],
                 "to": {
                   "x": -6,
-                  "z": -9.439904492348433,
+                  "z": 21.061390656977892,
                   "h": 11
                 }
               }
             }
           },
           {
-            "step": 2251,
-            "tick": 2250,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  2,
-                  3,
-                  10
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -8.830211959779263,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2401,
-            "tick": 2400,
+            "step": 1651,
+            "tick": 1650,
             "input": {
               "unitMove": {
                 "ids": [
                   1,
                   2,
                   3,
-                  7,
-                  9
+                  4,
+                  5
                 ],
                 "to": {
                   "x": -6,
-                  "z": 5.630206703208387,
+                  "z": -25.128981401212513,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 1951,
+            "tick": 1950,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  5
+                ],
+                "to": {
+                  "x": -6,
+                  "z": -6.604337696917355,
                   "h": 11
                 }
               }
@@ -285,7 +248,8 @@
     },
     "pass": false,
     "reasons": [
-      "무작위 조작에서 패배 (성벽 0, 80.9초) — 대충 만지면 무너진다"
+      "무개입이 너무 쉽다 (1550 > 1400) — 조작할 이유가 없다",
+      "무작위 조작에서 패배 (성벽 0, 78.1초) — 대충 만지면 무너진다"
     ]
   },
   {
@@ -295,12 +259,12 @@
         "seed": 1,
         "policy": "afk",
         "loadout": "default",
-        "status": "lost",
-        "ticks": 2670,
-        "seconds": 89,
-        "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 21,
+        "status": "won",
+        "ticks": 2764,
+        "seconds": 92.1,
+        "wallHp": 1160,
+        "unitsAlive": 9,
+        "enemiesKilled": 23,
         "unitsLost": 0,
         "commands": [
           {
@@ -316,12 +280,12 @@
         "seed": 1,
         "policy": "greedy",
         "loadout": "default",
-        "status": "lost",
-        "ticks": 2610,
-        "seconds": 87,
-        "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 21,
+        "status": "won",
+        "ticks": 2651,
+        "seconds": 88.4,
+        "wallHp": 1550,
+        "unitsAlive": 9,
+        "enemiesKilled": 23,
         "unitsLost": 0,
         "commands": [
           {
@@ -332,17 +296,31 @@
             }
           },
           {
-            "step": 481,
-            "tick": 480,
+            "step": 361,
+            "tick": 360,
             "input": {
               "unitMove": {
                 "ids": [
-                  5
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -3.18530528214613,
-                  "h": 11
+                  "x": -12,
+                  "z": 10.65274806991602
+                }
+              }
+            }
+          },
+          {
+            "step": 541,
+            "tick": 540,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": -13.6228046355664
                 }
               }
             }
@@ -353,45 +331,41 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  1
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -2.6766270774761676,
-                  "h": 11
+                  "x": -12,
+                  "z": 16
                 }
               }
             }
           },
           {
-            "step": 961,
-            "tick": 960,
+            "step": 901,
+            "tick": 900,
             "input": {
               "unitMove": {
                 "ids": [
-                  1,
-                  2
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 18.98857731372118,
-                  "h": 11
+                  "x": -12,
+                  "z": 1.5862690029726936
                 }
               }
             }
           },
           {
-            "step": 1201,
-            "tick": 1200,
+            "step": 1261,
+            "tick": 1260,
             "input": {
               "unitMove": {
                 "ids": [
-                  3
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 14.125486931927986,
-                  "h": 11
+                  "x": -12,
+                  "z": -6.5442883482632475
                 }
               }
             }
@@ -402,61 +376,37 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  1,
-                  2
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -6.070895404742957,
-                  "h": 11
+                  "x": -12,
+                  "z": 1.0693533609044683
                 }
               }
             }
           },
           {
-            "step": 1921,
-            "tick": 1920,
+            "step": 2510,
+            "tick": 2509,
             "input": {
-              "unitMove": {
-                "ids": [
-                  6
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -6.977637333883928,
-                  "h": 11
-                }
+              "heroSkill": {
+                "x": -1,
+                "z": -9,
+                "heroId": 9
               }
             }
           },
           {
-            "step": 2161,
-            "tick": 2160,
+            "step": 2521,
+            "tick": 2520,
             "input": {
               "unitMove": {
                 "ids": [
-                  6
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -5.685550678292364,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2401,
-            "tick": 2400,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  6
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -1.6287977626617305,
-                  "h": 11
+                  "x": -12,
+                  "z": -8.388911925287557
                 }
               }
             }
@@ -468,11 +418,11 @@
         "policy": "random",
         "loadout": "default",
         "status": "lost",
-        "ticks": 1744,
-        "seconds": 58.1,
+        "ticks": 1247,
+        "seconds": 41.6,
         "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 11,
+        "unitsAlive": 9,
+        "enemiesKilled": 3,
         "unitsLost": 0,
         "commands": [
           {
@@ -492,310 +442,11 @@
                   4,
                   5,
                   7,
-                  8,
-                  9,
-                  10
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 15.991206228733063,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1651,
-            "tick": 1650,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  2,
-                  4,
-                  5,
-                  6,
-                  7,
                   8
                 ],
                 "to": {
                   "x": -6,
-                  "z": -21.638693241402507,
-                  "h": 11
-                }
-              }
-            }
-          }
-        ]
-      }
-    },
-    "pass": false,
-    "reasons": [
-      "무개입 패배 (성벽 0, 89초) — 기본 배치가 성립하지 않는다",
-      "적극 플레이 패배 (성벽 0)",
-      "무작위 조작에서 패배 (성벽 0, 58.1초) — 대충 만지면 무너진다"
-    ]
-  },
-  {
-    "seed": 7,
-    "runs": {
-      "afk": {
-        "seed": 7,
-        "policy": "afk",
-        "loadout": "default",
-        "status": "won",
-        "ticks": 2703,
-        "seconds": 90.1,
-        "wallHp": 380,
-        "unitsAlive": 11,
-        "enemiesKilled": 23,
-        "unitsLost": 0,
-        "commands": [
-          {
-            "step": 0,
-            "tick": 0,
-            "input": {
-              "startAssault": true
-            }
-          }
-        ]
-      },
-      "greedy": {
-        "seed": 7,
-        "policy": "greedy",
-        "loadout": "default",
-        "status": "lost",
-        "ticks": 2905,
-        "seconds": 96.8,
-        "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 22,
-        "unitsLost": 0,
-        "commands": [
-          {
-            "step": 0,
-            "tick": 0,
-            "input": {
-              "startAssault": true
-            }
-          },
-          {
-            "step": 481,
-            "tick": 480,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  3,
-                  4
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -18.866290490998832,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 721,
-            "tick": 720,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  2
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 11.659215306004171,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 961,
-            "tick": 960,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  3
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 2.7317853309231226,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1201,
-            "tick": 1200,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 3.572578622664421,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1441,
-            "tick": 1440,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  2
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -2.834775576960783,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1681,
-            "tick": 1680,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 10.563595462590456,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1921,
-            "tick": 1920,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  5
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -4.177867112947243,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2161,
-            "tick": 2160,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  6
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -2.283817068939266,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2401,
-            "tick": 2400,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 2.7207705675234384,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2641,
-            "tick": 2640,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  2
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 12.591553542818597,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2881,
-            "tick": 2880,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  3
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 19.11784417927265,
-                  "h": 11
-                }
-              }
-            }
-          }
-        ]
-      },
-      "random": {
-        "seed": 7,
-        "policy": "random",
-        "loadout": "default",
-        "status": "lost",
-        "ticks": 1069,
-        "seconds": 35.6,
-        "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 1,
-        "unitsLost": 0,
-        "commands": [
-          {
-            "step": 0,
-            "tick": 0,
-            "input": {
-              "startAssault": true
-            }
-          },
-          {
-            "step": 1,
-            "tick": 0,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  2,
-                  3,
-                  5,
-                  8,
-                  9
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -3.609074342995882,
+                  "z": -19.97238278388977,
                   "h": 11
                 }
               }
@@ -809,12 +460,11 @@
                 "ids": [
                   3,
                   4,
-                  5,
-                  7
+                  5
                 ],
                 "to": {
                   "x": -6,
-                  "z": 11.701432093977928,
+                  "z": 6.741076949983835,
                   "h": 11
                 }
               }
@@ -826,289 +476,16 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  1,
-                  4,
-                  5,
-                  7,
-                  9
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -0.5873993504792452,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 751,
-            "tick": 750,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  3,
-                  4,
-                  5,
-                  8,
-                  9,
-                  10
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 5.503533969633281,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1051,
-            "tick": 1050,
-            "input": {
-              "unitMove": {
-                "ids": [
                   2,
                   4,
                   5,
+                  6,
+                  7,
                   8
                 ],
                 "to": {
                   "x": -6,
-                  "z": 18.198025985620916,
-                  "h": 11
-                }
-              }
-            }
-          }
-        ]
-      }
-    },
-    "pass": false,
-    "reasons": [
-      "적극 플레이 패배 (성벽 0)",
-      "무작위 조작에서 패배 (성벽 0, 35.6초) — 대충 만지면 무너진다"
-    ]
-  },
-  {
-    "seed": 42,
-    "runs": {
-      "afk": {
-        "seed": 42,
-        "policy": "afk",
-        "loadout": "default",
-        "status": "won",
-        "ticks": 2704,
-        "seconds": 90.1,
-        "wallHp": 680,
-        "unitsAlive": 11,
-        "enemiesKilled": 23,
-        "unitsLost": 0,
-        "commands": [
-          {
-            "step": 0,
-            "tick": 0,
-            "input": {
-              "startAssault": true
-            }
-          }
-        ]
-      },
-      "greedy": {
-        "seed": 42,
-        "policy": "greedy",
-        "loadout": "default",
-        "status": "won",
-        "ticks": 2715,
-        "seconds": 90.5,
-        "wallHp": 840,
-        "unitsAlive": 11,
-        "enemiesKilled": 23,
-        "unitsLost": 0,
-        "commands": [
-          {
-            "step": 0,
-            "tick": 0,
-            "input": {
-              "startAssault": true
-            }
-          },
-          {
-            "step": 481,
-            "tick": 480,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 2.020407792155658,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 721,
-            "tick": 720,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 6.618621974706943,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 961,
-            "tick": 960,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  2,
-                  3
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -13.00744405016303,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1201,
-            "tick": 1200,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -1.283009111011635,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1441,
-            "tick": 1440,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  5
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -3.2920351439166504,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1921,
-            "tick": 1920,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  6
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -8.371429338785308,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2161,
-            "tick": 2160,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  2
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 0.39026932192077635,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2320,
-            "tick": 2319,
-            "input": {
-              "heroSkill": {
-                "x": 5.533333333333189,
-                "z": -4,
-                "heroId": 11
-              }
-            }
-          },
-          {
-            "step": 2641,
-            "tick": 2640,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  2,
-                  3
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 13.493497036397457,
-                  "h": 11
-                }
-              }
-            }
-          }
-        ]
-      },
-      "random": {
-        "seed": 42,
-        "policy": "random",
-        "loadout": "default",
-        "status": "lost",
-        "ticks": 1645,
-        "seconds": 54.8,
-        "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 9,
-        "unitsLost": 0,
-        "commands": [
-          {
-            "step": 0,
-            "tick": 0,
-            "input": {
-              "startAssault": true
-            }
-          },
-          {
-            "step": 1,
-            "tick": 0,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  6,
-                  7
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -18.669459036551416,
+                  "z": 22.568789636716247,
                   "h": 11
                 }
               }
@@ -1124,32 +501,11 @@
                   4,
                   5,
                   7,
-                  10
+                  8
                 ],
                 "to": {
                   "x": -6,
-                  "z": 5.806840500794351,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1051,
-            "tick": 1050,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  2,
-                  3,
-                  4,
-                  7,
-                  9,
-                  10
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -9.630892070010304,
+                  "z": 0.7187082152813673,
                   "h": 11
                 }
               }
@@ -1160,7 +516,473 @@
     },
     "pass": false,
     "reasons": [
-      "무작위 조작에서 패배 (성벽 0, 54.8초) — 대충 만지면 무너진다"
+      "무작위 조작에서 패배 (성벽 0, 41.6초) — 대충 만지면 무너진다"
+    ]
+  },
+  {
+    "seed": 7,
+    "runs": {
+      "afk": {
+        "seed": 7,
+        "policy": "afk",
+        "loadout": "default",
+        "status": "won",
+        "ticks": 2768,
+        "seconds": 92.3,
+        "wallHp": 550,
+        "unitsAlive": 9,
+        "enemiesKilled": 23,
+        "unitsLost": 0,
+        "commands": [
+          {
+            "step": 0,
+            "tick": 0,
+            "input": {
+              "startAssault": true
+            }
+          }
+        ]
+      },
+      "greedy": {
+        "seed": 7,
+        "policy": "greedy",
+        "loadout": "default",
+        "status": "won",
+        "ticks": 2772,
+        "seconds": 92.4,
+        "wallHp": 1220,
+        "unitsAlive": 9,
+        "enemiesKilled": 23,
+        "unitsLost": 0,
+        "commands": [
+          {
+            "step": 0,
+            "tick": 0,
+            "input": {
+              "startAssault": true
+            }
+          },
+          {
+            "step": 541,
+            "tick": 540,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": -7.2052603590565365
+                }
+              }
+            }
+          },
+          {
+            "step": 721,
+            "tick": 720,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": 5.449493401123892
+                }
+              }
+            }
+          },
+          {
+            "step": 1261,
+            "tick": 1260,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": -16
+                }
+              }
+            }
+          },
+          {
+            "step": 1981,
+            "tick": 1980,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": -6.914636377277016
+                }
+              }
+            }
+          },
+          {
+            "step": 2521,
+            "tick": 2520,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": 4.275832574390261
+                }
+              }
+            }
+          },
+          {
+            "step": 2701,
+            "tick": 2700,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": 15
+                }
+              }
+            }
+          }
+        ]
+      },
+      "random": {
+        "seed": 7,
+        "policy": "random",
+        "loadout": "default",
+        "status": "lost",
+        "ticks": 1283,
+        "seconds": 42.8,
+        "wallHp": 0,
+        "unitsAlive": 9,
+        "enemiesKilled": 4,
+        "unitsLost": 0,
+        "commands": [
+          {
+            "step": 0,
+            "tick": 0,
+            "input": {
+              "startAssault": true
+            }
+          },
+          {
+            "step": 1,
+            "tick": 0,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  1,
+                  2,
+                  3,
+                  5,
+                  8
+                ],
+                "to": {
+                  "x": -6,
+                  "z": -23.586862818337977,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 751,
+            "tick": 750,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  3,
+                  4,
+                  5,
+                  7
+                ],
+                "to": {
+                  "x": -6,
+                  "z": 21.425963770598173,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 1201,
+            "tick": 1200,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  1,
+                  4,
+                  5,
+                  7
+                ],
+                "to": {
+                  "x": -6,
+                  "z": -26.647638059221208,
+                  "h": 11
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "pass": false,
+    "reasons": [
+      "무작위 조작에서 패배 (성벽 0, 42.8초) — 대충 만지면 무너진다"
+    ]
+  },
+  {
+    "seed": 42,
+    "runs": {
+      "afk": {
+        "seed": 42,
+        "policy": "afk",
+        "loadout": "default",
+        "status": "won",
+        "ticks": 2708,
+        "seconds": 90.3,
+        "wallHp": 1610,
+        "unitsAlive": 9,
+        "enemiesKilled": 23,
+        "unitsLost": 0,
+        "commands": [
+          {
+            "step": 0,
+            "tick": 0,
+            "input": {
+              "startAssault": true
+            }
+          }
+        ]
+      },
+      "greedy": {
+        "seed": 42,
+        "policy": "greedy",
+        "loadout": "default",
+        "status": "won",
+        "ticks": 2708,
+        "seconds": 90.3,
+        "wallHp": 1610,
+        "unitsAlive": 9,
+        "enemiesKilled": 23,
+        "unitsLost": 0,
+        "commands": [
+          {
+            "step": 0,
+            "tick": 0,
+            "input": {
+              "startAssault": true
+            }
+          },
+          {
+            "step": 541,
+            "tick": 540,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": 8.679144072157804
+                }
+              }
+            }
+          },
+          {
+            "step": 1081,
+            "tick": 1080,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": -11.916658610235823
+                }
+              }
+            }
+          },
+          {
+            "step": 1261,
+            "tick": 1260,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": 16
+                }
+              }
+            }
+          },
+          {
+            "step": 1441,
+            "tick": 1440,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": -0.32942454548977856
+                }
+              }
+            }
+          },
+          {
+            "step": 2701,
+            "tick": 2700,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": 15
+                }
+              }
+            }
+          }
+        ]
+      },
+      "random": {
+        "seed": 42,
+        "policy": "random",
+        "loadout": "default",
+        "status": "lost",
+        "ticks": 1295,
+        "seconds": 43.2,
+        "wallHp": 0,
+        "unitsAlive": 9,
+        "enemiesKilled": 3,
+        "unitsLost": 0,
+        "commands": [
+          {
+            "step": 0,
+            "tick": 0,
+            "input": {
+              "startAssault": true
+            }
+          },
+          {
+            "step": 1,
+            "tick": 0,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  1,
+                  6,
+                  7
+                ],
+                "to": {
+                  "x": -6,
+                  "z": 8.71397488284856,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 301,
+            "tick": 300,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  2,
+                  3,
+                  6,
+                  8
+                ],
+                "to": {
+                  "x": -6,
+                  "z": 25.20976312458515,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 451,
+            "tick": 450,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  1,
+                  3,
+                  6,
+                  8
+                ],
+                "to": {
+                  "x": -6,
+                  "z": 4.150519464164972,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 751,
+            "tick": 750,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  1,
+                  4,
+                  6,
+                  7,
+                  8
+                ],
+                "to": {
+                  "x": -6,
+                  "z": 4.907110333442688,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 1201,
+            "tick": 1200,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  1,
+                  3,
+                  4,
+                  5,
+                  6,
+                  7,
+                  8
+                ],
+                "to": {
+                  "x": -6,
+                  "z": 9.227359648793936,
+                  "h": 11
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    "pass": false,
+    "reasons": [
+      "무개입이 너무 쉽다 (1610 > 1400) — 조작할 이유가 없다",
+      "무작위 조작에서 패배 (성벽 0, 43.2초) — 대충 만지면 무너진다"
     ]
   },
   {
@@ -1171,10 +993,10 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 2712,
-        "seconds": 90.4,
-        "wallHp": 220,
-        "unitsAlive": 11,
+        "ticks": 2732,
+        "seconds": 91.1,
+        "wallHp": 1490,
+        "unitsAlive": 9,
         "enemiesKilled": 23,
         "unitsLost": 0,
         "commands": [
@@ -1191,12 +1013,12 @@
         "seed": 777,
         "policy": "greedy",
         "loadout": "default",
-        "status": "lost",
-        "ticks": 2545,
-        "seconds": 84.8,
-        "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 18,
+        "status": "won",
+        "ticks": 2605,
+        "seconds": 86.8,
+        "wallHp": 1810,
+        "unitsAlive": 9,
+        "enemiesKilled": 23,
         "unitsLost": 0,
         "commands": [
           {
@@ -1207,17 +1029,16 @@
             }
           },
           {
-            "step": 481,
-            "tick": 480,
+            "step": 541,
+            "tick": 540,
             "input": {
               "unitMove": {
                 "ids": [
-                  1
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -1.178483089519997,
-                  "h": 11
+                  "x": -12,
+                  "z": -11.523493235629052
                 }
               }
             }
@@ -1228,44 +1049,26 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  4
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -13.24904141783592,
-                  "h": 11
+                  "x": -12,
+                  "z": -16
                 }
               }
             }
           },
           {
-            "step": 961,
-            "tick": 960,
+            "step": 1261,
+            "tick": 1260,
             "input": {
               "unitMove": {
                 "ids": [
-                  4
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -13.373231522342415,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1201,
-            "tick": 1200,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  5
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -4.3360043450069945,
-                  "h": 11
+                  "x": -12,
+                  "z": -2.163506079167875
                 }
               }
             }
@@ -1276,62 +1079,38 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  6
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 0.4824816022596725,
-                  "h": 11
+                  "x": -12,
+                  "z": 16
                 }
               }
             }
           },
           {
-            "step": 1921,
-            "tick": 1920,
+            "step": 1981,
+            "tick": 1980,
             "input": {
               "unitMove": {
                 "ids": [
-                  1
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 6.689313654831996,
-                  "h": 11
+                  "x": -12,
+                  "z": 9.523628217244122
                 }
               }
             }
           },
           {
-            "step": 2161,
-            "tick": 2160,
+            "step": 2389,
+            "tick": 2388,
             "input": {
-              "unitMove": {
-                "ids": [
-                  1
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 5.349437253446017,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2401,
-            "tick": 2400,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  2
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 11.31715623166028,
-                  "h": 11
-                }
+              "heroSkill": {
+                "x": 2.839707066680532,
+                "z": 2.3600488222199028,
+                "heroId": 9
               }
             }
           }
@@ -1342,11 +1121,11 @@
         "policy": "random",
         "loadout": "default",
         "status": "lost",
-        "ticks": 1507,
-        "seconds": 50.2,
+        "ticks": 1214,
+        "seconds": 40.5,
         "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 7,
+        "unitsAlive": 9,
+        "enemiesKilled": 3,
         "unitsLost": 0,
         "commands": [
           {
@@ -1365,12 +1144,31 @@
                   1,
                   2,
                   3,
-                  5,
-                  10
+                  5
                 ],
                 "to": {
                   "x": -6,
-                  "z": -7.070150193758309,
+                  "z": 8.01308280788362,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 451,
+            "tick": 450,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  1,
+                  3,
+                  6,
+                  7,
+                  8
+                ],
+                "to": {
+                  "x": -6,
+                  "z": 21.804108386859298,
                   "h": 11
                 }
               }
@@ -1382,71 +1180,14 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  3,
                   4,
                   5,
-                  7
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -8.469727295450866,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 751,
-            "tick": 750,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  2,
-                  7,
-                  9
-                ],
-                "to": {
-                  "x": -6,
-                  "z": -5.451205779798329,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1351,
-            "tick": 1350,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  4,
-                  8,
-                  9,
-                  10
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 13.092336427420378,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 1501,
-            "tick": 1500,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  4,
                   6,
                   7
                 ],
                 "to": {
                   "x": -6,
-                  "z": -12.630963113158941,
+                  "z": 5.1207296177744865,
                   "h": 11
                 }
               }
@@ -1457,8 +1198,8 @@
     },
     "pass": false,
     "reasons": [
-      "적극 플레이 패배 (성벽 0)",
-      "무작위 조작에서 패배 (성벽 0, 50.2초) — 대충 만지면 무너진다"
+      "무개입이 너무 쉽다 (1490 > 1400) — 조작할 이유가 없다",
+      "무작위 조작에서 패배 (성벽 0, 40.5초) — 대충 만지면 무너진다"
     ]
   },
   {
@@ -1469,10 +1210,10 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 2711,
-        "seconds": 90.4,
-        "wallHp": 280,
-        "unitsAlive": 11,
+        "ticks": 2721,
+        "seconds": 90.7,
+        "wallHp": 1420,
+        "unitsAlive": 9,
         "enemiesKilled": 23,
         "unitsLost": 0,
         "commands": [
@@ -1489,12 +1230,12 @@
         "seed": 31337,
         "policy": "greedy",
         "loadout": "default",
-        "status": "lost",
-        "ticks": 2509,
-        "seconds": 83.6,
-        "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 19,
+        "status": "won",
+        "ticks": 2611,
+        "seconds": 87,
+        "wallHp": 1810,
+        "unitsAlive": 9,
+        "enemiesKilled": 23,
         "unitsLost": 0,
         "commands": [
           {
@@ -1505,17 +1246,31 @@
             }
           },
           {
-            "step": 481,
-            "tick": 480,
+            "step": 361,
+            "tick": 360,
             "input": {
               "unitMove": {
                 "ids": [
-                  1
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 1.3268193401196564,
-                  "h": 11
+                  "x": -12,
+                  "z": 7.351531283265321
+                }
+              }
+            }
+          },
+          {
+            "step": 541,
+            "tick": 540,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": -5.540219102162937
                 }
               }
             }
@@ -1526,46 +1281,56 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  1
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 7.466092562029826,
-                  "h": 11
+                  "x": -12,
+                  "z": 6.143093323636254
                 }
               }
             }
           },
           {
-            "step": 961,
-            "tick": 960,
+            "step": 901,
+            "tick": 900,
             "input": {
               "unitMove": {
                 "ids": [
-                  1,
-                  2,
-                  3
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -19.993135798722506,
-                  "h": 11
+                  "x": -12,
+                  "z": -16
                 }
               }
             }
           },
           {
-            "step": 1201,
-            "tick": 1200,
+            "step": 1081,
+            "tick": 1080,
             "input": {
               "unitMove": {
                 "ids": [
-                  4
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": -12.719019526286633,
-                  "h": 11
+                  "x": -12,
+                  "z": 16
+                }
+              }
+            }
+          },
+          {
+            "step": 1261,
+            "tick": 1260,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  9
+                ],
+                "to": {
+                  "x": -12,
+                  "z": 7.992083834565588
                 }
               }
             }
@@ -1576,74 +1341,27 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  1,
-                  2
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 12.20025314842832,
-                  "h": 11
+                  "x": -12,
+                  "z": -6.438723700640193
                 }
               }
             }
           },
           {
-            "step": 1681,
-            "tick": 1680,
+            "step": 1981,
+            "tick": 1980,
             "input": {
               "unitMove": {
                 "ids": [
-                  1
+                  9
                 ],
                 "to": {
-                  "x": -6,
-                  "z": 17.815336394123733,
-                  "h": 11
+                  "x": -12,
+                  "z": 7.152526978543859
                 }
-              }
-            }
-          },
-          {
-            "step": 1921,
-            "tick": 1920,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1,
-                  3
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 2.9078442165183254,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2161,
-            "tick": 2160,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  1
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 6.577446940528584,
-                  "h": 11
-                }
-              }
-            }
-          },
-          {
-            "step": 2166,
-            "tick": 2165,
-            "input": {
-              "heroSkill": {
-                "x": 5.960000000000523,
-                "z": 0.521765137091279,
-                "heroId": 11
               }
             }
           },
@@ -1651,15 +1369,10 @@
             "step": 2401,
             "tick": 2400,
             "input": {
-              "unitMove": {
-                "ids": [
-                  1
-                ],
-                "to": {
-                  "x": -6,
-                  "z": 8.66320842688297,
-                  "h": 11
-                }
+              "heroSkill": {
+                "x": 5.24205105500445,
+                "z": 12.176214998926602,
+                "heroId": 9
               }
             }
           }
@@ -1670,11 +1383,11 @@
         "policy": "random",
         "loadout": "default",
         "status": "lost",
-        "ticks": 2146,
-        "seconds": 71.5,
+        "ticks": 2539,
+        "seconds": 84.6,
         "wallHp": 0,
-        "unitsAlive": 11,
-        "enemiesKilled": 11,
+        "unitsAlive": 9,
+        "enemiesKilled": 16,
         "unitsLost": 0,
         "commands": [
           {
@@ -1693,31 +1406,46 @@
                   4,
                   5,
                   6,
-                  7,
-                  9
+                  7
                 ],
                 "to": {
                   "x": -6,
-                  "z": -15.92664336413145,
+                  "z": -19.966786704026163,
                   "h": 11
                 }
               }
             }
           },
           {
-            "step": 1801,
-            "tick": 1800,
+            "step": 1501,
+            "tick": 1500,
             "input": {
               "unitMove": {
                 "ids": [
-                  1,
-                  6,
-                  8,
-                  10
+                  3,
+                  4,
+                  5
                 ],
                 "to": {
                   "x": -6,
-                  "z": 8.412640830501914,
+                  "z": 14.952710950747132,
+                  "h": 11
+                }
+              }
+            }
+          },
+          {
+            "step": 1651,
+            "tick": 1650,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  2,
+                  4
+                ],
+                "to": {
+                  "x": -6,
+                  "z": -26.279945438727736,
                   "h": 11
                 }
               }
@@ -1728,8 +1456,8 @@
     },
     "pass": false,
     "reasons": [
-      "적극 플레이 패배 (성벽 0)",
-      "무작위 조작에서 패배 (성벽 0, 71.5초) — 대충 만지면 무너진다"
+      "무개입이 너무 쉽다 (1420 > 1400) — 조작할 이유가 없다",
+      "무작위 조작에서 패배 (성벽 0, 84.6초) — 대충 만지면 무너진다"
     ]
   }
 ]

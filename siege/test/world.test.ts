@@ -12,12 +12,35 @@ import {
   createSiege,
   stepSiege,
   UNIT_KINDS,
+  SEGMENTS,
+  DEFAULT_LOADOUT,
+  type ActiveEnemy,
+  type Loadout,
   type SiegeInput,
   type SiegeState,
 } from '../sim/world'
 
 const SEED = 20260725
 const MAX_TICKS = 30 * 300 // 5분 상한 — 이 안에 승패가 나야 한다
+
+/** 테스트용 괴수 직접 배치 — 스폰 경로를 거치지 않으므로 접근 구간을 손으로 채운다 */
+function placeEnemy(state: SiegeState, kind: string, x: number, z: number, hp: number): ActiveEnemy {
+  const r = ENEMY_KINDS[kind]!.radius
+  const e: ActiveEnemy = {
+    id: state.nextId++,
+    kind,
+    pos: { x, z },
+    hp,
+    cooldown: 0,
+    atWall: false,
+    wave: 0,
+    seg: 0,
+    aim: { x: CASTLE.east + CASTLE.wallT / 2 + r + 0.2, z },
+    via: null,
+  }
+  state.enemies.push(e)
+  return e
+}
 
 /** 스크립트 입력으로 판 전체 실행. 종료 틱·최종 상태 반환 */
 function runSiege(
@@ -71,14 +94,15 @@ describe('M2b 전투', () => {
     expect(end.enemies).toHaveLength(0)
   })
 
-  it('부대 명령: 성벽 위 궁수가 계단을 거쳐 지상 목표로 이동한다', () => {
+  it('부대 명령: 성벽 위 유닛이 계단을 거쳐 지상 목표로 이동한다', () => {
     const { state, spawns } = createSiege(SEED)
-    const soldier = state.units.find((u) => u.kind === 'soldier')!
-    expect(soldier.h).toBe(11)
-    stepSiege(state, spawns, { unitMove: { ids: [soldier.id], to: { x: -14, z: -8 } } })
-    for (let i = 0; i < 1200 && soldier.path.length > 0; i++) stepSiege(state, spawns, {})
-    expect(soldier.h).toBe(0)
-    expect(Math.hypot(soldier.pos.x - -14, soldier.pos.z - -8)).toBeLessThan(2.5)
+    // 계단(동벽 안쪽 z∈±[4.5,15])에 가까운 대포로 — 이동 속도 1.0이라 여유 틱을 크게 준다
+    const unit = state.units.find((u) => u.kind === 'cannon' && u.pos.z === -6)!
+    expect(unit.h).toBe(11)
+    stepSiege(state, spawns, { unitMove: { ids: [unit.id], to: { x: -14, z: -8 } } })
+    for (let i = 0; i < 4000 && unit.path.length > 0; i++) stepSiege(state, spawns, {})
+    expect(unit.h).toBe(0)
+    expect(Math.hypot(unit.pos.x - -14, unit.pos.z - -8)).toBeLessThan(2.5)
   })
 
   it('지상 아군은 괴수와 접전한다 — 성벽 대신 유닛을 때린다', () => {
@@ -86,15 +110,7 @@ describe('M2b 전투', () => {
     stepSiege(state, spawns, { startAssault: true })
     const hero = state.units.find((u) => u.kind === 'hero')!
     // 영웅 바로 옆에 야귀 배치 (첫 정규 스폰은 4초 뒤라 간섭 없음)
-    state.enemies.push({
-      id: state.nextId++,
-      kind: 'grunt',
-      pos: { x: hero.pos.x + 1.0, z: hero.pos.z },
-      hp: 480,
-      cooldown: 0,
-      atWall: false,
-      wave: 0,
-    })
+    placeEnemy(state, 'grunt', hero.pos.x + 1.0, hero.pos.z, 480)
     for (let i = 0; i < 60; i++) stepSiege(state, spawns, {})
     expect(hero.hp).toBeLessThan(UNIT_KINDS.hero!.hp)
     expect(state.wallHp).toBe(WALL_HP)
@@ -124,22 +140,92 @@ describe('M2b 전투', () => {
     }
   })
 
+  it('위협 회피 유도: 화망을 한쪽에 몰면 괴수가 반대쪽으로 흐른다', () => {
+    // 이 판의 핵심 규칙. 플레이어가 성벽 위 화력을 북쪽에 몰면 남쪽이 "무방비"로 보여
+    // 괴수가 그리로 흐르고, 비워둔 그 구간이 킬존이 된다 (docs/02-game-design.md §2).
+    const manyGrunts: Loadout = {
+      ...DEFAULT_LOADOUT,
+      name: 'test-many',
+      // 표본이 작으면(60기) 구간별 편차가 노이즈에 묻힌다 — 비율을 재려면 수를 키운다
+      waves: [{ wave: 1, kind: 'grunt', count: 400, at: 1, every: 0.02 }],
+    }
+    // 스폰 시점의 배정을 센다 — 생존자만 세면 "위협이 낮은 쪽이 더 오래 산다"는
+    // 생존 편향이 끼어서 유도 자체의 세기를 측정할 수 없다.
+    const countSouth = (clusterZ: number): { south: number; far: number; near: number } => {
+      const { state, spawns } = createSiege(SEED, manyGrunts)
+      // 성벽 위 유닛을 전부 한쪽으로 — 지상 유닛(영웅)은 그대로 둔다
+      for (const u of state.units) if (u.h >= 1) u.pos.z = clusterZ
+      stepSiege(state, spawns, { startAssault: true })
+      const seen = new Map<number, number>()
+      for (let i = 0; i < 30 * 12; i++) {
+        stepSiege(state, spawns, {})
+        for (const e of state.enemies) if (!seen.has(e.id)) seen.set(e.id, e.seg)
+      }
+      const east = [...seen.values()].filter((s) => SEGMENTS[s]!.face === 'east')
+      expect(east.length).toBeGreaterThan(300) // 표본이 충분해야 비율이 의미가 있다
+      const at = (z: number): number => east.filter((s) => SEGMENTS[s]!.probe.z === z).length
+      return { south: east.filter((s) => SEGMENTS[s]!.probe.z > 0).length / east.length, far: at(15), near: at(-15) }
+    }
+    const northHeavy = countSouth(-14) // 화망을 북쪽에 몰았다 → 남쪽으로 흘러야 한다
+    const southHeavy = countSouth(14)
+    // 반쪽 비율보다 양 끝 구간의 대비가 이 규칙의 실제 세기다
+    expect(northHeavy.far).toBeGreaterThan(northHeavy.near * 3)
+    expect(southHeavy.near).toBeGreaterThan(southHeavy.far * 3)
+    expect(northHeavy.south).toBeGreaterThan(0.6)
+    expect(southHeavy.south).toBeLessThan(0.4)
+  })
+
+  it('지연 규칙: 목표 구간은 스폰 시 정해지고 이후 재배치에 반응하지 않는다', () => {
+    // "늦게 옮긴 대포는 지금 오는 무리에 안 통하고 다음 웨이브부터 통한다"
+    const { state, spawns } = createSiege(SEED)
+    stepSiege(state, spawns, { startAssault: true })
+    for (let i = 0; i < 30 * 6; i++) stepSiege(state, spawns, {})
+    const before = state.enemies.map((e) => [e.id, e.seg] as const)
+    expect(before.length).toBeGreaterThan(0)
+    // 성벽 위 유닛을 전부 한쪽 끝으로 몰아도 이미 달려든 무리는 목표를 안 바꾼다
+    for (const u of state.units) if (u.h >= 1) u.pos.z = -16
+    for (let i = 0; i < 30 * 5; i++) stepSiege(state, spawns, {})
+    for (const [id, seg] of before) {
+      const e = state.enemies.find((x) => x.id === id)
+      if (e) expect(e.seg).toBe(seg)
+    }
+  })
+
+  it('모서리 회절: 북/남벽을 치는 괴수는 성벽 모서리를 돌아 벽 바깥 면에서 멈춘다', () => {
+    // 회절 레인만 뽑히도록 flankBias를 극단으로 준 로드아웃
+    const flankOnly: Loadout = {
+      ...DEFAULT_LOADOUT,
+      name: 'test-flank',
+      enemyKinds: {
+        ...DEFAULT_LOADOUT.enemyKinds,
+        grunt: { ...DEFAULT_LOADOUT.enemyKinds.grunt!, flankBias: 999, threatAvoidance: 0 },
+      },
+      waves: [{ wave: 1, kind: 'grunt', count: 12, at: 1, every: 0.2 }],
+    }
+    const { state, spawns } = createSiege(SEED, flankOnly)
+    state.units = [] // 방해 없이 벽까지 도달시킨다
+    stepSiege(state, spawns, { startAssault: true })
+    for (let i = 0; i < 30 * 60 && state.status === 'assault'; i++) stepSiege(state, spawns, {})
+    const flank = state.enemies.filter((e) => SEGMENTS[e.seg]!.face !== 'east')
+    expect(flank.length).toBeGreaterThan(0)
+    const r = DEFAULT_LOADOUT.enemyKinds.grunt!.radius
+    for (const e of flank) {
+      // 벽 속으로 파고들지 않았다 — 북벽 바깥 면(z=-22) 바깥에 서 있다
+      const face = SEGMENTS[e.seg]!.face
+      if (face === 'north') expect(e.pos.z).toBeLessThanOrEqual(CASTLE.north - CASTLE.wallT / 2 - r)
+      else expect(e.pos.z).toBeGreaterThanOrEqual(CASTLE.south + CASTLE.wallT / 2 + r)
+    }
+  })
+
   it('영웅 스킬: 반경 내 광역 피해 + 쿨다운·사거리 검증', () => {
     const { state, spawns } = createSiege(SEED)
     stepSiege(state, spawns, { startAssault: true })
     const hero = state.units.find((u) => u.kind === 'hero')!
     state.units = [hero] // 다른 유닛 사격이 수치 단언에 끼지 않게
-    const mkGrunt = (x: number, z: number) => ({
-      id: state.nextId++,
-      kind: 'grunt',
-      pos: { x, z },
-      hp: 700,
-      cooldown: 0,
-      atWall: false,
-      wave: 0,
-    })
     // 시전점 (2,0) — 영웅(-12,0)에서 d=14 ≤ 사거리 18. 반경 4.5 안 2마리 + 밖 1마리
-    state.enemies.push(mkGrunt(2, 0), mkGrunt(3, 1.5), mkGrunt(2, 8))
+    placeEnemy(state, 'grunt', 2, 0, 700)
+    placeEnemy(state, 'grunt', 3, 1.5, 700)
+    placeEnemy(state, 'grunt', 2, 8, 700)
     stepSiege(state, spawns, { heroSkill: { x: 2, z: 0 } })
     expect(state.enemies.filter((e) => e.hp === 700 - HERO_SKILL.dmg)).toHaveLength(2)
     expect(state.enemies.filter((e) => e.hp === 700).length).toBeGreaterThanOrEqual(1)
