@@ -252,17 +252,17 @@ export interface EnemyKindDef {
 export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
   // 되살아난 병사 — 생전의 기억으로 화망을 제대로 피한다. 유도가 가장 잘 먹히는 표준 개체
   grunt: {
-    kind: 'grunt', name: '야귀', hp: 660, dmg: 70, atkInterval: 1.5, speed: 2.4, radius: 0.55,
+    kind: 'grunt', name: '야귀', hp: 660, dmg: 70, atkInterval: 1.5, speed: 2.4, radius: 0.6,
     wallDamage: 21, threatAvoidance: 1.0, flankBias: 0.25,
   },
   // 되살린 짐승 — 겁이 많아 회피 폭이 크고, 크게 돌아 모서리로 파고든다
   runner: {
-    kind: 'runner', name: '질주귀', hp: 300, dmg: 50, atkInterval: 1.0, speed: 4.6, radius: 0.45,
+    kind: 'runner', name: '질주귀', hp: 300, dmg: 50, atkInterval: 1.0, speed: 4.6, radius: 0.5,
     wallDamage: 14, threatAvoidance: 1.6, flankBias: 0.9,
   },
   // 속이 빈 판금 갑옷 — 두려움이 없다. 화망을 무시하고 정면으로 밀고 온다
   tank: {
-    kind: 'tank', name: '갑주귀', hp: 2050, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 0.8,
+    kind: 'tank', name: '갑주귀', hp: 2050, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 1.0,
     wallDamage: 46, threatAvoidance: 0, flankBias: 0.05,
   },
   // 이 군세를 일으킨 자. 뒤에 서서 쓰러진 것들을 다시 세운다 — 직접 공격은 약하다.

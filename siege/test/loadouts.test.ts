@@ -17,7 +17,7 @@ describe('로드아웃', () => {
     // 이 수치는 "지금 출고 중인 판"을 고정하는 단언이라, 밸런스를 손대면 여기가 먼저 깨진다.
     const run = playout(SHIPPING_SEED, afk, DEFAULT_LOADOUT)
     expect(run.status).toBe('won')
-    expect(run.wallHp).toBe(815)
+    expect(run.wallHp).toBe(903)
     expect(run.seconds).toBe(107.1)
     expect(describeLoadout(DEFAULT_LOADOUT)).toBe('대포 8 · 발리스타 4 · 영웅 1')
   })

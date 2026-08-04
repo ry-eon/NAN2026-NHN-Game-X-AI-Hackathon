@@ -710,13 +710,15 @@ export function makeMonster(kind: string): MonsterRig {
   const root = new THREE.Group()
   const K =
     kind === 'runner'
-      ? { hipH: 0.78, hunch: 0.5, gait: 13, atkDur: 300, legR: 0.09, spread: 0.16 }
+      ? // 사족보행 — 몸통이 수평이라 hunch는 거의 0. 보폭이 짧아 gait를 올린다
+        { hipH: 0.68, hunch: 0.06, gait: 15, atkDur: 320, legR: 0.075, spread: 0.19 }
       : kind === 'tank'
-        ? { hipH: 1.12, hunch: 0.12, gait: 5.5, atkDur: 620, legR: 0.2, spread: 0.3 }
+        ? // 스케일 상향 — 성벽 높이 11 대비 작아 보였다. 굵고 넓게 (sim radius도 함께 올림)
+          { hipH: 1.32, hunch: 0.12, gait: 5.2, atkDur: 620, legR: 0.24, spread: 0.36 }
         : kind === 'necromancer'
           ? // 부유 — 다리가 없으니 보행 주파수 0. 로브 자락이 지면 가까이 내려와 떠 있는 것처럼 보인다
             { hipH: 1.15, hunch: 0, gait: 0, atkDur: 760, legR: 0.001, spread: 0 }
-          : { hipH: 0.84, hunch: 0.3, gait: 8, atkDur: 450, legR: 0.14, spread: 0.24 }
+          : { hipH: 0.92, hunch: 0.3, gait: 8, atkDur: 450, legR: 0.15, spread: 0.26 }
 
   // ---- 다리 (골반 피벗) — 맨발엔 발톱, 갑주귀는 정강받이+쇠발
   const mkLeg = (side: number): THREE.Group => {
@@ -792,64 +794,106 @@ export function makeMonster(kind: string): MonsterRig {
   let rArm: THREE.Group
 
   if (kind === 'runner') {
-    // 몸통 — 마르고 좁게
-    torso.add(
-      lathe(
-        [
-          [0.17, 0],
-          [0.24, 0.2],
-          [0.2, 0.42],
-          [0.12, 0.52],
-        ],
-        skin,
-        12,
-      ),
+    // ---- 질주귀 — 되살린 짐승. **유일한 사족보행**이라 부감에서 즉시 갈린다.
+    //      앞다리를 lArm/rArm에 매핑하면 기존 보행 애니메이션(팔·다리 역위상)이
+    //      그대로 대각 보행(트롯)이 된다. 공격 모션의 앞발 들기도 짐승에 맞는다.
+    // 몸통 — 수평. 지오메트리 자체를 z축으로 눕혀 회전 트릭을 쓰지 않는다
+    const body = lathe(
+      [
+        [0.0, -0.52],
+        [0.19, -0.4],
+        [0.24, 0.0],
+        [0.21, 0.34],
+        [0.14, 0.5],
+      ],
+      skin,
+      12,
     )
-    // 등뼈 가시 4개
-    for (let i = 0; i < 4; i++) {
-      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.13, 5), MAT_BONE)
-      spike.rotation.x = -2.3
-      spike.position.set(0, 0.1 + i * 0.12, -0.2)
+    body.rotation.x = Math.PI / 2 // 세로 몸통을 z축을 따라 눕힌다
+    torso.add(body)
+    // 어깨·엉덩이 융기 — 옆에서 봤을 때 짐승 실루엣의 굴곡
+    for (const [z, r] of [[0.34, 0.2], [-0.3, 0.18]] as const) {
+      const hump = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), skin)
+      hump.position.set(0, 0.09, z)
+      hump.scale.set(1, 0.75, 1.1)
+      torso.add(hump)
+    }
+    // 등뼈 가시 — 목덜미에서 꼬리까지 낮게
+    for (let i = 0; i < 5; i++) {
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.15, 5), MAT_BONE)
+      spike.rotation.x = -0.35
+      spike.position.set(0, 0.19, 0.3 - i * 0.17)
       torso.add(spike)
     }
-    // 머리 — 뒤로 긴 두개골 + 후방 단일 뿔
-    head.position.set(0, 0.55, 0.1)
-    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), skin)
-    skull.scale.set(0.9, 0.8, 1.3)
-    skull.position.y = 0.08
-    const jaw = bevelBox(0.16, 0.07, 0.16, skin, 0.015)
-    jaw.position.set(0, -0.03, 0.12)
-    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.4, 7), MAT_BONE)
-    horn.rotation.x = -0.9
-    horn.position.set(0, 0.2, -0.12)
-    head.add(skull, jaw, horn)
-    for (const s of [-1, 1]) {
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), MAT_EYE)
-      eye.position.set(s * 0.07, 0.1, 0.19)
-      head.add(eye)
-    }
-    // 팔 — 길고 가늘게 + 갈퀴 3개
-    const armProf = (): [[number, number][], [number, number][]] => [
+    // 꼬리 — 뒤로 뻗어 사족 실루엣을 길게 만든다
+    const tail = lathe(
       [
         [0.06, 0],
-        [0.065, -0.16],
-        [0.05, -0.4],
+        [0.04, 0.26],
+        [0.0, 0.46],
+      ],
+      skin,
+      7,
+    )
+    tail.rotation.x = -Math.PI / 2 + 0.5
+    tail.position.set(0, 0.06, -0.5)
+    torso.add(tail)
+    // 머리 — 몸 앞쪽 낮게. 긴 주둥이 + 벌어진 턱
+    head.position.set(0, 0.02, 0.6)
+    const skull = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), skin)
+    skull.scale.set(0.85, 0.85, 1.25)
+    const snout = lathe(
+      [
+        [0.1, 0],
+        [0.075, 0.16],
+        [0.05, 0.28],
+      ],
+      skin,
+      8,
+    )
+    snout.rotation.x = -Math.PI / 2
+    snout.position.set(0, -0.02, 0.12)
+    const jaw = bevelBox(0.13, 0.05, 0.24, skin, 0.012)
+    jaw.position.set(0, -0.09, 0.2)
+    jaw.rotation.x = 0.18
+    head.add(skull, snout, jaw)
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.032, 8, 6), MAT_EYE)
+      eye.position.set(s * 0.085, 0.07, 0.1)
+      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.16, 5), skin)
+      ear.rotation.x = -0.5
+      ear.rotation.z = -s * 0.35
+      ear.position.set(s * 0.09, 0.15, -0.03)
+      const fang = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.1, 5), MAT_BONE)
+      fang.rotation.x = Math.PI
+      fang.position.set(s * 0.05, -0.03, 0.26)
+      head.add(eye, ear, fang)
+    }
+    // 다리 — 넷 다 같은 형상. 앞다리(=팔)는 몸 앞, 뒷다리(=lLeg/rLeg)는 root에서 뒤로 옮긴다
+    const legProf = (): [[number, number][], [number, number][]] => [
+      [
+        [0.062, 0],
+        [0.07, -0.18],
+        [0.05, -0.38],
       ],
       [
-        [0.05, -0.4],
-        [0.06, -0.48],
-        [0.045, -0.75],
+        [0.05, -0.38],
+        [0.058, -0.46],
+        [0.042, -0.66],
       ],
     ]
-    lArm = mkArm(-1, [0.26, 0.44], ...armProf(), 0.1, -0.79)
-    rArm = mkArm(1, [0.26, 0.44], ...armProf(), 0.1, -0.79)
-    for (const arm of [lArm, rArm])
+    lArm = mkArm(-1, [0.19, 0.02], ...legProf(), 0.085, -0.68)
+    rArm = mkArm(1, [0.19, 0.02], ...legProf(), 0.085, -0.68)
+    for (const paw of [lArm, rArm]) {
+      paw.position.z = 0.36 // 앞다리를 가슴 아래로
       for (const dx of [-1, 0, 1]) {
-        const claw = new THREE.Mesh(new THREE.ConeGeometry(0.018, 0.17, 5), MAT_BONE)
-        claw.rotation.x = Math.PI
-        claw.position.set(dx * 0.04, -0.9, 0.02)
-        arm.add(claw)
+        const claw = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.11, 5), MAT_BONE)
+        claw.rotation.x = 2.5
+        claw.position.set(dx * 0.032, -0.72, 0.05)
+        paw.add(claw)
       }
+    }
+    for (const hind of [lLeg, rLeg]) hind.position.z = -0.3 // 뒷다리를 엉덩이 아래로
   } else if (kind === 'tank') {
     // 몸통 — 거구 + 판금 흉갑·폴드
     torso.add(
