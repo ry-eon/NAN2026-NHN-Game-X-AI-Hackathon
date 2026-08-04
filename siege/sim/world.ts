@@ -568,7 +568,9 @@ export const DEFAULT_LOADOUT: Loadout = {
   // 증원 [2026-08-04]: 병기 8 → 12. "성을 지키기엔 대포와 발리스타가 너무 적다"(사용자).
   // 북/남벽에 발리스타를 둔 게 핵심이다 — 모서리 회절 레인이 그전까지 완전 무방비였다.
   placements: [
-    ...[-18, -13, -8, -3, 3, 8, 13, 18].map((z) => ({ kind: 'cannon', x: WALL_X, z, h: C.wallH })),
+    // 안쪽 두 문은 ±4 — 성문 발리스타(±1.6)와 반경이 겹치지 않는 최소 간격이다.
+    // 고정 병기는 밀려나지 않으므로 배치 단계에서 겹치지 않게 두어야 한다.
+    ...[-18, -13, -8, -4, 4, 8, 13, 18].map((z) => ({ kind: 'cannon', x: WALL_X, z, h: C.wallH })),
     { kind: 'ballista', x: WALL_X, z: -1.6, h: C.wallH }, // 성문 위 다리
     { kind: 'ballista', x: WALL_X, z: 1.6, h: C.wallH },
     { kind: 'ballista', x: -14, z: C.north, h: C.wallH }, // 북벽 동쪽 끝 — 회절 레인 대응
@@ -829,6 +831,9 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       }
       const push = (minD - d) * 0.4
       for (const [m, sign] of [[a, -1], [b, 1]] as const) {
+        // 고정 병기는 밀리지 않는다 — 포좌는 배치된 자리에 박혀 있다.
+        // (밀리게 두면 "고정"이라는 규칙과 어긋나고, 배치 좌표가 조용히 어긋난다)
+        if (state.kinds.units[m.kind]!.emplaced) continue
         const nx = m.pos.x + (dx / d) * push * sign
         const nz = m.pos.z + (dz / d) * push * sign
         const h = stepHeight(m.h, nx, nz)

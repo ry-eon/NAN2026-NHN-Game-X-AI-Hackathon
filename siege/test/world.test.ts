@@ -116,7 +116,14 @@ describe('M2b 전투', () => {
     const withArcher: Loadout = {
       ...DEFAULT_LOADOUT,
       name: 'test-archer',
-      placements: [{ kind: 'soldier', x: CASTLE.east, z: -8, h: CASTLE.wallH }, ...DEFAULT_LOADOUT.placements],
+      // 보도 **안쪽 차선**(x = east-3)에 세운다. 고정 병기는 밀리지 않으므로 병기가 늘어선
+      // 중앙선(x = east)에 이동 유닛을 끼워 넣으면 양옆 포좌 사이에 갇혀 못 빠져나온다
+      // (실측: 1200틱 동안 26노드 중 2노드만 전진). 보도 폭이 8인 건 이러라고 있는 것이다.
+      // 나중에 「침입 시 백병전 전환」을 넣을 때 병사 기본 자리를 안쪽 차선으로 잡아야 한다.
+      placements: [
+        { kind: 'soldier', x: CASTLE.east - 3, z: -10.5, h: CASTLE.wallH },
+        ...DEFAULT_LOADOUT.placements,
+      ],
     }
     const { state, spawns } = createSiege(SEED, withArcher)
     const unit = state.units.find((u) => u.kind === 'soldier')!

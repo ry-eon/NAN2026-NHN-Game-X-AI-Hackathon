@@ -45,7 +45,7 @@ describe('봇 러너', () => {
   it('출고 시드는 무개입으로도 방어에 성공한다 (기본 배치가 성립한다)', () => {
     const run = playout(SHIPPING_SEED, afk)
     expect(run.status).toBe('won')
-    expect(run.wallHp).toBe(1190) // 2026-08-04: 유도 → 궁수 폐지 → 조준 → 증원·재조정 (500 → 1190)
+    expect(run.wallHp).toBe(1239) // 2026-08-04: 유도 → 궁수 폐지 → 조준 → 증원·재조정 (500 → 1239)
     expect(run.seconds).toBeGreaterThan(60)
   })
 

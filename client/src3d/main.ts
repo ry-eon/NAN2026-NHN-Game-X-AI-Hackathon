@@ -344,13 +344,18 @@ const aimReticle = new THREE.Group()
 
 // 고정 병기의 조준선 — 화망이 어디에 그려져 있는지 보이지 않으면 유도 규칙 자체가 안 읽힌다.
 // 선택한 병기에 대해서만 그린다(전부 그리면 화면이 선으로 덮인다).
-const AIM_MAX = 24 // 동시에 그릴 선 개수 상한 = 병기 수 여유
+const AIM_MAX = 24 // 동시에 그릴 병기 수 상한
+// 병기당 선분 2개: 포신→조준점, 그리고 조준점의 수직 표식.
+// WebGL은 선 두께가 1px로 고정이라 선만으로는 끝점이 안 읽힌다 — 표식이 그 보완이다.
 const aimLineGeo = new THREE.BufferGeometry()
-aimLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(AIM_MAX * 6), 3))
+aimLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(AIM_MAX * 12), 3))
 const aimLines = new THREE.LineSegments(
   aimLineGeo,
-  new THREE.LineBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.5, depthWrite: false }),
+  // depthTest를 끈다 — 지휘 오버레이라 성벽 너머로도 보여야 한다.
+  // (켜두면 안뜰 시점에서 선이 통째로 벽에 가려져 조준이 안 보인다 — 실측으로 확인)
+  new THREE.LineBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.62, depthTest: false, depthWrite: false }),
 )
+aimLines.renderOrder = 999
 aimLines.frustumCulled = false
 scene.add(aimLines)
 
@@ -360,12 +365,15 @@ function updateAimLines(): void {
   let n = 0
   for (const u of state.units) {
     if (n >= AIM_MAX || !u.aim || !selected.has(u.id)) continue
-    pos.setXYZ(n * 2, u.pos.x, u.h + 1.2, u.pos.z)
-    pos.setXYZ(n * 2 + 1, u.aim.x, 0.35, u.aim.z)
+    const v = n * 4
+    pos.setXYZ(v, u.pos.x, u.h + 1.2, u.pos.z) // 포신에서
+    pos.setXYZ(v + 1, u.aim.x, 0.35, u.aim.z) // 조준점까지
+    pos.setXYZ(v + 2, u.aim.x, 0.05, u.aim.z) // 조준점 수직 표식
+    pos.setXYZ(v + 3, u.aim.x, 2.6, u.aim.z)
     n++
   }
   pos.needsUpdate = true
-  aimLineGeo.setDrawRange(0, n * 2)
+  aimLineGeo.setDrawRange(0, n * 4)
   aimLines.visible = n > 0
 }
 let aiming = false
