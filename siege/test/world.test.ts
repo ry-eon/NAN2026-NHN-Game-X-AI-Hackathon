@@ -38,6 +38,7 @@ function placeEnemy(state: SiegeState, kind: string, x: number, z: number, hp: n
     aim: { x: CASTLE.east + CASTLE.wallT / 2 + r + 0.2, z },
     via: null,
     raiseCd: 0,
+    mode: 'wall',
   }
   state.enemies.push(e)
   return e
@@ -248,6 +249,62 @@ describe('M2b 전투', () => {
       if (face === 'north') expect(e.pos.z).toBeLessThanOrEqual(CASTLE.north - CASTLE.wallT / 2 - r)
       else expect(e.pos.z).toBeGreaterThanOrEqual(CASTLE.south + CASTLE.wallT / 2 + r)
     }
+  })
+
+  describe('성문 돌파', () => {
+    /** 성벽 위 병기를 전부 한쪽 끝으로 겨눠 성문 화망을 비운다 */
+    const run = (emptyGate: boolean) => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      if (emptyGate) {
+        const ids = state.units.filter((u) => u.h >= 1).map((u) => u.id)
+        stepSiege(state, spawns, { unitAim: { ids, to: { x: 6, z: -16 } } })
+      }
+      const breached = new Set<number>()
+      for (let i = 0; i < 30 * 200 && state.status === 'assault'; i++) {
+        stepSiege(state, spawns, {})
+        for (const e of state.enemies) if (e.mode === 'breach') breached.add(e.id)
+      }
+      return breached.size
+    }
+
+    it('성문을 지키면 아무도 안 들어오고, 비우면 들어온다', () => {
+      // 이 규칙의 전부: 화망을 몰 때 성문 몫을 남겨야 하는 이유가 여기서 생긴다
+      expect(run(false)).toBe(0)
+      expect(run(true)).toBeGreaterThan(5)
+    })
+
+    it('성문 터널은 성벽 위에서 쏠 수 없다 — 안뜰 방어는 지상 전력의 몫', () => {
+      // 터널은 보도 **아래**를 지난다. 이 사각이 없으면 돌파가 성립하지 않는다
+      // (실측: 사각이 없을 때 돌파병은 터널 안에서 전멸했다)
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const gunner = state.units.find((u) => u.h >= 1)!
+      const inTunnel = placeEnemy(state, 'runner', CASTLE.east, 0, 300) // 터널 한가운데
+      const outside = placeEnemy(state, 'runner', CASTLE.east + CASTLE.wallT / 2 + 1, 0, 300)
+      // 둘 다 제자리에 묶는다 — 목표를 향해 걸어나가면 무엇 때문에 맞았는지 알 수 없다
+      for (const e of [inTunnel, outside]) {
+        e.aim = { ...e.pos }
+        e.atWall = true
+      }
+      state.units = [gunner] // 지상 유닛(영웅)을 빼고 성벽 위 병기 하나만 남긴다
+      gunner.cooldown = 0
+      for (let i = 0; i < 30 * 8; i++) stepSiege(state, spawns, {})
+      expect(inTunnel.hp).toBe(300) // 터널 안은 못 맞힌다
+      expect(outside.hp).toBeLessThan(300) // 바깥은 맞는다
+    })
+
+    it('돌파한 개체는 성벽을 때리지 않는다 — 지상 병력을 문다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      state.units = []
+      const e = placeEnemy(state, 'runner', CASTLE.east - CASTLE.wallT / 2 - 3, 0, 300)
+      e.mode = 'breach'
+      e.via = null
+      const before = state.wallHp
+      for (let i = 0; i < 30 * 20; i++) stepSiege(state, spawns, {})
+      expect(state.wallHp).toBe(before) // 안뜰에 있어도 성벽 HP는 안 깎인다
+    })
   })
 
   describe('보스 네크로맨서', () => {

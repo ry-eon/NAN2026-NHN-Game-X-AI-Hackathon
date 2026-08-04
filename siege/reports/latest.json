@@ -281,7 +281,7 @@
         "status": "won",
         "ticks": 3329,
         "seconds": 111,
-        "wallHp": 806,
+        "wallHp": 729,
         "unitsAlive": 13,
         "enemiesKilled": 72,
         "unitsLost": 0,
@@ -302,7 +302,7 @@
         "status": "won",
         "ticks": 3201,
         "seconds": 106.7,
-        "wallHp": 1132,
+        "wallHp": 1118,
         "unitsAlive": 13,
         "enemiesKilled": 72,
         "unitsLost": 0,
@@ -476,7 +476,7 @@
         "status": "won",
         "ticks": 3279,
         "seconds": 109.3,
-        "wallHp": 543,
+        "wallHp": 676,
         "unitsAlive": 13,
         "enemiesKilled": 72,
         "unitsLost": 0,
@@ -607,9 +607,9 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 3213,
-        "seconds": 107.1,
-        "wallHp": 508,
+        "ticks": 3267,
+        "seconds": 108.9,
+        "wallHp": 404,
         "unitsAlive": 13,
         "enemiesKilled": 72,
         "unitsLost": 0,
@@ -628,9 +628,9 @@
         "policy": "greedy",
         "loadout": "default",
         "status": "won",
-        "ticks": 3142,
-        "seconds": 104.7,
-        "wallHp": 1096,
+        "ticks": 3129,
+        "seconds": 104.3,
+        "wallHp": 1073,
         "unitsAlive": 13,
         "enemiesKilled": 72,
         "unitsLost": 0,
@@ -805,7 +805,7 @@
                 ],
                 "to": {
                   "x": -12,
-                  "z": 12.70419465328286
+                  "z": 16
                 }
               }
             }
@@ -817,11 +817,11 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3283,
-        "seconds": 109.4,
-        "wallHp": 196,
+        "ticks": 3321,
+        "seconds": 110.7,
+        "wallHp": 184,
         "unitsAlive": 13,
-        "enemiesKilled": 72,
+        "enemiesKilled": 74,
         "unitsLost": 0,
         "commands": [
           {
@@ -1031,9 +1031,9 @@
         "policy": "greedy",
         "loadout": "default",
         "status": "won",
-        "ticks": 3141,
-        "seconds": 104.7,
-        "wallHp": 913,
+        "ticks": 3138,
+        "seconds": 104.6,
+        "wallHp": 959,
         "unitsAlive": 13,
         "enemiesKilled": 70,
         "unitsLost": 0,
@@ -1100,7 +1100,7 @@
                 ],
                 "to": {
                   "x": -12,
-                  "z": -0.8162862943875697
+                  "z": -0.596951583445189
                 }
               }
             }
@@ -1235,9 +1235,9 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3321,
-        "seconds": 110.7,
-        "wallHp": 289,
+        "ticks": 3304,
+        "seconds": 110.1,
+        "wallHp": 395,
         "unitsAlive": 13,
         "enemiesKilled": 72,
         "unitsLost": 0,
@@ -1595,7 +1595,7 @@
         "status": "won",
         "ticks": 3238,
         "seconds": 107.9,
-        "wallHp": 401,
+        "wallHp": 447,
         "unitsAlive": 13,
         "enemiesKilled": 72,
         "unitsLost": 0,
@@ -1734,7 +1734,7 @@
         "status": "won",
         "ticks": 3219,
         "seconds": 107.3,
-        "wallHp": 1124,
+        "wallHp": 1103,
         "unitsAlive": 13,
         "enemiesKilled": 71,
         "unitsLost": 0,

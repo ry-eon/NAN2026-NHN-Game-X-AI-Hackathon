@@ -246,6 +246,12 @@ export interface EnemyKindDef {
   standoff?: number
   /** 부활술 — 지정 시 쿨마다 반경 안의 시체를 되살린다 (네크로맨서) */
   raise?: { cooldown: number /* 초 */; radius: number; count: number; hpRatio: number }
+  /**
+   * 성문 돌파 성향 (0~1). 성벽을 때리는 대신 성문 터널을 지나 안뜰로 들어가 지상 병력을 문다.
+   * 실제 확률은 **성문 앞 화망이 얇을수록** 올라간다 — 유도 규칙과 같은 논리다.
+   * 성문을 비워두면 뚫린다는 뜻이라, 화망을 몰 때 성문 몫을 남겨야 하는 이유가 생긴다.
+   */
+  breach?: number
 }
 
 // 언데드 군세 — 네크로맨서가 일으킨 것들 (기획 확정 2026-08-04, docs/02-game-design.md §4-2)
@@ -259,6 +265,7 @@ export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
   runner: {
     kind: 'runner', name: '질주귀', hp: 300, dmg: 50, atkInterval: 1.0, speed: 4.6, radius: 0.5,
     wallDamage: 14, threatAvoidance: 1.6, flankBias: 0.9,
+    breach: 0.75, // 성문이 비면 그리로 파고든다 — 성벽이 아니라 안뜰의 지상 병력을 문다
   },
   // 속이 빈 판금 갑옷 — 두려움이 없다. 화망을 무시하고 정면으로 밀고 온다
   tank: {
@@ -298,6 +305,8 @@ export interface ActiveEnemy {
   via: Vec2 | null
   /** 부활술 남은 쿨다운 (틱). 부활술이 없는 종류는 항상 0 */
   raiseCd: number
+  /** 'wall' = 성벽을 깬다 / 'breach' = 성문으로 들어가 지상 병력을 문다 (성벽은 안 때린다) */
+  mode: 'wall' | 'breach'
 }
 
 /** 쓰러진 자리 — 네크로맨서가 다시 세울 수 있는 대상. 되살아나면 소모된다 */
@@ -763,11 +772,20 @@ const FORMATION: [number, number][] = [
  * 폴백한다. 완전 침묵시키지 않는 이유: 그러면 "한 번의 잘못된 명령이 곧 패배"라는,
  * 이동 규칙에서 막 걷어낸 문제가 조준으로 되살아난다. 빗나간 조준은 손해지 사형이 아니다.
  */
+/**
+ * 성문 터널 안인가. 터널은 보도 **아래**를 지나므로 성벽 위에서는 시야가 닿지 않는다.
+ * 이 구멍이 「성문 돌파」가 성립하는 이유다 — 안뜰 방어는 지상 전력의 몫으로 남는다.
+ */
+function inGateTunnel(x: number, z: number): boolean {
+  return Math.abs(z) <= C.gateHalf && x >= C.east - halfT && x <= C.east + halfT
+}
+
 function acquireTarget(u: FriendlyUnit, enemies: ActiveEnemy[], def: UnitKindDef): ActiveEnemy | null {
   const pick = (near: Vec2, limit: number): ActiveEnemy | null => {
     let best: ActiveEnemy | null = null
     let bestD = Infinity
     for (const e of enemies) {
+      if (u.h >= 1 && inGateTunnel(e.pos.x, e.pos.z)) continue // 발 밑 터널은 못 쏜다
       if (Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z) > def.range) continue // 사거리는 절대 조건
       const d = Math.hypot(e.pos.x - near.x, e.pos.z - near.z)
       if (d <= limit && (d < bestD || (d === bestD && best !== null && e.id < best.id))) {
@@ -794,7 +812,7 @@ function makeEnemy(state: SiegeState, kind: string, pos: Vec2, hpRatio: number, 
   const seg = pickSegment(state, def, id)
   // 보스는 벽에 붙지 않고 standoff만큼 떨어져 멈춘다 — 뒤에서 지휘하는 그림
   const gap = def.radius + 0.2 + (def.standoff ?? 0)
-  return {
+  const base: ActiveEnemy = {
     id,
     kind,
     pos: { ...pos },
@@ -806,7 +824,52 @@ function makeEnemy(state: SiegeState, kind: string, pos: Vec2, hpRatio: number, 
     aim: { x: seg.probe.x + seg.normal.x * gap, z: seg.probe.z + seg.normal.z * gap },
     via: seg.via ? { ...seg.via } : null,
     raiseCd: 0,
+    mode: 'wall',
   }
+  // 성문 돌파 — **성문 구간을 목표로 뽑힌 개체만**, 성문 앞 화망이 얇을 때.
+  //
+  // 여기까지 오는 데 두 번 틀렸다. ①스폰 시점에 아무나 성문으로 보냈더니 필드를
+  // 혼자 가로질러 도착 전에 죽었다(판정 32건, 진입 0). ②벽에 닿은 뒤 전환하게 했더니
+  // 벽면을 따라 성문까지 걷는 1초 동안 성문 발리스타 밑에서 HP 190→50이 됐다(진입 0).
+  // 결국 **원래 목표가 성문 근처인 개체만** 곧장 성문으로 보내는 게 맞다 —
+  // 무리와 같은 방향으로 접근하니 노출이 다른 개체와 다르지 않다.
+  if (def.breach && Math.abs(seg.probe.z) <= C.gateHalf + 2 && seg.face === 'east' && wantsBreach(state, def, id)) {
+    base.mode = 'breach'
+    base.via = { x: C.east + halfT + def.radius + 0.3, z: 0 }
+    base.aim = { x: C.east - halfT - 3, z: 0 }
+  }
+  return base
+}
+
+/** 성문 앞 화망 대비 돌파 확률. 성문을 평균 이상으로 지키면 0이 된다 */
+function wantsBreach(state: SiegeState, def: EnemyKindDef, id: number): boolean {
+  const gate: ApproachSegment = {
+    id: -1,
+    face: 'east',
+    probe: { x: C.east + halfT, z: 0 },
+    normal: { x: 1, z: 0 },
+    via: null,
+  }
+  const east = SEGMENTS.filter((s) => s.face === 'east')
+  const mean = east.reduce((a, s) => a + segmentThreat(state, s), 0) / east.length
+  const gateThreat = segmentThreat(state, gate)
+  const slack = mean > 0 ? Math.max(0, 1 - gateThreat / mean) : 1
+  return hashRand(state.seed ^ 0x5bf03635, id) < def.breach! * slack
+}
+
+/** 안뜰에서 쫓을 지상 아군 (결정론 — 거리 동률이면 id 순) */
+function nearestGround(state: SiegeState, e: ActiveEnemy): FriendlyUnit | null {
+  let best: FriendlyUnit | null = null
+  let bestD = Infinity
+  for (const u of state.units) {
+    if (u.h >= 1) continue
+    const d = Math.hypot(u.pos.x - e.pos.x, u.pos.z - e.pos.z)
+    if (d < bestD || (d === bestD && best !== null && u.id < best.id)) {
+      best = u
+      bestD = d
+    }
+  }
+  return best
 }
 
 /** 시체가 삭기까지 (초) — 무한히 쌓아두고 후반에 몰아서 되살리는 걸 막는다 */
@@ -974,6 +1037,16 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       // 목표 구간의 정지점(aim)으로 향한다. 회절 레인은 성 동쪽 바깥의 경유점(via)을 먼저
       // 지나 모서리를 돌아 들어온다 — 직선으로 가면 성벽 모서리를 뚫고 지나간다.
       // aim은 이미 "벽 바깥 면 + 자기 반경"이라 벽 속으로 파고들지 않는다.
+      // 돌파 개체는 성문을 지난 뒤 안뜰의 지상 아군을 쫓는다 — 성벽은 때리지 않는다.
+      // (성벽 위 병기는 이들에게 닿지 않는 대신, 위협 계산에 안 잡히던 지상 전력이
+      //  비로소 값어치를 한다 — 가시성 규칙의 뒷면이다)
+      if (e.mode === 'breach' && !e.via) {
+        const prey = nearestGround(state, e)
+        if (prey) {
+          e.aim.x = prey.pos.x
+          e.aim.z = prey.pos.z
+        }
+      }
       const wp = e.via ?? e.aim
       const dx = wp.x - e.pos.x
       const dz = wp.z - e.pos.z
@@ -983,7 +1056,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
         e.pos.x = wp.x
         e.pos.z = wp.z
         if (e.via) e.via = null
-        else e.atWall = true
+        else if (e.mode === 'wall') e.atWall = true
       } else {
         e.pos.x += (dx / d) * step
         e.pos.z += (dz / d) * step
