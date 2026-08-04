@@ -10,6 +10,7 @@ import {
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
 import type { FriendlyUnit, SiegeEvent, SiegeInput } from '../../siege/sim/world'
+import { Sfx, type SfxName } from './audio'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js'
@@ -205,6 +206,15 @@ interface EnemyVisual {
 const enemyVisuals = new Map<number, EnemyVisual>()
 const enemyGroupToId = new Map<string, number>()
 const enemyAttackT = new Map<number, number>() // meleeHit/wallHit 시각 — 내리찍기 스윙 재생용
+/** 병종 → 발사음. 없으면 화살음으로 대체 (프리셋으로 새 병종을 넣어도 소리는 난다) */
+const SFX_BY_UNIT: Record<string, SfxName> = {
+  cannon: 'cannon',
+  ballista: 'ballista',
+  soldier: 'arrow',
+  hero: 'heroSwing',
+}
+const _sfxFwd = new THREE.Vector3() // 매 프레임 카메라 방향 — 할당 없이 재사용
+
 const enemyFacing = new Map<number, number>() // 접전 중 바라볼 방향 (기본은 서쪽 -x)
 const ENEMY_FACE_WEST = -Math.PI / 2
 /** 자기가 치는 벽면을 바라보는 각 — 회절 레인으로 북/남벽에 붙은 개체는 서쪽이 아니다 */
@@ -383,9 +393,14 @@ let pendingHeroSkill: { x: number; z: number; heroId?: number } | undefined
 
 // ---------------------------------------------------------------- 입력 (LoL식)
 let spaceLatch = false
+let muted = false
 window.addEventListener('keydown', (e) => {
+  // 브라우저 정책상 사용자 제스처 전에는 오디오가 안 난다 — 첫 입력에서 연다
+  Sfx.unlock()
   if (e.code === 'Space') spaceLatch = true
+  if (e.code === 'KeyM') muted = Sfx.toggleMute()
 })
+window.addEventListener('pointerdown', () => Sfx.unlock())
 
 // 고정 부감 카메라: 남쪽에서 북쪽을 내려다봄 (서=성벽=왼쪽, 동=적=오른쪽). 휠 줌만.
 let camDist = 26
@@ -679,7 +694,7 @@ hud.innerHTML = `
     <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
   </div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~5</b>: 부대 지정 / <b>1~5</b>: 호출 · 우클릭: <b>병기 조준</b> / 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공
+    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~5</b>: 부대 지정 / <b>1~5</b>: 호출 · 우클릭: <b>병기 조준</b> / 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공 · <b>M</b>: 음소거
   </div>
   <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
        background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
@@ -910,6 +925,7 @@ function handleEvents(events: SiegeEvent[]): void {
       // 발사 섬광 — 어디서 쏘는지 읽히게 (대포는 크게)
       spawnFlash(from.clone(), ev.unitKind === 'cannon' ? 2.4 : 0.8, 0xffdf9a, 200)
       unitAttackT.set(ev.unitId, performance.now()) // 사격 모션·병기 반동
+      Sfx.at(SFX_BY_UNIT[ev.unitKind] ?? 'arrow', ev.from.x, ev.from.z)
       if (ev.unitKind === 'cannon') {
         spawnLight(from.clone(), 0xffb060, 40, 300)
         addTrauma(0.3, ev.from.x, ev.from.z) // 대포는 쏠 때부터 화면이 울린다
@@ -939,12 +955,14 @@ function handleEvents(events: SiegeEvent[]): void {
       spawnFlash(new THREE.Vector3(ev.pos.x, 0.8, ev.pos.z), 1.6, 0xff6a4a, 300)
       // 쓰러지며 이는 흙먼지 — 시신이 바닥에 닿는 쪽이라 낮고 넓게
       fx.smoke(ev.pos.x, 0.3, ev.pos.z, { count: 3, scale: 1, rise: 0.35, spread: 0.6, dur: 900, tint: 0x9c9184, opacity: 0.4 })
+      Sfx.at('enemyDie', ev.pos.x, ev.pos.z)
     } else if (ev.type === 'enemyRaised') {
       // 부활 — 잡았던 것이 다시 선다. 죽음(붉은 섬광)과 반대로 **차가운 보라**로 읽히게 해서
       // "내가 방금 죽인 게 일어났다"가 한눈에 구분되게 한다. 술사를 끊으라는 신호이기도 하다.
       spawnFlash(new THREE.Vector3(ev.pos.x, 0.9, ev.pos.z), 2.2, 0x9a5cff, 420)
       fx.smoke(ev.pos.x, 0.25, ev.pos.z, { count: 5, scale: 1.1, rise: 1.5, spread: 0.5, dur: 1100, tint: 0x3a2258, opacity: 0.55 })
       addTrauma(0.08, ev.pos.x, ev.pos.z)
+      Sfx.at('raise', ev.pos.x, ev.pos.z)
     } else if (ev.type === 'unitDied') {
       const v = unitVisuals.get(ev.id)
       if (v) {
@@ -962,6 +980,7 @@ function handleEvents(events: SiegeEvent[]): void {
       // 마지막 렌더 위치의 y를 쓴다)
       const uy = v ? v.group.position.y : 0
       fx.smoke(ev.pos.x, uy + 0.3, ev.pos.z, { count: 3, scale: 0.9, rise: 0.4, spread: 0.5, dur: 850, tint: 0xa8a196, opacity: 0.4 })
+      Sfx.at('unitDie', ev.pos.x, ev.pos.z)
     } else if (ev.type === 'heroSkillCast') {
       spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 8, 0xffa040, 650)
       spawnFlash(new THREE.Vector3(ev.x, 3.6, ev.z), 4.5, 0xfff0c0, 450)
@@ -973,6 +992,7 @@ function handleEvents(events: SiegeEvent[]): void {
       scene.add(fire.group)
       fireCols.push({ fx: fire, t0: performance.now(), dur: 1200 })
       addTrauma(0.75, ev.x, ev.z)
+      Sfx.at('skill', ev.x, ev.z)
       // 업화 뒤에 남는 검은 연기와 튀어오르는 잔해 — 폭심이 오래 읽히게
       fx.smoke(ev.x, 1.2, ev.z, { count: 6, scale: 2.2, rise: 2.2, spread: 1.6, dur: 2000, tint: 0x6b6259, opacity: 0.5 })
       fx.debris(ev.x, 0.4, ev.z, { count: 10, speed: 7, kind: 'ember' })
@@ -998,12 +1018,14 @@ function handleEvents(events: SiegeEvent[]): void {
         fx.debris(u.pos.x, u.h + 1.1, u.pos.z, { count: 3, speed: 2.6, kind: 'ember', floorY: u.h })
         // 접전 대상을 바라보게 — sim에 방향 개념이 없으므로 연출 전용
         if (e) enemyFacing.set(ev.enemyId, Math.atan2(u.pos.x - e.pos.x, u.pos.z - e.pos.z))
+        Sfx.at('melee', u.pos.x, u.pos.z)
       }
     } else if (ev.type === 'wallHit') {
       enemyAttackT.set(ev.id, performance.now())
       const we = state.enemies.find((x) => x.id === ev.id)
       enemyFacing.set(ev.id, we ? faceWall(we) : ENEMY_FACE_WEST)
       wallHitT = performance.now() // HUD 성벽 게이지 반응
+      if (we) Sfx.at('wallHit', we.pos.x, we.pos.z)
       const e = state.enemies.find((x) => x.id === ev.id)
       if (e) {
         addTrauma(0.16, e.pos.x, e.pos.z) // 성벽이 얻어맞으면 화면이 울린다
@@ -1604,7 +1626,7 @@ function frame(now: number): void {
   if (now - fpsT0 >= 500) {
     const fps = (fpsFrames * 1000) / (now - fpsT0)
     document.getElementById('fps')!.textContent =
-      `${Math.round(fps)} fps · 해상도 ${Math.round((resScale / RES_MAX) * 100)}%${bloom.enabled ? '' : ' · 블룸 꺼짐'}`
+      `${Math.round(fps)} fps · 해상도 ${Math.round((resScale / RES_MAX) * 100)}%${bloom.enabled ? '' : ' · 블룸 꺼짐'}${muted ? ' · 음소거' : ''}`
     adaptQuality(fps, now)
     fpsFrames = 0
     fpsT0 = now
@@ -1639,7 +1661,14 @@ function frame(now: number): void {
       input.heroSkill = pendingHeroSkill
       pendingHeroSkill = undefined
     }
+    const before = state.status
     stepSiege(state, spawns, input)
+    // 상태 전이는 이벤트로 오지 않으므로 여기서 잡는다 (뿔피리·승패음)
+    if (before !== state.status) {
+      if (state.status === 'assault') Sfx.global('horn')
+      else if (state.status === 'won') Sfx.global('victory')
+      else if (state.status === 'lost') Sfx.global('defeat')
+    }
     frameEvents.push(...state.events)
   }
   handleEvents(frameEvents)
@@ -1700,6 +1729,9 @@ function frame(now: number): void {
   renderAlpha = Math.min(1, acc / STEP_MS)
   syncScene(now)
   updateAimLines()
+  // 리스너 = 카메라. 오른쪽 축을 월드 XZ로 투영해 좌우 패닝에 쓴다
+  camera.getWorldDirection(_sfxFwd)
+  Sfx.setListener(camera.position.x, camera.position.z, -_sfxFwd.z, _sfxFwd.x)
   composer.render()
   requestAnimationFrame(frame)
 }
@@ -1726,6 +1758,9 @@ requestAnimationFrame(frame)
       renderer.toneMappingExposure = v
     },
   },
+  // 사운드 핸들 — 소리는 정지 화면으로 판정할 수 없으므로 빌드 없이 하나씩 들어보기 위한 훅.
+  // 예) __siege.sfx.at('cannon', -6, 0) / __siege.sfx.global('horn') / __siege.sfx.toggleMute()
+  sfx: Sfx,
   // 성능 계측용 핸들 — 그림자 패스/배경/캐릭터의 몫을 따로 끄고 재보기 위해서만 쓴다.
   dbg: { scene, renderer, sun, composer },
   // 성능 계측 훅 — fps만으로는 원인(드로우콜인지 fill-rate인지)을 못 가른다.
