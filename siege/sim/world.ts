@@ -462,24 +462,32 @@ export interface UnitKindDef {
    * 그래서 빠른 개체는 포탄을 흘릴 수 있고, 대포는 예측 사격이 필요해진다.
    */
   projectileSpeed?: number
+  /**
+   * 조작 병사 — 이 병기에서 내려보낼 수 있는 백병전 인력의 병종.
+   * 내려보내면 **그 병기는 이 판에서 다시 쏘지 못한다**(편도). 화력 한 문과 지상 한 명을 맞바꾸는
+   * 결정이고, 성문이 뚫렸을 때 쓰라고 있는 수단이다.
+   */
+  crew?: string
 }
 
 export const UNIT_KINDS: Record<string, UnitKindDef> = {
   soldier: { kind: 'soldier', name: '궁수', hp: 260, dmg: 33, atkInterval: 1.3, range: 14, speed: 3.5, radius: 0.4 },
   ballista: {
     kind: 'ballista', name: '발리스타', hp: 420, dmg: 260, atkInterval: 2.8, range: 21, speed: 1.2,
-    radius: 0.8, emplaced: true, aimRadius: 7,
+    radius: 0.8, emplaced: true, aimRadius: 7, crew: 'guard',
     projectileSpeed: 46, // 볼트 — 빠르지만 즉시는 아니다
   },
   cannon: {
     kind: 'cannon', name: '대포', hp: 500, dmg: 182, atkInterval: 3.8, range: 24, speed: 1.0,
-    radius: 0.9, aoe: 2.8, emplaced: true, aimRadius: 9,
+    radius: 0.9, aoe: 2.8, emplaced: true, aimRadius: 9, crew: 'guard',
     projectileSpeed: 22, // 포탄 — 느리다. 최대 사거리에서 1초 넘게 난다
   },
   // 피해 상향은 비행 도입의 대가다. 실측 명중률 65% — 35%가 빗나가므로 그만큼 화력이 준다.
   // 속도로 우겨 히트스캔에 가깝게 만드는 대신, **맞으면 무겁게** 해서 상쇄했다(×1.3).
   // 대포 140 → 182, 발리스타 200 → 260.
   hero: { kind: 'hero', name: '영웅', hp: 900, dmg: 110, atkInterval: 0.9, range: 13, speed: HERO_SPEED, radius: 0.5 },
+  // 병기에서 내려온 조작 병사 — 사거리 1.6은 사실상 백병전이다. 배치가 아니라 병기에서 나온다
+  guard: { kind: 'guard', name: '수비병', hp: 320, dmg: 62, atkInterval: 0.8, range: 1.6, speed: 3.4, radius: 0.4 },
 }
 
 export interface FriendlyUnit {
@@ -496,6 +504,8 @@ export interface FriendlyUnit {
   skillCd: number
   /** 고정 병기 전용 — 겨누고 있는 지점. 화망의 실체이자 괴수가 읽는 위협의 출처 */
   aim: Vec2 | null
+  /** 조작 병사가 내려갔다 — 이 병기는 다시 쏘지 못한다 */
+  crewGone: boolean
 }
 
 /** 영웅 스킬 「업화」 — 지점 지정 광역 화염. 조준(자동/수동)은 클라이언트 보조,
@@ -523,6 +533,8 @@ export interface SiegeInput {
   unitMove?: { ids: number[]; to: Vec2 & { h?: number } }
   /** 고정 병기 조준 명령 — 옮기는 대신 겨눈다. 이게 화망을 그리는 유일한 수단이다 */
   unitAim?: { ids: number[]; to: Vec2 }
+  /** 조작 병사 하차 — 병기를 버리고 백병전 인력으로 내려보낸다 (편도) */
+  dismount?: { ids: number[] }
   /** 영웅 스킬 시전 지점 — 사거리·쿨다운은 sim이 검증. heroId 생략 시 첫 영웅 (다영웅 대비) */
   heroSkill?: Vec2 & { heroId?: number }
   /** 준비 종료 → 침공 개시 */
@@ -568,6 +580,7 @@ export type SiegeEvent =
       flight: number
     }
   | { type: 'shotLanded'; x: number; z: number; unitKind: string; aoe?: number }
+  | { type: 'crewDismounted'; unitId: number; crewId: number; pos: Vec2 }
   | { type: 'heroSkillCast'; x: number; z: number }
   | { type: 'meleeHit'; enemyId: number; unitId: number }
   | { type: 'enemyDied'; id: number; kind: string; pos: Vec2 }
@@ -705,6 +718,7 @@ function initialUnits(loadout: Loadout, nextId: () => number): FriendlyUnit[] {
       // 좁아지고 흐름이 생긴다. 처음부터 좁게 겨눈 상태로 시작하면 손대지 않은 판이
       // 성립하지 않아서(무개입 0/6으로 측정됨) "조준은 선택적 개선"이라는 전제가 깨진다.
       aim: null,
+      crewGone: false,
     }
   })
 }
@@ -966,6 +980,40 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     }
   }
 
+  // 조작 병사 하차 — 병기 한 문을 버리고 지상 백병전 인력을 얻는다. 되돌릴 수 없다.
+  // 성문이 뚫려 안뜰에 적이 들어왔을 때 쓰라고 있는 수단이다(위협 계산에 안 잡히는 지상 전력).
+  if (input.dismount) {
+    for (const id of [...input.dismount.ids].sort((a, b) => a - b)) {
+      const u = state.units.find((v) => v.id === id)
+      if (!u || u.crewGone) continue
+      const def = state.kinds.units[u.kind]!
+      const crewKind = def.crew
+      if (!crewKind || !state.kinds.units[crewKind]) continue
+      u.crewGone = true
+      // 성벽 안쪽 지상으로 내려선다 (계단을 타는 시간은 생략 — 결정 자체가 비용이다).
+      // 위치를 두 번 틀렸다: 병기 z를 그대로 쓰면 성벽 끝(±18)에서 **북/남벽 보도 속**에
+      // 생성되고, 벽에 바짝 붙이면 **계단 경사면**(높이 8.4)에 떨어진다. 둘 다 지상이 아니라
+      // 한 발짝도 못 움직인다(실측). 계단 띠(x −12.4~−9.8)와 벽 밴드를 모두 벗어난 안뜰로 놓는다.
+      const dz = clamp(u.pos.z, C.north + halfT + 1.5, C.south - halfT - 1.5)
+      const crew: FriendlyUnit = {
+        id: state.nextId++,
+        kind: crewKind,
+        pos: { x: C.east - halfT - 4, z: dz },
+        h: 0,
+        hp: state.kinds.units[crewKind]!.hp,
+        facing: Math.PI / 2,
+        target: null,
+        path: [],
+        cooldown: 0,
+        skillCd: 0,
+        aim: null,
+        crewGone: false,
+      }
+      state.units.push(crew)
+      state.events.push({ type: 'crewDismounted', unitId: u.id, crewId: crew.id, pos: { ...crew.pos } })
+    }
+  }
+
   // 조준 — 고정 병기에만. 즉시 반영되고 이동 시간이 없다(그래서 화망을 다시 그리는 게 빠르다)
   if (input.unitAim) {
     const to = input.unitAim.to
@@ -1083,7 +1131,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   // 아군 사격 — 정지 상태에서만 (이동 중 발사 불가)
   for (const u of state.units) {
     if (u.cooldown > 0) u.cooldown--
-    if (u.path.length > 0 || u.cooldown > 0) continue
+    if (u.path.length > 0 || u.cooldown > 0 || u.crewGone) continue // 병사가 내려간 병기는 침묵한다
     const def = state.kinds.units[u.kind]!
     const tgt = acquireTarget(u, state.enemies, def)
     if (!tgt) continue

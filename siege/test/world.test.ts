@@ -251,6 +251,51 @@ describe('M2b 전투', () => {
     }
   })
 
+  describe('조작 병사 하차 (백병전 전환)', () => {
+    it('병기를 버리고 지상 병사를 얻는다 — 그 병기는 다시 쏘지 못한다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const gun = state.units.find((u) => u.kind === 'cannon')!
+      const before = state.units.length
+      stepSiege(state, spawns, { dismount: { ids: [gun.id] } })
+      expect(gun.crewGone).toBe(true)
+      expect(state.units).toHaveLength(before + 1)
+      const guard = state.units.find((u) => u.kind === 'guard')!
+      expect(guard.h).toBe(0) // 지상이다 — 그래서 괴수의 위협 계산에 안 잡힌다
+      expect(state.events.some((e) => e.type === 'crewDismounted')).toBe(true)
+
+      // 침묵 확인 — 사거리 안에 표적을 세워도 이 병기는 쏘지 않는다
+      state.units = [gun]
+      placeEnemy(state, 'grunt', gun.pos.x + 10, gun.pos.z, 660).atWall = true
+      gun.cooldown = 0
+      for (let i = 0; i < 30 * 10; i++) stepSiege(state, spawns, {})
+      expect(state.events.some((e) => e.type === 'unitFired')).toBe(false)
+      expect(state.shots).toHaveLength(0)
+    })
+
+    it('편도다 — 같은 병기를 두 번 내려보낼 수 없다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const gun = state.units.find((u) => u.kind === 'ballista')!
+      stepSiege(state, spawns, { dismount: { ids: [gun.id] } })
+      const after = state.units.length
+      stepSiege(state, spawns, { dismount: { ids: [gun.id] } })
+      expect(state.units).toHaveLength(after) // 두 번째는 무시된다
+    })
+
+    it('영웅처럼 이동 가능한 병종이다 — 고정 병기가 아니다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const gun = state.units.find((u) => u.kind === 'cannon')!
+      stepSiege(state, spawns, { dismount: { ids: [gun.id] } })
+      const guard = state.units.find((u) => u.kind === 'guard')!
+      const from = { ...guard.pos }
+      stepSiege(state, spawns, { unitMove: { ids: [guard.id], to: { x: CASTLE.east - 12, z: 0 } } })
+      for (let i = 0; i < 30 * 20 && guard.path.length > 0; i++) stepSiege(state, spawns, {})
+      expect(Math.hypot(guard.pos.x - from.x, guard.pos.z - from.z)).toBeGreaterThan(3)
+    })
+  })
+
   describe('투사체 비행', () => {
     it('포탄은 날아가는 동안 피해가 없고, 도착해서야 터진다', () => {
       const { state, spawns } = createSiege(SEED)

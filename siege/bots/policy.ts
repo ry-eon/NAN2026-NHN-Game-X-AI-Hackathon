@@ -97,10 +97,24 @@ export const greedy: BotPolicy = {
       if (half.length > 0) return { unitAim: { ids: half.map((u) => u.id), to: { x: boss.pos.x, z: boss.pos.z } } }
     }
 
+    // 3) 안뜰이 뚫렸으면 병기 한 문을 버리고 조작 병사를 내려보낸다.
+    //    성벽 위 화력은 터널·안뜰에 닿지 않으므로, 여기서만은 지상 전력이 유일한 답이다.
+    const intruders = s.enemies.filter((e) => e.mode === 'breach' && e.pos.x < CASTLE.east - CASTLE.wallT / 2)
+    if (intruders.length > 0) {
+      const guards = s.units.filter((u) => u.kind === 'guard').length
+      if (guards < intruders.length) {
+        // 전선에서 가장 먼 병기부터 뗀다 — 화력 손실이 가장 적은 문
+        const spare = s.units
+          .filter((u) => !u.crewGone && s.kinds.units[u.kind]?.crew)
+          .sort((a, b) => Math.abs(b.pos.z - intruders[0]!.pos.z) - Math.abs(a.pos.z - intruders[0]!.pos.z))[0]
+        if (spare) return { dismount: { ids: [spare.id] } }
+      }
+    }
+
     const tz = threatZ(s)
     if (tz === null) return undefined
 
-    // 3) 조준 — 4초에 한 번 전선 쪽으로 화망을 다시 그린다. 이동이 아니라 조준이라 즉시 먹는다.
+    // 4) 조준 — 4초에 한 번 전선 쪽으로 화망을 다시 그린다. 이동이 아니라 조준이라 즉시 먹는다.
     //    전부 한 점에 몰지는 않는다: 몰면 반대편이 완전히 비어 다음 웨이브가 통째로 그리로 흐른다.
     if (s.tick % sec(4) === 0) {
       const aimAt = clampWallZ(tz)
@@ -111,7 +125,7 @@ export const greedy: BotPolicy = {
       }
     }
 
-    // 4) 영웅 — 성벽 안쪽 지상을 따라 움직여 업화 사거리(18) 안에 전선을 넣는다
+    // 5) 영웅 — 성벽 안쪽 지상을 따라 움직여 업화 사거리(18) 안에 전선을 넣는다
     if (s.tick % sec(6) !== 0) return undefined
     if (Math.abs(hero.pos.z - tz) <= 6) return undefined
     return { unitMove: { ids: [hero.id], to: { x: WALL_X - 6, z: clampWallZ(tz) } } }
