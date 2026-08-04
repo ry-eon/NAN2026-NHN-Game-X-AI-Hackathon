@@ -37,6 +37,7 @@ function placeEnemy(state: SiegeState, kind: string, x: number, z: number, hp: n
     seg: 0,
     aim: { x: CASTLE.east + CASTLE.wallT / 2 + r + 0.2, z },
     via: null,
+    raiseCd: 0,
   }
   state.enemies.push(e)
   return e
@@ -247,6 +248,62 @@ describe('M2b 전투', () => {
       if (face === 'north') expect(e.pos.z).toBeLessThanOrEqual(CASTLE.north - CASTLE.wallT / 2 - r)
       else expect(e.pos.z).toBeGreaterThanOrEqual(CASTLE.south + CASTLE.wallT / 2 + r)
     }
+  })
+
+  describe('보스 네크로맨서', () => {
+    /** 술사 1기 + 시체 n구만 있는 최소 판 — 부활만 떼어내서 본다 */
+    const raiseBed = (corpses: number) => {
+      const { state, spawns } = createSiege(SEED, { ...DEFAULT_LOADOUT, name: 'test-raise', waves: [] })
+      state.units = [] // 사격 간섭 제거
+      stepSiege(state, spawns, { startAssault: true })
+      const boss = placeEnemy(state, 'necromancer', 8, 0, 2000)
+      for (let i = 0; i < corpses; i++) {
+        state.corpses.push({ kind: 'grunt', pos: { x: 8 + i * 0.5, z: 1 }, rotAt: state.tick + 30 * 60 })
+      }
+      return { state, spawns, boss }
+    }
+
+    it('쿨마다 반경 안의 시체를 되살리고, 그 시체는 소모된다', () => {
+      const { state, spawns } = raiseBed(5)
+      stepSiege(state, spawns, {})
+      const raised = state.events.filter((e) => e.type === 'enemyRaised')
+      expect(raised).toHaveLength(2) // count: 2
+      expect(state.corpses).toHaveLength(3) // 되살아난 둘은 소모됐다
+      const def = DEFAULT_LOADOUT.enemyKinds.grunt!
+      const back = state.enemies.filter((e) => e.kind === 'grunt')
+      expect(back).toHaveLength(2)
+      for (const e of back) expect(e.hp).toBe(Math.round(def.hp * 0.4)) // hpRatio
+      // 쿨 안에는 더 안 일어난다
+      for (let i = 0; i < 30 * 5; i++) stepSiege(state, spawns, {})
+      expect(state.corpses).toHaveLength(3)
+    })
+
+    it('술사를 끊으면 부활이 멈춘다 — 이것이 이 판의 판단 지점이다', () => {
+      const { state, spawns, boss } = raiseBed(6)
+      stepSiege(state, spawns, {})
+      expect(state.corpses).toHaveLength(4)
+      boss.hp = 0 // 술사만 제거
+      stepSiege(state, spawns, {})
+      expect(state.enemies.some((e) => e.kind === 'necromancer')).toBe(false)
+      for (let i = 0; i < 30 * 30; i++) stepSiege(state, spawns, {})
+      expect(state.corpses).toHaveLength(4) // 더는 아무도 일어나지 않는다
+    })
+
+    it('술사는 시체를 남기지 않는다 — 스스로를 되살릴 수 없다', () => {
+      const { state, spawns, boss } = raiseBed(0)
+      boss.hp = 0
+      stepSiege(state, spawns, {})
+      expect(state.corpses).toHaveLength(0)
+    })
+
+    it('시체는 삭는다 — 무한히 쌓아두고 후반에 몰아서 되살릴 수 없다', () => {
+      const { state, spawns, boss } = raiseBed(0)
+      boss.raiseCd = 30 * 60 // 술사를 쿨에 묶어두고 삭는 것만 본다
+      state.corpses.push({ kind: 'grunt', pos: { x: 8, z: 1 }, rotAt: state.tick + 10 })
+      for (let i = 0; i < 40; i++) stepSiege(state, spawns, {})
+      expect(state.corpses).toHaveLength(0)
+      expect(state.enemies.some((e) => e.kind === 'grunt')).toBe(false)
+    })
   })
 
   it('영웅 스킬: 반경 내 광역 피해 + 쿨다운·사거리 검증', () => {

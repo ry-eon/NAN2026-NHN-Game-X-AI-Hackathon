@@ -686,6 +686,8 @@ const MONSTER_SKIN: Record<string, THREE.MeshStandardMaterial> = {
   grunt: new THREE.MeshStandardMaterial({ color: 0x8a4038, roughness: 0.92 }),
   runner: new THREE.MeshStandardMaterial({ color: 0x9c4f28, roughness: 0.9 }),
   tank: new THREE.MeshStandardMaterial({ color: 0x52406b, roughness: 0.88 }),
+  // 보스 — 짙은 자주 로브. 병졸(붉은 계열)과 색으로도 갈린다
+  necromancer: new THREE.MeshStandardMaterial({ color: 0x241d38, roughness: 0.96 }),
 }
 
 export interface MonsterRig {
@@ -711,12 +713,16 @@ export function makeMonster(kind: string): MonsterRig {
       ? { hipH: 0.78, hunch: 0.5, gait: 13, atkDur: 300, legR: 0.09, spread: 0.16 }
       : kind === 'tank'
         ? { hipH: 1.12, hunch: 0.12, gait: 5.5, atkDur: 620, legR: 0.2, spread: 0.3 }
-        : { hipH: 0.84, hunch: 0.3, gait: 8, atkDur: 450, legR: 0.14, spread: 0.24 }
+        : kind === 'necromancer'
+          ? // 부유 — 다리가 없으니 보행 주파수 0. 로브 자락이 지면 가까이 내려와 떠 있는 것처럼 보인다
+            { hipH: 1.15, hunch: 0, gait: 0, atkDur: 760, legR: 0.001, spread: 0 }
+          : { hipH: 0.84, hunch: 0.3, gait: 8, atkDur: 450, legR: 0.14, spread: 0.24 }
 
   // ---- 다리 (골반 피벗) — 맨발엔 발톱, 갑주귀는 정강받이+쇠발
   const mkLeg = (side: number): THREE.Group => {
     const leg = new THREE.Group()
     leg.position.set(side * K.spread, K.hipH, 0)
+    if (kind === 'necromancer') return leg // 다리가 없다 — 로브 아래로 떠 있다
     const thigh = lathe(
       [
         [K.legR * 1.15, 0],
@@ -963,6 +969,82 @@ export function makeMonster(kind: string): MonsterRig {
     band.position.y = -0.78
     maul.add(handle, maulHead, band)
     rArm.add(maul)
+  } else if (kind === 'necromancer') {
+    // ---- 네크로맨서 — 이 군세를 일으킨 자. 유일하게 다리가 없는 실루엣이라
+    //      멀리서도 "저건 병졸이 아니다"가 즉시 읽힌다.
+    // 로브 — 어깨에서 바닥 가까이까지 한 덩어리로 떨어진다 (골반 아래로 -1.05까지)
+    torso.add(
+      lathe(
+        [
+          [0.0, 0.62],
+          [0.2, 0.5],
+          [0.26, 0.2],
+          [0.34, -0.4],
+          [0.46, -1.0],
+          [0.5, -1.12],
+        ],
+        skin,
+        16,
+      ),
+    )
+    // 어깨 망토 — 로브와 색을 갈라 실루엣에 층을 준다
+    const mantle = lathe(
+      [
+        [0.12, 0.6],
+        [0.3, 0.42],
+        [0.38, 0.1],
+      ],
+      MATS.clothDark,
+      16,
+    )
+    torso.add(mantle)
+    // 머리 — 후드. 얼굴은 없고 빈 어둠 속에 눈만 떠 있다
+    head.position.set(0, 0.62, 0)
+    const hood = lathe(
+      [
+        [0.0, 0.34],
+        [0.15, 0.26],
+        [0.22, 0.02],
+        [0.24, -0.12],
+      ],
+      skin,
+      14,
+    )
+    const voidFace = new THREE.Mesh(new THREE.SphereGeometry(0.16, 10, 8), new THREE.MeshBasicMaterial({ color: 0x000000 }))
+    voidFace.position.set(0, 0.04, 0.05)
+    head.add(hood, voidFace)
+    for (const s of [-1, 1]) {
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), MAT_EYE)
+      eye.position.set(s * 0.06, 0.06, 0.14)
+      head.add(eye)
+    }
+    // 팔 — 가늘고 긴 소매. 오른손에 지팡이
+    const armProf = (): [[number, number][], [number, number][]] => [
+      [
+        [0.09, 0],
+        [0.11, -0.2],
+        [0.08, -0.42],
+      ],
+      [
+        [0.085, -0.42],
+        [0.1, -0.52],
+        [0.06, -0.74],
+      ],
+    ]
+    lArm = mkArm(-1, [0.3, 0.44], ...armProf(), 0.11, -0.8)
+    rArm = mkArm(1, [0.3, 0.44], ...armProf(), 0.11, -0.8)
+    const staff = new THREE.Group()
+    staff.position.y = -0.8
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.024, 1.9, 8), MAT_WOOD_DARK)
+    shaft.position.y = 0.18
+    // 끝에 물린 뼈 고리 + 발광 구슬 — 부활술의 출처가 눈에 보이게
+    const claw = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.025, 6, 12), MAT_BONE)
+    claw.rotation.x = Math.PI / 2
+    claw.position.y = 1.06
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), MAT_EYE)
+    orb.position.y = 1.06
+    staff.add(shaft, claw, orb)
+    rArm.add(staff)
   } else {
     // ---- 야귀 (기본) — 구부정한 덩치
     torso.add(

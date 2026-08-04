@@ -242,6 +242,10 @@ export interface EnemyKindDef {
   threatAvoidance: number
   /** 모서리 회절 레인(북/남벽) 선호도 — 1이 동벽 정면과 동등, 0이면 절대 안 돈다 */
   flankBias: number
+  /** 벽에 붙지 않고 이만큼 떨어져 멈춘다 (보스처럼 뒤에서 지휘하는 개체) */
+  standoff?: number
+  /** 부활술 — 지정 시 쿨마다 반경 안의 시체를 되살린다 (네크로맨서) */
+  raise?: { cooldown: number /* 초 */; radius: number; count: number; hpRatio: number }
 }
 
 // 언데드 군세 — 네크로맨서가 일으킨 것들 (기획 확정 2026-08-04, docs/02-game-design.md §4-2)
@@ -260,6 +264,16 @@ export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
   tank: {
     kind: 'tank', name: '갑주귀', hp: 2050, dmg: 90, atkInterval: 2.0, speed: 1.4, radius: 0.8,
     wallDamage: 46, threatAvoidance: 0, flankBias: 0.05,
+  },
+  // 이 군세를 일으킨 자. 뒤에 서서 쓰러진 것들을 다시 세운다 — 직접 공격은 약하다.
+  // 킬존에서 잡은 것들이 계속 일어나므로 "먼저 이 자를 끊는다"는 판단이 생긴다.
+  // 수치는 후보 13종을 봇으로 돌려 고른 것. 더 세게(hp3200·쿨7×3기·0.55) 두면 무개입이
+  // 무너진다 — 자동 조준은 가까운 적부터 치므로 뒤에 선 술사를 영영 못 끊기 때문이다.
+  necromancer: {
+    kind: 'necromancer', name: '네크로맨서', hp: 2000, dmg: 30, atkInterval: 3.0, speed: 1.1,
+    radius: 0.9, wallDamage: 12, threatAvoidance: 2.2, flankBias: 0.15,
+    standoff: 6, // 벽에 붙지 않되 성벽 화력 안에는 들어온다 — 무개입으로도 끊을 수 있어야 한다
+    raise: { cooldown: 8, radius: 13, count: 2, hpRatio: 0.4 },
   },
 }
 // 개체당 벽 피해는 2026-08-04에 크게 낮췄다(60/40/130 → 21/14/46). 대신 수를 34 → 62로 늘렸다.
@@ -282,6 +296,16 @@ export interface ActiveEnemy {
   aim: Vec2
   /** 회절 레인 경유점 (성 동쪽 바깥). 통과하면 null이 되고 aim으로 향한다 */
   via: Vec2 | null
+  /** 부활술 남은 쿨다운 (틱). 부활술이 없는 종류는 항상 0 */
+  raiseCd: number
+}
+
+/** 쓰러진 자리 — 네크로맨서가 다시 세울 수 있는 대상. 되살아나면 소모된다 */
+export interface Corpse {
+  kind: string
+  pos: Vec2
+  /** 이 틱이 지나면 삭는다 (무한히 쌓여 후반에 몰아서 부활하는 걸 막는다) */
+  rotAt: number
 }
 
 // ---------------------------------------------------------------- 접근 구간 (침공 설계)
@@ -482,6 +506,8 @@ export interface SiegeState {
   lord: LordState
   units: FriendlyUnit[]
   enemies: ActiveEnemy[]
+  /** 아직 삭지 않은 시체 — 네크로맨서의 재료 */
+  corpses: Corpse[]
   spawnCursor: number
   nextId: number
   /** 이번 틱 이벤트 (렌더러 소비) */
@@ -495,6 +521,7 @@ export type SiegeEvent =
   | { type: 'heroSkillCast'; x: number; z: number }
   | { type: 'meleeHit'; enemyId: number; unitId: number }
   | { type: 'enemyDied'; id: number; kind: string; pos: Vec2 }
+  | { type: 'enemyRaised'; id: number; kind: string; pos: Vec2; byId: number }
   | { type: 'unitDied'; id: number; kind: string; pos: Vec2 }
   | { type: 'assaultStarted' }
   | { type: 'won' }
@@ -585,6 +612,7 @@ export const DEFAULT_LOADOUT: Loadout = {
     { wave: 2, kind: 'runner', count: 18, at: 26, every: 0.8 }, // 짐승 무리 (회절 레인으로 크게 돈다)
     { wave: 3, kind: 'tank', count: 5, at: 50, every: 2.5 }, // 중장 — 빈 갑옷
     { wave: 3, kind: 'grunt', altKind: 'runner', count: 25, at: 52, every: 0.6 }, // 본대
+    { wave: 4, kind: 'necromancer', count: 1, at: 57, z: 0 }, // 이 군세를 일으킨 자
   ],
 }
 
@@ -649,6 +677,7 @@ export function createSiege(
       lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null, path: [], h: 0 },
       units,
       enemies: [],
+      corpses: [],
       spawnCursor: 0,
       nextId: id,
       events: [],
@@ -755,6 +784,34 @@ function acquireTarget(u: FriendlyUnit, enemies: ActiveEnemy[], def: UnitKindDef
   return pick(u.pos, def.range)
 }
 
+/**
+ * 괴수 1기 생성 — 스폰과 부활이 같은 경로를 쓴다.
+ * 되살아난 것도 새로 온 것과 똑같이 목표 구간을 새로 뽑는다(그 시점의 화망을 보고 고른다).
+ */
+function makeEnemy(state: SiegeState, kind: string, pos: Vec2, hpRatio: number, wave: number): ActiveEnemy {
+  const def = state.kinds.enemies[kind]!
+  const id = state.nextId++
+  const seg = pickSegment(state, def, id)
+  // 보스는 벽에 붙지 않고 standoff만큼 떨어져 멈춘다 — 뒤에서 지휘하는 그림
+  const gap = def.radius + 0.2 + (def.standoff ?? 0)
+  return {
+    id,
+    kind,
+    pos: { ...pos },
+    hp: Math.max(1, Math.round(def.hp * hpRatio)),
+    cooldown: 0,
+    atWall: false,
+    wave,
+    seg: seg.id,
+    aim: { x: seg.probe.x + seg.normal.x * gap, z: seg.probe.z + seg.normal.z * gap },
+    via: seg.via ? { ...seg.via } : null,
+    raiseCd: 0,
+  }
+}
+
+/** 시체가 삭기까지 (초) — 무한히 쌓아두고 후반에 몰아서 되살리는 걸 막는다 */
+const CORPSE_ROT_SECONDS = 22
+
 /** 고정 1틱 전진. 결정론 — 입력 외 외부 상태 없음 */
 export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeInput): SiegeState {
   state.events = []
@@ -858,24 +915,9 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   // 스폰
   while (state.spawnCursor < spawns.length && spawns[state.spawnCursor]!.tick <= state.tick) {
     const s = spawns[state.spawnCursor++]!
-    const def = state.kinds.enemies[s.kind]!
-    const id = state.nextId++
     // 목표 구간은 지금 한 번만 정해진다 — 뒤늦게 옮긴 대포는 이 무리에 안 통하고
     // 다음 웨이브부터 통한다. 그래서 웨이브 사이가 판단 지점이 된다.
-    const seg = pickSegment(state, def, id)
-    const gap = def.radius + 0.2
-    const e: ActiveEnemy = {
-      id,
-      kind: s.kind,
-      pos: { x: FIELD.maxX - 1, z: s.z },
-      hp: def.hp,
-      cooldown: 0,
-      atWall: false,
-      wave: s.wave,
-      seg: seg.id,
-      aim: { x: seg.probe.x + seg.normal.x * gap, z: seg.probe.z + seg.normal.z * gap },
-      via: seg.via ? { ...seg.via } : null,
-    }
+    const e = makeEnemy(state, s.kind, { x: FIELD.maxX - 1, z: s.z }, 1, s.wave)
     state.enemies.push(e)
     state.events.push({ type: 'spawned', id: e.id, kind: e.kind, wave: e.wave })
   }
@@ -953,10 +995,44 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     }
   }
 
+  // 부활술 — 네크로맨서가 쿨마다 반경 안의 시체를 다시 세운다.
+  // 킬존에서 쓸어담은 것들이 계속 일어나므로 "먼저 이 자를 끊는다"는 판단이 생긴다.
+  // 대상 목록을 먼저 스냅샷한다 — 되살아난 개체가 같은 틱에 또 되살리면 폭주한다.
+  const raisers = state.enemies.filter((e) => state.kinds.enemies[e.kind]!.raise)
+  for (const boss of raisers) {
+    const r = state.kinds.enemies[boss.kind]!.raise!
+    if (boss.raiseCd > 0) {
+      boss.raiseCd--
+      continue
+    }
+    const picked: number[] = []
+    for (let i = 0; i < state.corpses.length && picked.length < r.count; i++) {
+      const c = state.corpses[i]!
+      if (Math.hypot(c.pos.x - boss.pos.x, c.pos.z - boss.pos.z) <= r.radius) picked.push(i)
+    }
+    if (picked.length === 0) continue
+    boss.raiseCd = Math.round(r.cooldown * TICKS_PER_SECOND)
+    for (const i of picked) {
+      const c = state.corpses[i]!
+      // 되살아난 것도 그 시점의 화망을 보고 목표 구간을 새로 고른다
+      const e = makeEnemy(state, c.kind, c.pos, r.hpRatio, boss.wave)
+      state.enemies.push(e)
+      state.events.push({ type: 'enemyRaised', id: e.id, kind: e.kind, pos: { ...c.pos }, byId: boss.id })
+    }
+    const used = new Set(picked)
+    state.corpses = state.corpses.filter((_, i) => !used.has(i))
+  }
+  // 삭은 시체 정리
+  if (state.corpses.length > 0) state.corpses = state.corpses.filter((c) => c.rotAt > state.tick)
+
   // 사망 처리
   state.enemies = state.enemies.filter((e) => {
     if (e.hp > 0) return true
     state.events.push({ type: 'enemyDied', id: e.id, kind: e.kind, pos: { ...e.pos } })
+    // 네크로맨서 자신은 시체를 남기지 않는다 — 스스로를 되살릴 수는 없다
+    if (!state.kinds.enemies[e.kind]!.raise) {
+      state.corpses.push({ kind: e.kind, pos: { ...e.pos }, rotAt: state.tick + CORPSE_ROT_SECONDS * TICKS_PER_SECOND })
+    }
     return false
   })
   state.units = state.units.filter((u) => {

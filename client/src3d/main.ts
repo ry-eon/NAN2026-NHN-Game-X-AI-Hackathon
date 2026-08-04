@@ -939,6 +939,12 @@ function handleEvents(events: SiegeEvent[]): void {
       spawnFlash(new THREE.Vector3(ev.pos.x, 0.8, ev.pos.z), 1.6, 0xff6a4a, 300)
       // 쓰러지며 이는 흙먼지 — 시신이 바닥에 닿는 쪽이라 낮고 넓게
       fx.smoke(ev.pos.x, 0.3, ev.pos.z, { count: 3, scale: 1, rise: 0.35, spread: 0.6, dur: 900, tint: 0x9c9184, opacity: 0.4 })
+    } else if (ev.type === 'enemyRaised') {
+      // 부활 — 잡았던 것이 다시 선다. 죽음(붉은 섬광)과 반대로 **차가운 보라**로 읽히게 해서
+      // "내가 방금 죽인 게 일어났다"가 한눈에 구분되게 한다. 술사를 끊으라는 신호이기도 하다.
+      spawnFlash(new THREE.Vector3(ev.pos.x, 0.9, ev.pos.z), 2.2, 0x9a5cff, 420)
+      fx.smoke(ev.pos.x, 0.25, ev.pos.z, { count: 5, scale: 1.1, rise: 1.5, spread: 0.5, dur: 1100, tint: 0x3a2258, opacity: 0.55 })
+      addTrauma(0.08, ev.pos.x, ev.pos.z)
     } else if (ev.type === 'unitDied') {
       const v = unitVisuals.get(ev.id)
       if (v) {

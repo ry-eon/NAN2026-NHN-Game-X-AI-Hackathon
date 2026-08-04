@@ -83,10 +83,24 @@ export const greedy: BotPolicy = {
       }
     }
 
+    // 2) 부활술사 우선 — 이 자를 끊지 않으면 킬존에서 잡은 것들이 계속 다시 일어난다.
+    //    설계가 의도한 판단이 그대로 정책이 된다: 잡몹을 붙잡고 있지 말고 술사를 먼저 끊는다.
+    const boss = s.enemies.find((e) => s.kinds.enemies[e.kind]?.raise)
+    if (boss && s.tick % sec(3) === 0) {
+      const guns = s.units.filter((u) => u.aim !== null)
+      const off = guns.filter(
+        (u) => u.aim && Math.hypot(u.aim.x - boss.pos.x, u.aim.z - boss.pos.z) > 4
+          && Math.hypot(u.pos.x - boss.pos.x, u.pos.z - boss.pos.z) <= s.kinds.units[u.kind]!.range,
+      )
+      // 전부 술사에게 돌리면 그 사이 본대가 성벽을 갉는다 — 절반만 뗀다
+      const half = off.slice(0, Math.max(1, Math.floor(guns.length / 2)))
+      if (half.length > 0) return { unitAim: { ids: half.map((u) => u.id), to: { x: boss.pos.x, z: boss.pos.z } } }
+    }
+
     const tz = threatZ(s)
     if (tz === null) return undefined
 
-    // 2) 조준 — 4초에 한 번 전선 쪽으로 화망을 다시 그린다. 이동이 아니라 조준이라 즉시 먹는다.
+    // 3) 조준 — 4초에 한 번 전선 쪽으로 화망을 다시 그린다. 이동이 아니라 조준이라 즉시 먹는다.
     //    전부 한 점에 몰지는 않는다: 몰면 반대편이 완전히 비어 다음 웨이브가 통째로 그리로 흐른다.
     if (s.tick % sec(4) === 0) {
       const aimAt = clampWallZ(tz)
@@ -97,7 +111,7 @@ export const greedy: BotPolicy = {
       }
     }
 
-    // 3) 영웅 — 성벽 안쪽 지상을 따라 움직여 업화 사거리(18) 안에 전선을 넣는다
+    // 4) 영웅 — 성벽 안쪽 지상을 따라 움직여 업화 사거리(18) 안에 전선을 넣는다
     if (s.tick % sec(6) !== 0) return undefined
     if (Math.abs(hero.pos.z - tz) <= 6) return undefined
     return { unitMove: { ids: [hero.id], to: { x: WALL_X - 6, z: clampWallZ(tz) } } }
