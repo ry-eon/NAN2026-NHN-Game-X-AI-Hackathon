@@ -410,29 +410,67 @@ window.addEventListener('keydown', (e) => {
   Sfx.unlock()
   if (e.code === 'Space') spaceLatch = true
   if (e.code === 'KeyM') muted = Sfx.toggleMute()
-  // G — 선택한 병기의 조작 병사를 선택으로 전환 (그다음 우클릭으로 빼거나 되돌린다).
-  // 병사가 선택돼 있으면 반대로 담당 병기를 선택 — 쌍을 오가는 토글.
-  if (e.code === 'KeyG' && selected.size > 0) {
-    const crews: number[] = []
-    const weapons: number[] = []
-    for (const id of selected) {
-      const u = state.units.find((v) => v.id === id)
-      if (!u) continue
-      if (u.crewOf !== undefined) weapons.push(u.crewOf)
-      const crew = state.units.find((v) => v.crewOf === u.id)
-      if (crew) crews.push(crew.id)
-    }
-    const next = crews.length > 0 ? crews : weapons
-    if (next.length > 0) {
-      selected.clear()
-      for (const id of next) selected.add(id)
-    }
-  }
+  if (e.code === 'KeyG') toggleCrewSelection()
 })
+
+// ---- 조작 액션 (키보드·커맨드 카드 버튼 공용 — 규칙이 두 벌 되지 않게 함수를 공유)
+
+/** G — 선택한 병기의 조작 병사를 선택으로 전환 (그다음 우클릭으로 빼거나 되돌린다).
+ *  병사가 선택돼 있으면 반대로 담당 병기를 선택 — 쌍을 오가는 토글. */
+function toggleCrewSelection(): void {
+  if (selected.size === 0) return
+  const crews: number[] = []
+  const weapons: number[] = []
+  for (const id of selected) {
+    const u = state.units.find((v) => v.id === id)
+    if (!u) continue
+    if (u.crewOf !== undefined) weapons.push(u.crewOf)
+    const crew = state.units.find((v) => v.crewOf === u.id)
+    if (crew) crews.push(crew.id)
+  }
+  const next = crews.length > 0 ? crews : weapons
+  if (next.length > 0) {
+    selected.clear()
+    for (const id of next) selected.add(id)
+  }
+}
+
+/** F2 — 전군 선택 (SC2 관례) */
+function selectAllArmy(): void {
+  selected.clear()
+  for (const u of state.units) selected.add(u.id)
+}
+
+/** H — 영웅 선택 */
+function selectHero(): void {
+  const hero = state.units.find((u) => u.kind === 'hero')
+  if (hero) {
+    selected.clear()
+    selected.add(hero.id)
+  }
+}
+
+/** E — 영웅 스킬 (선택 중인 영웅 우선, 없으면 첫 영웅) */
+function castSkill(): void {
+  const heroes = state.units.filter((u) => u.kind === 'hero')
+  const hero = heroes.find((h) => selected.has(h.id)) ?? heroes[0]
+  if (hero) triggerSkill(hero)
+}
 window.addEventListener('pointerdown', () => Sfx.unlock())
 
-// 고정 부감 카메라: 남쪽에서 북쪽을 내려다봄 (서=성벽=왼쪽, 동=적=오른쪽). 휠 줌만.
+// 부감 카메라: 남쪽에서 북쪽을 내려다봄 (서=성벽=왼쪽, 동=적=오른쪽). 휠 줌.
+// 2026-08-06 사용자 지시로 자유 이동 추가 — "멀리서 오는 것도 스타/롤처럼 움직여서 보고 싶다".
+// 기본은 성주 추적(camFollow), 가장자리 스크롤·화살표·미니맵 좌클릭이 추적을 풀고 C로 복귀.
 let camDist = 26
+let camFollow = true
+const camPos = { x: -15, z: 2 } // 자유 모드의 시점 (지면 기준). follow 중엔 매 프레임 성주로 덮인다
+let camY = 0 // 시점 높이 (성주가 성벽 위면 11) — 모드 전환 시 튀지 않게 보간
+let camPrevT = performance.now()
+const EDGE_PX = 18
+let mouseX = -1
+let mouseY = -1
+let mouseIn = false
+document.documentElement.addEventListener('mouseleave', () => (mouseIn = false))
 window.addEventListener('contextmenu', (e) => e.preventDefault())
 window.addEventListener('wheel', (e) => {
   camDist = Math.max(9, Math.min(42, camDist + e.deltaY * 0.02))
@@ -521,6 +559,9 @@ function issueCommand(p: { x: number; z: number; h?: number }): void {
 }
 
 window.addEventListener('pointermove', (e) => {
+  mouseX = e.clientX
+  mouseY = e.clientY
+  mouseIn = true
   if (aiming) {
     const p = pickPoint(e.clientX, e.clientY)
     if (p) {
@@ -642,21 +683,25 @@ window.addEventListener('keydown', (e) => {
   }
 })
 
-// 전군/영웅 바로잡기: F2 = 전군 선택 (SC2 관례), H = 영웅 선택
+// 전군/영웅/카메라: F2 = 전군 선택 (SC2 관례), H = 영웅 선택, C = 성주 카메라 복귀
 window.addEventListener('keydown', (e) => {
   if (e.code === 'F2') {
-    selected.clear()
-    for (const u of state.units) selected.add(u.id)
+    selectAllArmy()
     e.preventDefault()
   }
-  if (e.code === 'KeyH') {
-    const hero = state.units.find((u) => u.kind === 'hero')
-    if (hero) {
-      selected.clear()
-      selected.add(hero.id)
-    }
+  if (e.code === 'KeyH') selectHero()
+  if (e.code === 'KeyC') camFollow = true
+})
+
+// 화살표 키 팬 (SC식) — 카메라 로직은 frame()에서 소비
+const keysPan = new Set<string>()
+window.addEventListener('keydown', (e) => {
+  if (e.code.startsWith('Arrow')) {
+    keysPan.add(e.code)
+    e.preventDefault()
   }
 })
+window.addEventListener('keyup', (e) => keysPan.delete(e.code))
 
 /** 자동 조준: 사거리 내에서 "반경에 가장 많이 쓸려드는" 적 위치 (동률 시 앞선 스폰) */
 function bestSkillTarget(hero: FriendlyUnit): { x: number; z: number } | null {
@@ -696,11 +741,7 @@ window.addEventListener('keydown', (e) => {
     return
   }
   if (e.code === 'KeyT') skillAuto = !skillAuto
-  if (e.code !== 'KeyE') return
-  // 선택 중인 영웅 우선, 없으면 첫 영웅
-  const heroes = state.units.filter((u) => u.kind === 'hero')
-  const hero = heroes.find((h) => selected.has(h.id)) ?? heroes[0]
-  if (hero) triggerSkill(hero)
+  if (e.code === 'KeyE') castSkill()
 })
 
 // 이동 마커 (LoL식 클릭 링) — 성주 초록, 부대 명령 청록
@@ -738,9 +779,10 @@ hud.innerHTML = `
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
   <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
   <div id="fps" style="position:absolute;top:14px;right:16px;font-size:12px;color:#88a088"></div>
-  <canvas id="minimap" width="190" height="150" style="position:absolute;top:34px;right:16px;
+  <!-- SC식 하단 컨트롤 바: 좌 미니맵 / 중앙 영웅 카드·선택 부대·상세 / 우 커맨드 카드 -->
+  <canvas id="minimap" width="190" height="150" style="position:absolute;left:16px;bottom:14px;
        pointer-events:auto;background:#0a0e14d8;border:1px solid #345;border-radius:4px"></canvas>
-  <div id="deck" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);
+  <div id="deck" style="position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
        display:flex;gap:10px;align-items:flex-end">
     <div id="herobar" style="display:flex;gap:8px;align-items:flex-end"></div>
     <div id="selpanel" style="pointer-events:auto;display:none;background:#000d;border:1px solid #345;
@@ -748,18 +790,21 @@ hud.innerHTML = `
       <div id="selcount" style="font-size:11px;color:#9fc4a8;margin-bottom:5px"></div>
       <div id="selgrid" style="display:flex;flex-wrap:wrap;gap:4px"></div>
     </div>
-  </div>
-  <div id="panel" style="position:absolute;bottom:14px;right:16px;width:215px;background:#000b;
-       border:1px solid #333;border-radius:4px;padding:10px 12px;font-size:12px;display:none">
-    <div id="p-name" style="font-size:14px;font-weight:bold;margin-bottom:5px"></div>
-    <div id="p-hptext"></div>
-    <div style="width:100%;height:8px;background:#0008;margin:3px 0 7px">
-      <div id="p-hpbar" style="height:100%;background:#62c462"></div>
+    <div id="panel" style="width:215px;background:#000b;
+         border:1px solid #333;border-radius:4px;padding:10px 12px;font-size:12px;display:none">
+      <div id="p-name" style="font-size:14px;font-weight:bold;margin-bottom:5px"></div>
+      <div id="p-hptext"></div>
+      <div style="width:100%;height:8px;background:#0008;margin:3px 0 7px">
+        <div id="p-hpbar" style="height:100%;background:#62c462"></div>
+      </div>
+      <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
     </div>
-    <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
   </div>
-  <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~9</b>: 부대 지정 / <b>Shift+1~9</b>: 추가 / <b>1~9</b>: 호출 · <b>F2</b>: 전군 · <b>H</b>: 영웅 · 우클릭(화면·미니맵): <b>병기 조준</b> / 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공 · <b>G</b>: 병기↔조작병사 선택 전환 · <b>M</b>: 음소거
+  <div id="cmdcard" style="position:absolute;bottom:14px;right:16px;pointer-events:auto;
+       display:grid;grid-template-columns:repeat(3,58px);gap:5px"></div>
+  <div style="position:absolute;top:100px;left:16px;font-size:11px;color:#8a8aa0;max-width:420px;line-height:1.7">
+    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl/Shift+1~9</b>: 부대 지정/추가 · <b>1~9</b>: 호출 ·
+    우클릭(화면·미니맵): 조준/이동 · 화면 가장자리·미니맵 좌클릭: 카메라 · ESC: 해제 · <b>M</b>: 음소거
   </div>
   <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
        background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
@@ -781,14 +826,62 @@ const miniCtx = miniCanvas.getContext('2d')!
 const miniX = (x: number) => ((x - FIELD.minX) / (FIELD.maxX - FIELD.minX)) * miniCanvas.width
 const miniZ = (z: number) => ((z - FIELD.minZ) / (FIELD.maxZ - FIELD.minZ)) * miniCanvas.height
 
+function miniToWorld(clientX: number, clientY: number): { x: number; z: number } {
+  const r = miniCanvas.getBoundingClientRect()
+  return {
+    x: FIELD.minX + ((clientX - r.left) / r.width) * (FIELD.maxX - FIELD.minX),
+    z: FIELD.minZ + ((clientY - r.top) / r.height) * (FIELD.maxZ - FIELD.minZ),
+  }
+}
+let miniCamDrag = false
 miniCanvas.addEventListener('pointerdown', (e) => {
   e.stopPropagation()
-  if (e.button !== 2) return
-  const r = miniCanvas.getBoundingClientRect()
-  const x = FIELD.minX + ((e.clientX - r.left) / r.width) * (FIELD.maxX - FIELD.minX)
-  const z = FIELD.minZ + ((e.clientY - r.top) / r.height) * (FIELD.maxZ - FIELD.minZ)
-  issueCommand({ x, z })
+  const p = miniToWorld(e.clientX, e.clientY)
+  if (e.button === 0) {
+    // 좌클릭(+드래그) = 카메라 점프 (SC 관례) — 성주 추적이 풀린다, C로 복귀
+    camFollow = false
+    camPos.x = p.x
+    camPos.z = p.z
+    miniCamDrag = true
+  } else if (e.button === 2) {
+    issueCommand(p)
+  }
 })
+window.addEventListener('pointermove', (e) => {
+  if (!miniCamDrag || !(e.buttons & 1)) return
+  const p = miniToWorld(e.clientX, e.clientY)
+  camPos.x = Math.max(FIELD.minX, Math.min(FIELD.maxX, p.x))
+  camPos.z = Math.max(FIELD.minZ, Math.min(FIELD.maxZ, p.z))
+})
+window.addEventListener('pointerup', () => (miniCamDrag = false))
+
+// ---------------------------------------------------------------- 커맨드 카드 (SC식)
+// 키보드와 같은 함수를 호출한다 — 버튼과 단축키의 동작이 갈라질 수 없다
+const CMD_BUTTONS: Array<{ id: string; label: string; key: string; fn: () => void }> = [
+  { id: 'cmd-e', label: '업화', key: 'E', fn: castSkill },
+  { id: 'cmd-t', label: '자동', key: 'T', fn: () => (skillAuto = !skillAuto) },
+  { id: 'cmd-g', label: '병사', key: 'G', fn: toggleCrewSelection },
+  { id: 'cmd-f2', label: '전군', key: 'F2', fn: selectAllArmy },
+  { id: 'cmd-h', label: '영웅', key: 'H', fn: selectHero },
+  { id: 'cmd-c', label: '성주', key: 'C', fn: () => (camFollow = true) },
+]
+{
+  const card = document.getElementById('cmdcard')!
+  for (const b of CMD_BUTTONS) {
+    const btn = document.createElement('div')
+    btn.id = b.id
+    btn.style.cssText =
+      'cursor:pointer;text-align:center;background:#131b26d8;border:1px solid #3a4a5e;border-radius:5px;' +
+      'padding:7px 0 6px;font-family:monospace;color:#cfe0f0;user-select:none'
+    btn.innerHTML = `<div class="lbl" style="font-size:13px;font-weight:bold">${b.label}</div>
+      <div style="font-size:10px;color:#7d94ad;margin-top:2px">${b.key}</div>`
+    btn.addEventListener('pointerdown', (e) => {
+      e.stopPropagation()
+      if (e.button === 0) b.fn()
+    })
+    card.appendChild(btn)
+  }
+}
 
 function drawMinimap(): void {
   const c = miniCtx
@@ -836,6 +929,12 @@ function drawMinimap(): void {
   c.beginPath()
   c.arc(miniX(state.lord.pos.x), miniZ(state.lord.pos.z), 2.4, 0, Math.PI * 2)
   c.fill()
+  // 카메라 시야 (SC식 뷰포트 사각형) — 어디를 보고 있는지, 얼마나 벗어났는지
+  const vw = camDist * 0.95
+  const vh = camDist * 0.72
+  c.strokeStyle = '#ffffff88'
+  c.lineWidth = 1
+  c.strokeRect(miniX(camPos.x - vw), miniZ(camPos.z - vh), miniX(camPos.x + vw) - miniX(camPos.x - vw), miniZ(camPos.z + vh) - miniZ(camPos.z - vh))
 }
 
 // ---------------------------------------------------------------- 루프
@@ -1559,11 +1658,37 @@ function syncScene(now: number): void {
     }
   }
 
-  // 카메라: LoL식 고정 부감 — 성주 남쪽 상공에서 내려다보며 추적
-  const target = new THREE.Vector3(lx, ly, lz)
+  // 카메라: 기본은 성주 추적, 가장자리·화살표·미니맵으로 자유 이동 (C로 복귀)
+  const camDt = Math.min(0.05, (now - camPrevT) / 1000)
+  camPrevT = now
+  let panX = 0
+  let panZ = 0
+  if (mouseIn && !dragStart) {
+    // 드래그 선택 중엔 가장자리 팬 금지 — 박스를 끌다 화면이 밀려나면 선택을 망친다
+    if (mouseX <= EDGE_PX) panX -= 1
+    else if (mouseX >= window.innerWidth - EDGE_PX) panX += 1
+    if (mouseY <= EDGE_PX) panZ -= 1
+    else if (mouseY >= window.innerHeight - EDGE_PX) panZ += 1
+  }
+  if (keysPan.has('ArrowLeft')) panX -= 1
+  if (keysPan.has('ArrowRight')) panX += 1
+  if (keysPan.has('ArrowUp')) panZ -= 1
+  if (keysPan.has('ArrowDown')) panZ += 1
+  if (panX !== 0 || panZ !== 0) {
+    camFollow = false
+    const spd = camDist * 1.15 // 줌 비례 — 당겨 보면 세밀하게, 빼면 빠르게
+    camPos.x = Math.max(FIELD.minX, Math.min(FIELD.maxX, camPos.x + panX * spd * camDt))
+    camPos.z = Math.max(FIELD.minZ, Math.min(FIELD.maxZ, camPos.z + panZ * spd * camDt))
+  }
+  if (camFollow) {
+    camPos.x = lx
+    camPos.z = lz
+  }
+  // 시점 높이: 추적 중엔 성주의 층(성벽 위 11), 자유 모드는 지면 — 전환 시 보간으로 튐 방지
+  camY += ((camFollow ? ly : 0) - camY) * Math.min(1, camDt * 8)
   // 비스듬한 앵글(약 43°) — 성벽·인물·바위의 수직면이 화면에 실린다
-  camera.position.set(target.x, target.y + camDist * 0.82, target.z + camDist * 0.68)
-  camera.lookAt(target.x, target.y + 1.0, target.z - 1.5)
+  camera.position.set(camPos.x, camY + camDist * 0.82, camPos.z + camDist * 0.68)
+  camera.lookAt(camPos.x, camY + 1.0, camPos.z - 1.5)
   // 흔들림은 lookAt 뒤에 덧붙인다 — 제곱 감쇠라 큰 충격만 확실히 느껴지고 잔진동은 빨리 사라진다
   if (trauma > 0.002) {
     const s = trauma * trauma
@@ -1575,6 +1700,8 @@ function syncScene(now: number): void {
 
   // HUD
   drawMinimap()
+  const tLbl = document.querySelector('#cmd-t .lbl') as HTMLElement | null
+  if (tLbl) tLbl.textContent = skillAuto ? '자동' : '수동'
   document.getElementById('wall')!.textContent = `${state.wallHp}/${state.wallHpMax}`
   const wallBar = document.getElementById('wallbar') as HTMLDivElement
   wallBar.style.width = `${(state.wallHp / state.wallHpMax) * 100}%`
