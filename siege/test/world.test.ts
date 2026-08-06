@@ -10,6 +10,7 @@ import {
   stepHeight,
   WALL_HP,
   createSiege,
+  isCrewManned,
   stepSiege,
   UNIT_KINDS,
   SEGMENTS,
@@ -251,48 +252,69 @@ describe('M2b 전투', () => {
     }
   })
 
-  describe('조작 병사 하차 (백병전 전환)', () => {
-    it('병기를 버리고 지상 병사를 얻는다 — 그 병기는 다시 쏘지 못한다', () => {
+  describe('조작 병사 (상주 조작제 — 2026-08-06 룰 개정)', () => {
+    it('병기마다 조작 병사가 처음부터 곁에 선다 — 전부 조작 중 상태로 시작한다', () => {
+      const { state } = createSiege(SEED)
+      const weapons = state.units.filter((u) => DEFAULT_LOADOUT.unitKinds[u.kind]?.crew)
+      expect(weapons.length).toBeGreaterThan(0)
+      for (const w of weapons) {
+        const crew = state.units.find((u) => u.crewOf === w.id)
+        expect(crew).toBeDefined()
+        expect(crew!.kind).toBe('guard')
+        expect(crew!.h).toBe(w.h) // 같은 층 — 보도 위 병기면 보도 위에 선다
+        expect(isCrewManned(state, w)).toBe(true)
+      }
+    })
+
+    it('병사를 빼면 병기가 침묵하고, 돌아오면 다시 쏜다 (편도 아님)', () => {
       const { state, spawns } = createSiege(SEED)
       stepSiege(state, spawns, { startAssault: true })
       const gun = state.units.find((u) => u.kind === 'cannon')!
-      const before = state.units.length
-      stepSiege(state, spawns, { dismount: { ids: [gun.id] } })
-      expect(gun.crewGone).toBe(true)
-      expect(state.units).toHaveLength(before + 1)
-      const guard = state.units.find((u) => u.kind === 'guard')!
-      expect(guard.h).toBe(0) // 지상이다 — 그래서 괴수의 위협 계산에 안 잡힌다
-      expect(state.events.some((e) => e.type === 'crewDismounted')).toBe(true)
-
-      // 침묵 확인 — 사거리 안에 표적을 세워도 이 병기는 쏘지 않는다
-      state.units = [gun]
+      const crew = state.units.find((u) => u.crewOf === gun.id)!
+      state.units = [gun, crew] // 다른 병기의 사격이 판정을 흐리지 않게
+      const home = { x: crew.pos.x, z: crew.pos.z, h: crew.h }
       placeEnemy(state, 'grunt', gun.pos.x + 10, gun.pos.z, 660).atWall = true
+
+      // 1) 안뜰로 내려보낸다 → 조작 해제, 침묵
+      stepSiege(state, spawns, { unitMove: { ids: [crew.id], to: { x: -18, z: 0, h: 0 } } })
+      for (let i = 0; i < 30 * 30 && crew.path.length > 0; i++) stepSiege(state, spawns, {})
+      expect(isCrewManned(state, gun)).toBe(false)
       gun.cooldown = 0
-      for (let i = 0; i < 30 * 10; i++) stepSiege(state, spawns, {})
-      expect(state.events.some((e) => e.type === 'unitFired')).toBe(false)
-      expect(state.shots).toHaveLength(0)
+      let fired = false
+      for (let i = 0; i < 30 * 5; i++) {
+        stepSiege(state, spawns, {})
+        if (state.events.some((e) => e.type === 'unitFired')) fired = true
+      }
+      expect(fired).toBe(false)
+
+      // 2) 제자리로 돌려보낸다 → 조작 재개, 사격 재개
+      stepSiege(state, spawns, { unitMove: { ids: [crew.id], to: home } })
+      for (let i = 0; i < 30 * 40 && crew.path.length > 0; i++) stepSiege(state, spawns, {})
+      expect(isCrewManned(state, gun)).toBe(true)
+      gun.cooldown = 0
+      fired = false
+      for (let i = 0; i < 30 * 5; i++) {
+        stepSiege(state, spawns, {})
+        if (state.events.some((e) => e.type === 'unitFired')) fired = true
+      }
+      expect(fired).toBe(true)
     })
 
-    it('편도다 — 같은 병기를 두 번 내려보낼 수 없다', () => {
-      const { state, spawns } = createSiege(SEED)
-      stepSiege(state, spawns, { startAssault: true })
-      const gun = state.units.find((u) => u.kind === 'ballista')!
-      stepSiege(state, spawns, { dismount: { ids: [gun.id] } })
-      const after = state.units.length
-      stepSiege(state, spawns, { dismount: { ids: [gun.id] } })
-      expect(state.units).toHaveLength(after) // 두 번째는 무시된다
-    })
-
-    it('영웅처럼 이동 가능한 병종이다 — 고정 병기가 아니다', () => {
+    it('병사가 죽으면 그 병기는 남은 판 내내 침묵한다', () => {
       const { state, spawns } = createSiege(SEED)
       stepSiege(state, spawns, { startAssault: true })
       const gun = state.units.find((u) => u.kind === 'cannon')!
-      stepSiege(state, spawns, { dismount: { ids: [gun.id] } })
-      const guard = state.units.find((u) => u.kind === 'guard')!
-      const from = { ...guard.pos }
-      stepSiege(state, spawns, { unitMove: { ids: [guard.id], to: { x: CASTLE.east - 12, z: 0 } } })
-      for (let i = 0; i < 30 * 20 && guard.path.length > 0; i++) stepSiege(state, spawns, {})
-      expect(Math.hypot(guard.pos.x - from.x, guard.pos.z - from.z)).toBeGreaterThan(3)
+      const crew = state.units.find((u) => u.crewOf === gun.id)!
+      state.units = [gun, crew]
+      placeEnemy(state, 'grunt', gun.pos.x + 10, gun.pos.z, 660).atWall = true
+      crew.hp = 0 // 전사 처리
+      gun.cooldown = 0
+      let fired = false
+      for (let i = 0; i < 30 * 5; i++) {
+        stepSiege(state, spawns, {})
+        if (state.events.some((e) => e.type === 'unitFired')) fired = true
+      }
+      expect(fired).toBe(false)
     })
   })
 
@@ -301,7 +323,7 @@ describe('M2b 전투', () => {
       const { state, spawns } = createSiege(SEED)
       stepSiege(state, spawns, { startAssault: true })
       const gun = state.units.find((u) => u.kind === 'cannon')!
-      state.units = [gun]
+      state.units = [gun, state.units.find((u) => u.crewOf === gun.id)!] // 조작 병사 없인 못 쏜다
       // 정지한 표적 — 예측이 개입하지 않게
       const tgt = placeEnemy(state, 'grunt', gun.pos.x + 14, gun.pos.z, 660)
       tgt.atWall = true
@@ -324,7 +346,7 @@ describe('M2b 전투', () => {
       const { state, spawns } = createSiege(SEED)
       stepSiege(state, spawns, { startAssault: true })
       const gun = state.units.find((u) => u.kind === 'ballista')!
-      state.units = [gun]
+      state.units = [gun, state.units.find((u) => u.crewOf === gun.id)!] // 조작 병사 없인 못 쏜다
       const tgt = placeEnemy(state, 'grunt', gun.pos.x + 12, gun.pos.z, 660)
       tgt.atWall = true
       gun.cooldown = 0
@@ -374,7 +396,8 @@ describe('M2b 전투', () => {
         e.aim = { ...e.pos }
         e.atWall = true
       }
-      state.units = [gunner] // 지상 유닛(영웅)을 빼고 성벽 위 병기 하나만 남긴다
+      // 지상 유닛(영웅)을 빼고 성벽 위 병기 하나만 남긴다 (+조작 병사 — 없으면 침묵)
+      state.units = [gunner, state.units.find((u) => u.crewOf === gunner.id)!]
       gunner.cooldown = 0
       for (let i = 0; i < 30 * 8; i++) stepSiege(state, spawns, {})
       expect(inTunnel.hp).toBe(300) // 터널 안은 못 맞힌다

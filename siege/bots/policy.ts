@@ -10,8 +10,8 @@
 //   greedy = 적극 플레이   → 플레이어의 개입이 보상되는가
 //   random = 아무렇게나 만짐 → 심사자가 대충 조작해도 무너지지 않는가
 
-import { CASTLE, FIELD, HERO_SKILL, TICKS_PER_SECOND, WALL_X } from '../sim/world'
-import type { SiegeInput, SiegeState, Vec2 } from '../sim/world'
+import { CASTLE, CREW_MAN_RADIUS, FIELD, HERO_SKILL, TICKS_PER_SECOND, WALL_X } from '../sim/world'
+import type { FriendlyUnit, SiegeInput, SiegeState, Vec2 } from '../sim/world'
 
 export interface BotPolicy {
   name: string
@@ -22,6 +22,12 @@ export interface BotPolicy {
 
 const dist = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.z - b.z)
 const sec = (n: number): number => Math.round(n * TICKS_PER_SECOND)
+
+/** 조작 병사가 담당 병기 곁에 있는가 (조작 판정과 같은 반경) */
+function nearOwnWeapon(s: SiegeState, g: FriendlyUnit): boolean {
+  const w = s.units.find((u) => u.id === g.crewOf)
+  return !!w && dist(g.pos, w.pos) <= CREW_MAN_RADIUS
+}
 
 /** 적 위치를 후보로 삼아 반경 안에 가장 많이 걸리는 지점 (스킬 조준 — 클라이언트 자동조준과 같은 방식) */
 function densestPoint(state: SiegeState, radius: number): { x: number; z: number; n: number } | null {
@@ -75,10 +81,11 @@ export const greedy: BotPolicy = {
     const hero = s.units.find((u) => u.kind === 'hero')
     if (!hero) return undefined
 
-    // 1) 스킬 — 쿨이 돌고 반경 안에 2기 이상 몰렸을 때만 (한 마리에 쓰면 낭비)
+    // 1) 스킬 — 쿨이 돌고 반경 안에 3기 이상 몰렸을 때만 (2026-08-06 상주 조작제 재검증에서
+    //    2기 기준이 과소비로 판명 — 6시드 스윕에서 3기 기준이 전 시드 우세)
     if (hero.skillCd === 0 && s.enemies.length > 0) {
       const spot = densestPoint(s, HERO_SKILL.radius)
-      if (spot && spot.n >= 2 && dist(hero.pos, spot) <= HERO_SKILL.range) {
+      if (spot && spot.n >= 3 && dist(hero.pos, spot) <= HERO_SKILL.range) {
         return { heroSkill: { x: spot.x, z: spot.z, heroId: hero.id } }
       }
     }
@@ -97,17 +104,23 @@ export const greedy: BotPolicy = {
       if (half.length > 0) return { unitAim: { ids: half.map((u) => u.id), to: { x: boss.pos.x, z: boss.pos.z } } }
     }
 
-    // 3) 안뜰이 뚫렸으면 병기 한 문을 버리고 조작 병사를 내려보낸다.
+    // 3) 안뜰이 뚫렸으면 조작 병사를 병기에서 빼 내려보낸다 (2026-08-06 룰 개정:
+    //    하차 스폰이 아니라 실재 유닛의 이동 — 계단을 타는 시간이 실제로 든다).
     //    성벽 위 화력은 터널·안뜰에 닿지 않으므로, 여기서만은 지상 전력이 유일한 답이다.
     const intruders = s.enemies.filter((e) => e.mode === 'breach' && e.pos.x < CASTLE.east - CASTLE.wallT / 2)
     if (intruders.length > 0) {
-      const guards = s.units.filter((u) => u.kind === 'guard').length
-      if (guards < intruders.length) {
-        // 전선에서 가장 먼 병기부터 뗀다 — 화력 손실이 가장 적은 문
+      // "대응 중"인 병사 = 이동 명령을 받았거나 이미 자리를 비운 조작 병사
+      const responding = s.units.filter(
+        (u) => u.crewOf !== undefined && (u.path.length > 0 || u.target !== null || !nearOwnWeapon(s, u)),
+      ).length
+      if (responding < intruders.length) {
+        // 전선에서 가장 먼 병기의 병사부터 뗀다 — 화력 손실이 가장 적은 문
         const spare = s.units
-          .filter((u) => !u.crewGone && s.kinds.units[u.kind]?.crew)
+          .filter((u) => u.crewOf !== undefined && u.path.length === 0 && nearOwnWeapon(s, u))
           .sort((a, b) => Math.abs(b.pos.z - intruders[0]!.pos.z) - Math.abs(a.pos.z - intruders[0]!.pos.z))[0]
-        if (spare) return { dismount: { ids: [spare.id] } }
+        if (spare) {
+          return { unitMove: { ids: [spare.id], to: { x: intruders[0]!.pos.x, z: intruders[0]!.pos.z, h: 0 } } }
+        }
       }
     }
 
@@ -125,9 +138,10 @@ export const greedy: BotPolicy = {
       }
     }
 
-    // 5) 영웅 — 성벽 안쪽 지상을 따라 움직여 업화 사거리(18) 안에 전선을 넣는다
+    // 5) 영웅 — 성벽 안쪽 지상을 따라 움직여 업화 사거리(18) 안에 전선을 넣는다.
+    //    문턱 10: 이동 중엔 못 쏘므로 재배치는 참을수록 이득 (6시드 스윕으로 확정)
     if (s.tick % sec(6) !== 0) return undefined
-    if (Math.abs(hero.pos.z - tz) <= 6) return undefined
+    if (Math.abs(hero.pos.z - tz) <= 10) return undefined
     return { unitMove: { ids: [hero.id], to: { x: WALL_X - 6, z: clampWallZ(tz) } } }
   },
 }

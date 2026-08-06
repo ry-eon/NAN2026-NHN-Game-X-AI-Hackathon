@@ -7,11 +7,11 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 3046,
-        "seconds": 101.5,
-        "wallHp": 641,
-        "unitsAlive": 13,
-        "enemiesKilled": 70,
+        "ticks": 3137,
+        "seconds": 104.6,
+        "wallHp": 614,
+        "unitsAlive": 25,
+        "enemiesKilled": 72,
         "unitsLost": 0,
         "commands": [
           {
@@ -28,10 +28,10 @@
         "policy": "greedy",
         "loadout": "default",
         "status": "won",
-        "ticks": 3034,
-        "seconds": 101.1,
-        "wallHp": 1509,
-        "unitsAlive": 13,
+        "ticks": 3060,
+        "seconds": 102,
+        "wallHp": 1031,
+        "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
@@ -43,16 +43,31 @@
             }
           },
           {
+            "step": 361,
+            "tick": 360,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  25
+                ],
+                "to": {
+                  "x": -12,
+                  "z": -15.643875097857494
+                }
+              }
+            }
+          },
+          {
             "step": 721,
             "tick": 720,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 7.311853097688911
+                  "z": 16
                 }
               }
             }
@@ -63,37 +78,11 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 1.0995379268002434
-                }
-              }
-            }
-          },
-          {
-            "step": 1176,
-            "tick": 1175,
-            "input": {
-              "heroSkill": {
-                "x": 4.05481823810632,
-                "z": 9.148845469473898,
-                "heroId": 13
-              }
-            }
-          },
-          {
-            "step": 1261,
-            "tick": 1260,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 11.389677781254745
+                  "z": -1.1271286975326587
                 }
               }
             }
@@ -104,26 +93,11 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 16
-                }
-              }
-            }
-          },
-          {
-            "step": 1621,
-            "tick": 1620,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 16
+                  "z": -11.091222471894264
                 }
               }
             }
@@ -134,26 +108,26 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": -9.689342819688527
+                  "z": 7.691324097251771
                 }
               }
             }
           },
           {
-            "step": 2161,
-            "tick": 2160,
+            "step": 1981,
+            "tick": 1980,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": -2.394150388555981
+                  "z": -11.48630559499656
                 }
               }
             }
@@ -164,53 +138,23 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 7.469960311315722
+                  "z": 2.123414740996246
                 }
               }
             }
           },
           {
-            "step": 2380,
-            "tick": 2379,
+            "step": 2454,
+            "tick": 2453,
             "input": {
               "heroSkill": {
-                "x": 5.590072117819629,
-                "z": 6.433663985304536,
-                "heroId": 13
-              }
-            }
-          },
-          {
-            "step": 2521,
-            "tick": 2520,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -3.4816586592400767
-                }
-              }
-            }
-          },
-          {
-            "step": 2881,
-            "tick": 2880,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -14.999999999999998
-                }
+                "x": 5.353459093230093,
+                "z": -2.476710703209245,
+                "heroId": 25
               }
             }
           }
@@ -221,10 +165,10 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3046,
-        "seconds": 101.5,
-        "wallHp": 398,
-        "unitsAlive": 13,
+        "ticks": 3090,
+        "seconds": 103,
+        "wallHp": 458,
+        "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
@@ -241,7 +185,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -17.8999147079885,
@@ -256,7 +200,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -14.851727707311511,
@@ -271,7 +215,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -15.273131946101785,
@@ -286,7 +230,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.47773889452219,
@@ -301,7 +245,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -16.969697643071413,
@@ -324,10 +268,10 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 3085,
-        "seconds": 102.8,
-        "wallHp": 513,
-        "unitsAlive": 13,
+        "ticks": 3040,
+        "seconds": 101.3,
+        "wallHp": 1286,
+        "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
@@ -345,11 +289,11 @@
         "policy": "greedy",
         "loadout": "default",
         "status": "won",
-        "ticks": 3089,
-        "seconds": 103,
-        "wallHp": 1204,
-        "unitsAlive": 13,
-        "enemiesKilled": 69,
+        "ticks": 2965,
+        "seconds": 98.8,
+        "wallHp": 1420,
+        "unitsAlive": 25,
+        "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
           {
@@ -360,87 +304,16 @@
             }
           },
           {
-            "step": 541,
-            "tick": 540,
+            "step": 1801,
+            "tick": 1800,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": -7.398372448809657
-                }
-              }
-            }
-          },
-          {
-            "step": 721,
-            "tick": 720,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 2.5023782142952644
-                }
-              }
-            }
-          },
-          {
-            "step": 1081,
-            "tick": 1080,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 11.963711453613765
-                }
-              }
-            }
-          },
-          {
-            "step": 1261,
-            "tick": 1260,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -0.006805097976187315
-                }
-              }
-            }
-          },
-          {
-            "step": 1301,
-            "tick": 1300,
-            "input": {
-              "heroSkill": {
-                "x": 5.9434102798209505,
-                "z": 4.053828354636884,
-                "heroId": 13
-              }
-            }
-          },
-          {
-            "step": 1441,
-            "tick": 1440,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 12.64385210017172
+                  "z": -16
                 }
               }
             }
@@ -451,79 +324,23 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 2.2284455464410904
+                  "z": -4.503487737692172
                 }
               }
             }
           },
           {
-            "step": 2305,
-            "tick": 2304,
+            "step": 2605,
+            "tick": 2604,
             "input": {
               "heroSkill": {
-                "x": 5.742214834703253,
-                "z": -0.593924734632456,
-                "heroId": 13
-              }
-            }
-          },
-          {
-            "step": 2701,
-            "tick": 2700,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -7.810518423966273
-                }
-              }
-            }
-          },
-          {
-            "step": 2854,
-            "tick": 2853,
-            "input": {
-              "heroSkill": {
-                "x": -5.083368119986517,
-                "z": -24.38787372800205,
-                "heroId": 13
-              }
-            }
-          },
-          {
-            "step": 2881,
-            "tick": 2880,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 2.6586364527481257
-                }
-              }
-            }
-          },
-          {
-            "step": 3061,
-            "tick": 3060,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 9
-                }
+                "x": 4.851974059038994,
+                "z": -10.924200035748912,
+                "heroId": 25
               }
             }
           }
@@ -534,11 +351,11 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3153,
-        "seconds": 105.1,
-        "wallHp": 636,
-        "unitsAlive": 13,
-        "enemiesKilled": 66,
+        "ticks": 3216,
+        "seconds": 107.2,
+        "wallHp": 464,
+        "unitsAlive": 25,
+        "enemiesKilled": 72,
         "unitsLost": 0,
         "commands": [
           {
@@ -554,7 +371,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -16.351922987028956,
@@ -569,7 +386,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -10.269747070968151,
@@ -584,7 +401,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -16.90749204158783,
@@ -599,7 +416,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12.64206651225686,
@@ -614,7 +431,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.515796100720763,
@@ -629,7 +446,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -17.009171951562166,
@@ -644,7 +461,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.919238911941648,
@@ -667,10 +484,10 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 3047,
-        "seconds": 101.6,
-        "wallHp": 902,
-        "unitsAlive": 13,
+        "ticks": 3060,
+        "seconds": 102,
+        "wallHp": 1022,
+        "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
@@ -688,11 +505,11 @@
         "policy": "greedy",
         "loadout": "default",
         "status": "won",
-        "ticks": 3036,
-        "seconds": 101.2,
-        "wallHp": 1538,
-        "unitsAlive": 13,
-        "enemiesKilled": 70,
+        "ticks": 3033,
+        "seconds": 101.1,
+        "wallHp": 1245,
+        "unitsAlive": 25,
+        "enemiesKilled": 68,
         "unitsLost": 0,
         "commands": [
           {
@@ -703,170 +520,54 @@
             }
           },
           {
-            "step": 361,
-            "tick": 360,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -16
-                }
-              }
-            }
-          },
-          {
-            "step": 541,
-            "tick": 540,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 2.449579084718812
-                }
-              }
-            }
-          },
-          {
-            "step": 721,
-            "tick": 720,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -8.154496791325446
-                }
-              }
-            }
-          },
-          {
             "step": 1081,
             "tick": 1080,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": -0.8108098451924393
+                  "z": -10.114315950439238
                 }
               }
             }
           },
           {
-            "step": 1279,
-            "tick": 1278,
+            "step": 1277,
+            "tick": 1276,
             "input": {
               "heroSkill": {
-                "x": 1.6275052661494356,
-                "z": 3.7898946616463878,
-                "heroId": 13
+                "x": 3.4775656505100407,
+                "z": -1.0282139159737764,
+                "heroId": 25
               }
             }
           },
           {
-            "step": 1441,
-            "tick": 1440,
+            "step": 2161,
+            "tick": 2160,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 13.082680615573416
+                  "z": 1.6996500231299434
                 }
               }
             }
           },
           {
-            "step": 1801,
-            "tick": 1800,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -4.418721569883665
-                }
-              }
-            }
-          },
-          {
-            "step": 1981,
-            "tick": 1980,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -10.700650219935609
-                }
-              }
-            }
-          },
-          {
-            "step": 2341,
-            "tick": 2340,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -2.1535058205065396
-                }
-              }
-            }
-          },
-          {
-            "step": 2402,
-            "tick": 2401,
+            "step": 2533,
+            "tick": 2532,
             "input": {
               "heroSkill": {
-                "x": -0.5013839043031385,
-                "z": 3.0506153627307135,
-                "heroId": 13
-              }
-            }
-          },
-          {
-            "step": 2877,
-            "tick": 2876,
-            "input": {
-              "heroSkill": {
-                "x": 1.2023890263522803,
-                "z": -3.1044908893045404,
-                "heroId": 13
-              }
-            }
-          },
-          {
-            "step": 2881,
-            "tick": 2880,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -16
-                }
+                "x": -0.022495624242245056,
+                "z": 3.0737571913582173,
+                "heroId": 25
               }
             }
           }
@@ -877,11 +578,11 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3142,
-        "seconds": 104.7,
-        "wallHp": 697,
-        "unitsAlive": 13,
-        "enemiesKilled": 72,
+        "ticks": 3170,
+        "seconds": 105.7,
+        "wallHp": 795,
+        "unitsAlive": 25,
+        "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
           {
@@ -897,7 +598,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -11.978791758418083,
@@ -912,7 +613,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -16.609560439363122,
@@ -927,7 +628,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.34380466490984,
@@ -942,7 +643,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -17.52996690943837,
@@ -957,7 +658,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12.952209798619151,
@@ -972,7 +673,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -16.85679516941309,
@@ -987,7 +688,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -16.811487160623074,
@@ -1002,7 +703,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -14.455002903938293,
@@ -1017,7 +718,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.893200118094683,
@@ -1032,11 +733,26 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -17.130585744976997,
                   "z": 3.9172822516411543
+                }
+              }
+            }
+          },
+          {
+            "step": 3151,
+            "tick": 3150,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  25
+                ],
+                "to": {
+                  "x": -10.62870098464191,
+                  "z": -16
                 }
               }
             }
@@ -1055,11 +771,11 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 3082,
-        "seconds": 102.7,
-        "wallHp": 768,
-        "unitsAlive": 13,
-        "enemiesKilled": 70,
+        "ticks": 3188,
+        "seconds": 106.3,
+        "wallHp": 921,
+        "unitsAlive": 25,
+        "enemiesKilled": 69,
         "unitsLost": 0,
         "commands": [
           {
@@ -1076,11 +792,11 @@
         "policy": "greedy",
         "loadout": "default",
         "status": "won",
-        "ticks": 3243,
-        "seconds": 108.1,
-        "wallHp": 1358,
-        "unitsAlive": 13,
-        "enemiesKilled": 68,
+        "ticks": 3173,
+        "seconds": 105.8,
+        "wallHp": 1298,
+        "unitsAlive": 25,
+        "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
           {
@@ -1091,83 +807,12 @@
             }
           },
           {
-            "step": 361,
-            "tick": 360,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 7.182186308189673
-                }
-              }
-            }
-          },
-          {
-            "step": 721,
-            "tick": 720,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -5.063451723834162
-                }
-              }
-            }
-          },
-          {
-            "step": 901,
-            "tick": 900,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 7.772728436463455
-                }
-              }
-            }
-          },
-          {
-            "step": 1261,
-            "tick": 1260,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -1.967333300778842
-                }
-              }
-            }
-          },
-          {
-            "step": 1266,
-            "tick": 1265,
-            "input": {
-              "heroSkill": {
-                "x": 3.9736857652681925,
-                "z": -0.9450777714541342,
-                "heroId": 13
-              }
-            }
-          },
-          {
             "step": 1441,
             "tick": 1440,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
@@ -1182,53 +827,12 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 2.0455037185768004
+                  "z": -5.36066449151075
                 }
-              }
-            }
-          },
-          {
-            "step": 1981,
-            "tick": 1980,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 8.767487534007065
-                }
-              }
-            }
-          },
-          {
-            "step": 2161,
-            "tick": 2160,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 0.9292167005126758
-                }
-              }
-            }
-          },
-          {
-            "step": 2300,
-            "tick": 2299,
-            "input": {
-              "heroSkill": {
-                "x": 4.6304477856247015,
-                "z": 7.741569774291264,
-                "heroId": 13
               }
             }
           },
@@ -1238,38 +842,23 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": -7.269451091440011
+                  "z": 4.7472122080220895
                 }
               }
             }
           },
           {
-            "step": 2881,
-            "tick": 2880,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 9.583960475704012
-                }
-              }
-            }
-          },
-          {
-            "step": 3051,
-            "tick": 3050,
+            "step": 2403,
+            "tick": 2402,
             "input": {
               "heroSkill": {
-                "x": -1.2,
-                "z": 15,
-                "heroId": 13
+                "x": 4.44164004012812,
+                "z": 4.793855636412345,
+                "heroId": 25
               }
             }
           },
@@ -1279,26 +868,11 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 16
-                }
-              }
-            }
-          },
-          {
-            "step": 3241,
-            "tick": 3240,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 16
+                  "z": -16
                 }
               }
             }
@@ -1310,11 +884,11 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3129,
-        "seconds": 104.3,
-        "wallHp": 973,
-        "unitsAlive": 13,
-        "enemiesKilled": 70,
+        "ticks": 3166,
+        "seconds": 105.5,
+        "wallHp": 546,
+        "unitsAlive": 25,
+        "enemiesKilled": 72,
         "unitsLost": 0,
         "commands": [
           {
@@ -1330,7 +904,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -14.116421891376376,
@@ -1345,7 +919,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -15.161863317713141,
@@ -1360,7 +934,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.236882468685508,
@@ -1375,7 +949,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12.148605281487107,
@@ -1390,7 +964,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -15.762643614783883,
@@ -1405,7 +979,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -17.715608997270465,
@@ -1420,7 +994,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.083232982084155,
@@ -1435,7 +1009,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -16.121948601678014,
@@ -1450,11 +1024,26 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.44241101294756,
                   "z": 9.769388982094824
+                }
+              }
+            }
+          },
+          {
+            "step": 3151,
+            "tick": 3150,
+            "input": {
+              "unitMove": {
+                "ids": [
+                  25
+                ],
+                "to": {
+                  "x": -14.654281377792358,
+                  "z": -13.133034640923142
                 }
               }
             }
@@ -1473,11 +1062,11 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 3188,
-        "seconds": 106.3,
-        "wallHp": 532,
-        "unitsAlive": 13,
-        "enemiesKilled": 72,
+        "ticks": 3048,
+        "seconds": 101.6,
+        "wallHp": 692,
+        "unitsAlive": 25,
+        "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
           {
@@ -1494,10 +1083,10 @@
         "policy": "greedy",
         "loadout": "default",
         "status": "won",
-        "ticks": 3022,
-        "seconds": 100.7,
-        "wallHp": 1391,
-        "unitsAlive": 13,
+        "ticks": 3053,
+        "seconds": 101.8,
+        "wallHp": 1202,
+        "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
@@ -1509,140 +1098,80 @@
             }
           },
           {
-            "step": 541,
-            "tick": 540,
+            "step": 1081,
+            "tick": 1080,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": -16
+                  "z": 11.461307277935893
                 }
               }
             }
           },
           {
-            "step": 721,
-            "tick": 720,
+            "step": 1261,
+            "tick": 1260,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": -9.79887227786965
+                  "z": -2.180256284080779
                 }
               }
             }
           },
           {
-            "step": 901,
-            "tick": 900,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -1.6779995401018803
-                }
-              }
-            }
-          },
-          {
-            "step": 1392,
-            "tick": 1391,
+            "step": 1276,
+            "tick": 1275,
             "input": {
               "heroSkill": {
-                "x": 1.9562148437059719,
-                "z": -13.095685079741349,
-                "heroId": 13
+                "x": 4.701763147650442,
+                "z": 9.204399557082526,
+                "heroId": 25
               }
             }
           },
           {
-            "step": 1441,
-            "tick": 1440,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -10.070369010242738
-                }
-              }
-            }
-          },
-          {
-            "step": 1801,
-            "tick": 1800,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 7.976874031655249
-                }
-              }
-            }
-          },
-          {
-            "step": 1981,
-            "tick": 1980,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -3.4579151078235757
-                }
-              }
-            }
-          },
-          {
-            "step": 2351,
-            "tick": 2350,
+            "step": 2470,
+            "tick": 2469,
             "input": {
               "heroSkill": {
-                "x": 5.084738857976419,
-                "z": 2.240264129895744,
-                "heroId": 13
+                "x": 1.9344574414726794,
+                "z": -13.399302529737216,
+                "heroId": 25
               }
             }
           },
           {
-            "step": 2521,
-            "tick": 2520,
+            "step": 2881,
+            "tick": 2880,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": -10.183744994527855
+                  "z": 9
                 }
               }
             }
           },
           {
-            "step": 2772,
-            "tick": 2771,
+            "step": 2908,
+            "tick": 2907,
             "input": {
               "heroSkill": {
                 "x": -0.8,
-                "z": -15,
-                "heroId": 13
+                "z": 9,
+                "heroId": 25
               }
             }
           }
@@ -1653,10 +1182,10 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3029,
+        "ticks": 3031,
         "seconds": 101,
-        "wallHp": 1004,
-        "unitsAlive": 13,
+        "wallHp": 398,
+        "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
@@ -1673,7 +1202,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -10.280376495793462,
@@ -1688,7 +1217,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -15.580170456320047,
@@ -1703,7 +1232,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -15.900667201727629,
@@ -1718,7 +1247,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -16.174165211617947,
@@ -1733,7 +1262,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -10.424621121957898,
@@ -1748,7 +1277,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.069359816610813,
@@ -1771,10 +1300,10 @@
         "policy": "afk",
         "loadout": "default",
         "status": "won",
-        "ticks": 3043,
-        "seconds": 101.4,
-        "wallHp": 669,
-        "unitsAlive": 13,
+        "ticks": 3129,
+        "seconds": 104.3,
+        "wallHp": 841,
+        "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
@@ -1792,10 +1321,10 @@
         "policy": "greedy",
         "loadout": "default",
         "status": "won",
-        "ticks": 3098,
-        "seconds": 103.3,
-        "wallHp": 1132,
-        "unitsAlive": 13,
+        "ticks": 3049,
+        "seconds": 101.6,
+        "wallHp": 1166,
+        "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
@@ -1807,125 +1336,69 @@
             }
           },
           {
-            "step": 721,
-            "tick": 720,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -14.007607162521438
-                }
-              }
-            }
-          },
-          {
-            "step": 1081,
-            "tick": 1080,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": 7.041036289369378
-                }
-              }
-            }
-          },
-          {
-            "step": 1382,
-            "tick": 1381,
-            "input": {
-              "heroSkill": {
-                "x": 4.197027944862228,
-                "z": 10.22932991946679,
-                "heroId": 13
-              }
-            }
-          },
-          {
             "step": 1441,
             "tick": 1440,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 0.8859625798513265
+                  "z": 16
                 }
               }
             }
           },
           {
-            "step": 1981,
-            "tick": 1980,
+            "step": 1801,
+            "tick": 1800,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": -13.719837344743617
+                  "z": -1.7235838125416902
                 }
               }
             }
           },
           {
-            "step": 2161,
-            "tick": 2160,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -12,
-                  "z": -4.018443814932696
-                }
-              }
-            }
-          },
-          {
-            "step": 2297,
-            "tick": 2296,
+            "step": 2423,
+            "tick": 2422,
             "input": {
               "heroSkill": {
-                "x": 3.824949168695097,
-                "z": -9.145066582755126,
-                "heroId": 13
+                "x": 3.147546398038725,
+                "z": -7.8584876883219685,
+                "heroId": 25
               }
             }
           },
           {
-            "step": 2341,
-            "tick": 2340,
+            "step": 2701,
+            "tick": 2700,
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -12,
-                  "z": 6.154618996582248
+                  "z": 10.990753367514285
                 }
               }
             }
           },
           {
-            "step": 2718,
-            "tick": 2717,
+            "step": 2844,
+            "tick": 2843,
             "input": {
               "heroSkill": {
-                "x": 3.8703678169796882,
-                "z": 6.312026215869449,
-                "heroId": 13
+                "x": 0.0017089132009102679,
+                "z": 12.41823860047124,
+                "heroId": 25
               }
             }
           }
@@ -1936,11 +1409,11 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3181,
-        "seconds": 106,
-        "wallHp": 106,
-        "unitsAlive": 13,
-        "enemiesKilled": 72,
+        "ticks": 3074,
+        "seconds": 102.5,
+        "wallHp": 888,
+        "unitsAlive": 25,
+        "enemiesKilled": 70,
         "unitsLost": 0,
         "commands": [
           {
@@ -1956,7 +1429,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -17.772552959620953,
@@ -1971,7 +1444,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.657054882496595,
@@ -1986,7 +1459,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -11.337761772796512,
@@ -2001,7 +1474,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -14.3727817106992,
@@ -2016,7 +1489,7 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -14.814943876117468,
@@ -2031,26 +1504,11 @@
             "input": {
               "unitMove": {
                 "ids": [
-                  13
+                  25
                 ],
                 "to": {
                   "x": -13.352878468111157,
                   "z": 16
-                }
-              }
-            }
-          },
-          {
-            "step": 3151,
-            "tick": 3150,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -15.184651361778378,
-                  "z": 11.471782950684428
                 }
               }
             }

@@ -8,6 +8,7 @@ import {
   HERO_SKILL,
   SEGMENTS,
   createSiege,
+  isCrewManned,
   stepSiege,
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
@@ -409,13 +410,23 @@ window.addEventListener('keydown', (e) => {
   Sfx.unlock()
   if (e.code === 'Space') spaceLatch = true
   if (e.code === 'KeyM') muted = Sfx.toggleMute()
-  // G — 선택한 병기에서 조작 병사를 내려보낸다 (편도. 그 병기는 이 판에서 침묵한다)
+  // G — 선택한 병기의 조작 병사를 선택으로 전환 (그다음 우클릭으로 빼거나 되돌린다).
+  // 병사가 선택돼 있으면 반대로 담당 병기를 선택 — 쌍을 오가는 토글.
   if (e.code === 'KeyG' && selected.size > 0) {
-    const guns = [...selected].filter((id) => {
+    const crews: number[] = []
+    const weapons: number[] = []
+    for (const id of selected) {
       const u = state.units.find((v) => v.id === id)
-      return u && !u.crewGone && state.kinds.units[u.kind]?.crew
-    })
-    if (guns.length > 0) pendingDismount = { ids: guns }
+      if (!u) continue
+      if (u.crewOf !== undefined) weapons.push(u.crewOf)
+      const crew = state.units.find((v) => v.crewOf === u.id)
+      if (crew) crews.push(crew.id)
+    }
+    const next = crews.length > 0 ? crews : weapons
+    if (next.length > 0) {
+      selected.clear()
+      for (const id of next) selected.add(id)
+    }
   }
 })
 window.addEventListener('pointerdown', () => Sfx.unlock())
@@ -449,7 +460,6 @@ function pickPoint(clientX: number, clientY: number): { x: number; z: number; h:
 let pendingMove: { x: number; z: number; h?: number } | undefined
 let pendingUnitMove: { ids: number[]; to: { x: number; z: number; h?: number } } | undefined
 let pendingUnitAim: { ids: number[]; to: { x: number; z: number } } | undefined
-let pendingDismount: { ids: number[] } | undefined
 const selected = new Set<number>()
 let inspectedEnemy: number | null = null // 클릭 조사 대상 (상태창)
 let lastClickUnit = -1 // 더블클릭 판정
@@ -749,7 +759,7 @@ hud.innerHTML = `
     <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
   </div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~9</b>: 부대 지정 / <b>Shift+1~9</b>: 추가 / <b>1~9</b>: 호출 · <b>F2</b>: 전군 · <b>H</b>: 영웅 · 우클릭(화면·미니맵): <b>병기 조준</b> / 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공 · <b>G</b>: 병사 하차 · <b>M</b>: 음소거
+    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~9</b>: 부대 지정 / <b>Shift+1~9</b>: 추가 / <b>1~9</b>: 호출 · <b>F2</b>: 전군 · <b>H</b>: 영웅 · 우클릭(화면·미니맵): <b>병기 조준</b> / 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공 · <b>G</b>: 병기↔조작병사 선택 전환 · <b>M</b>: 음소거
   </div>
   <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
        background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
@@ -808,10 +818,11 @@ function drawMinimap(): void {
     const s = boss ? 5 : 3
     c.fillRect(miniX(en.pos.x) - s / 2, miniZ(en.pos.z) - s / 2, s, s)
   }
-  // 아군 — 녹색(하차한 병기는 회색), 영웅 금색, 선택은 흰 테두리
+  // 아군 — 녹색(조작 병사가 비운 병기는 회색), 영웅 금색, 선택은 흰 테두리
   for (const u of state.units) {
     const hero = u.kind === 'hero'
-    c.fillStyle = hero ? '#ffd870' : u.crewGone ? '#4a5a52' : '#53d6a2'
+    const idle = state.kinds.units[u.kind]?.emplaced && !isCrewManned(state, u)
+    c.fillStyle = hero ? '#ffd870' : idle ? '#4a5a52' : '#53d6a2'
     const s = hero ? 5 : 3.5
     c.fillRect(miniX(u.pos.x) - s / 2, miniZ(u.pos.z) - s / 2, s, s)
     if (selected.has(u.id)) {
@@ -1084,13 +1095,6 @@ function handleEvents(events: SiegeEvent[]): void {
       // 쓰러지며 이는 흙먼지 — 시신이 바닥에 닿는 쪽이라 낮고 넓게
       fx.smoke(ev.pos.x, 0.3, ev.pos.z, { count: 3, scale: 1, rise: 0.35, spread: 0.6, dur: 900, tint: 0x9c9184, opacity: 0.4 })
       Sfx.at('enemyDie', ev.pos.x, ev.pos.z)
-    } else if (ev.type === 'crewDismounted') {
-      // 병사가 내려섰다 — 병기 쪽에서 먼지가 일고, 선택은 새 병사로 넘어간다
-      fx.smoke(ev.pos.x, 0.3, ev.pos.z, { count: 3, scale: 0.9, rise: 0.5, spread: 0.5, dur: 800, tint: 0xa8a196, opacity: 0.45 })
-      spawnFlash(new THREE.Vector3(ev.pos.x, 1.0, ev.pos.z), 1.0, 0xbfe3ff, 260)
-      selected.delete(ev.unitId)
-      selected.add(ev.crewId)
-      Sfx.at('melee', ev.pos.x, ev.pos.z)
     } else if (ev.type === 'enemyRaised') {
       // 부활 — 잡았던 것이 다시 선다. 죽음(붉은 섬광)과 반대로 **차가운 보라**로 읽히게 해서
       // "내가 방금 죽인 게 일어났다"가 한눈에 구분되게 한다. 술사를 끊으라는 신호이기도 하다.
@@ -1412,7 +1416,7 @@ function updateHeroBar(): void {
 }
 
 // 선택 부대 패널 (SC식) — 칩 그리드, 칩 클릭 = 단독 선택
-const KIND_SHORT: Record<string, string> = { soldier: '궁', ballista: '발', cannon: '포', hero: '영' }
+const KIND_SHORT: Record<string, string> = { soldier: '궁', ballista: '발', cannon: '포', hero: '영', guard: '수' }
 const selChips = new Map<number, { root: HTMLDivElement; hp: HTMLDivElement }>()
 let selPanelKey = ''
 
@@ -1720,7 +1724,6 @@ function resetGame(): void {
   pendingMove = undefined
   pendingUnitMove = undefined
   pendingUnitAim = undefined
-  pendingDismount = undefined
   pendingHeroSkill = undefined
 
   const fresh = createSiege(SEED)
@@ -1815,10 +1818,6 @@ function frame(now: number): void {
     if (pendingUnitAim) {
       input.unitAim = pendingUnitAim
       pendingUnitAim = undefined
-    }
-    if (pendingDismount) {
-      input.dismount = pendingDismount
-      pendingDismount = undefined
     }
     if (pendingHeroSkill) {
       input.heroSkill = pendingHeroSkill
