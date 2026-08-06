@@ -3,6 +3,8 @@
 
 import * as THREE from 'three'
 import {
+  CASTLE,
+  FIELD,
   HERO_SKILL,
   SEGMENTS,
   createSiege,
@@ -477,6 +479,11 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   // 우클릭: 선택 부대가 있으면 부대 명령, 없으면 성주 이동
   const p = pickPoint(e.clientX, e.clientY)
   if (!p) return
+  issueCommand(p)
+})
+
+// 우클릭 명령 공통 — 화면 클릭과 미니맵 클릭이 같은 의미를 갖는다
+function issueCommand(p: { x: number; z: number; h?: number }): void {
   if (selected.size > 0) {
     // 고정 병기(대포·발리스타)는 못 옮긴다 — 같은 우클릭이 **조준 명령**이 된다.
     // 한 번의 명령으로 둘이 섞여도 각자 맞는 쪽으로 간다.
@@ -499,7 +506,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     pendingMove = p
     showMoveMarker(p.x, p.z, p.h)
   }
-})
+}
 
 window.addEventListener('pointermove', (e) => {
   if (aiming) {
@@ -593,20 +600,49 @@ window.addEventListener('keydown', (e) => {
   }
 })
 
-// 컨트롤 그룹 (스타크래프트식): Ctrl+1~5 = 지정, 1~5 = 호출
+// 컨트롤 그룹 (스타크래프트식): Ctrl+1~9 = 지정, Shift+1~9 = 추가 지정, 1~9 = 호출
 const ctrlGroups = new Map<number, number[]>()
+function groupOf(id: number): number | null {
+  for (const [slot, ids] of ctrlGroups) if (ids.includes(id)) return slot
+  return null
+}
 window.addEventListener('keydown', (e) => {
-  const m = /^Digit([1-5])$/.exec(e.code)
+  const m = /^Digit([1-9])$/.exec(e.code)
   if (!m) return
   const slot = Number(m[1])
-  if (e.ctrlKey) {
+  if (e.ctrlKey || e.metaKey) {
+    // 지정은 배타 — 한 유닛은 한 그룹에만 속한다 (SC 관례, 뱃지도 하나만 그린다)
+    for (const [s, ids] of ctrlGroups) ctrlGroups.set(s, ids.filter((id) => !selected.has(id)))
     ctrlGroups.set(slot, [...selected])
+    selPanelKey = '' // 칩 그룹 뱃지 즉시 갱신
     e.preventDefault()
+  } else if (e.shiftKey) {
+    const cur = ctrlGroups.get(slot) ?? []
+    for (const [s, ids] of ctrlGroups)
+      if (s !== slot) ctrlGroups.set(s, ids.filter((id) => !selected.has(id)))
+    ctrlGroups.set(slot, [...new Set([...cur, ...selected])])
+    selPanelKey = ''
   } else {
     const ids = ctrlGroups.get(slot)
     if (!ids || ids.length === 0) return
     selected.clear()
     for (const id of ids) if (state.units.some((u) => u.id === id)) selected.add(id)
+  }
+})
+
+// 전군/영웅 바로잡기: F2 = 전군 선택 (SC2 관례), H = 영웅 선택
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'F2') {
+    selected.clear()
+    for (const u of state.units) selected.add(u.id)
+    e.preventDefault()
+  }
+  if (e.code === 'KeyH') {
+    const hero = state.units.find((u) => u.kind === 'hero')
+    if (hero) {
+      selected.clear()
+      selected.add(hero.id)
+    }
   }
 })
 
@@ -683,13 +719,15 @@ const hud = document.createElement('div')
 hud.style.cssText =
   'position:fixed;inset:0;pointer-events:none;font-family:monospace;color:#e8e8f0;text-shadow:0 1px 3px #000'
 hud.innerHTML = `
-  <div style="position:absolute;top:14px;left:16px;font-size:18px;font-weight:bold">마지막 성벽 — 농성전 3D (M1)</div>
+  <div style="position:absolute;top:14px;left:16px;font-size:18px;font-weight:bold">최후의 벽, 최후의 사람 (M1)</div>
   <div style="position:absolute;top:44px;left:16px;font-size:13px">
     성벽 <span id="wall"></span><div style="width:280px;height:10px;background:#000a;margin-top:3px"><div id="wallbar" style="height:100%;width:100%;background:#62c462"></div></div>
   </div>
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
   <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
   <div id="fps" style="position:absolute;top:14px;right:16px;font-size:12px;color:#88a088"></div>
+  <canvas id="minimap" width="190" height="150" style="position:absolute;top:34px;right:16px;
+       pointer-events:auto;background:#0a0e14d8;border:1px solid #345;border-radius:4px"></canvas>
   <div id="deck" style="position:absolute;bottom:40px;left:50%;transform:translateX(-50%);
        display:flex;gap:10px;align-items:flex-end">
     <div id="herobar" style="display:flex;gap:8px;align-items:flex-end"></div>
@@ -709,7 +747,7 @@ hud.innerHTML = `
     <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
   </div>
   <div style="position:absolute;bottom:14px;left:16px;font-size:12px;color:#a0a0b8">
-    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~5</b>: 부대 지정 / <b>1~5</b>: 호출 · 우클릭: <b>병기 조준</b> / 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공 · <b>G</b>: 병사 하차 · <b>M</b>: 음소거
+    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl+1~9</b>: 부대 지정 / <b>Shift+1~9</b>: 추가 / <b>1~9</b>: 호출 · <b>F2</b>: 전군 · <b>H</b>: 영웅 · 우클릭(화면·미니맵): <b>병기 조준</b> / 이동(무선택 시 성주) · <b>E</b>: 스킬 · <b>T</b>: 조준 전환 · ESC: 해제 · <b>Space</b>: 침공 · <b>G</b>: 병사 하차 · <b>M</b>: 음소거
   </div>
   <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
        background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
@@ -722,6 +760,70 @@ hud.innerHTML = `
     </div>
   </div>`
 document.body.appendChild(hud)
+
+// ---------------------------------------------------------------- 미니맵 (SC식)
+// 카메라가 성주 고정 추적이라 미니맵의 역할은 화면 점프가 아니라 **전황 파악 + 원격 명령**이다.
+// 우클릭 의미는 화면과 동일(issueCommand) — 조작 규칙이 두 개가 되지 않게 한다.
+const miniCanvas = document.getElementById('minimap') as HTMLCanvasElement
+const miniCtx = miniCanvas.getContext('2d')!
+const miniX = (x: number) => ((x - FIELD.minX) / (FIELD.maxX - FIELD.minX)) * miniCanvas.width
+const miniZ = (z: number) => ((z - FIELD.minZ) / (FIELD.maxZ - FIELD.minZ)) * miniCanvas.height
+
+miniCanvas.addEventListener('pointerdown', (e) => {
+  e.stopPropagation()
+  if (e.button !== 2) return
+  const r = miniCanvas.getBoundingClientRect()
+  const x = FIELD.minX + ((e.clientX - r.left) / r.width) * (FIELD.maxX - FIELD.minX)
+  const z = FIELD.minZ + ((e.clientY - r.top) / r.height) * (FIELD.maxZ - FIELD.minZ)
+  issueCommand({ x, z })
+})
+
+function drawMinimap(): void {
+  const c = miniCtx
+  c.clearRect(0, 0, miniCanvas.width, miniCanvas.height)
+  // 성 윤곽 — 안뜰 채움 + 성벽 선. 동벽은 성문(gateHalf) 구간을 비워 그린다
+  c.fillStyle = '#1c2530'
+  c.fillRect(
+    miniX(CASTLE.west), miniZ(CASTLE.north),
+    miniX(CASTLE.east) - miniX(CASTLE.west), miniZ(CASTLE.south) - miniZ(CASTLE.north),
+  )
+  c.strokeStyle = '#7d8fa5'
+  c.lineWidth = 2
+  c.beginPath()
+  c.moveTo(miniX(CASTLE.east), miniZ(CASTLE.north))
+  c.lineTo(miniX(CASTLE.west), miniZ(CASTLE.north))
+  c.lineTo(miniX(CASTLE.west), miniZ(CASTLE.south))
+  c.lineTo(miniX(CASTLE.east), miniZ(CASTLE.south))
+  c.moveTo(miniX(CASTLE.east), miniZ(CASTLE.north))
+  c.lineTo(miniX(CASTLE.east), miniZ(-CASTLE.gateHalf))
+  c.moveTo(miniX(CASTLE.east), miniZ(CASTLE.gateHalf))
+  c.lineTo(miniX(CASTLE.east), miniZ(CASTLE.south))
+  c.stroke()
+  // 적 — 표준 적색, 네크로맨서(보스)는 자색으로 크게
+  for (const en of state.enemies) {
+    const boss = en.kind === 'necromancer'
+    c.fillStyle = boss ? '#c07df5' : '#e05545'
+    const s = boss ? 5 : 3
+    c.fillRect(miniX(en.pos.x) - s / 2, miniZ(en.pos.z) - s / 2, s, s)
+  }
+  // 아군 — 녹색(하차한 병기는 회색), 영웅 금색, 선택은 흰 테두리
+  for (const u of state.units) {
+    const hero = u.kind === 'hero'
+    c.fillStyle = hero ? '#ffd870' : u.crewGone ? '#4a5a52' : '#53d6a2'
+    const s = hero ? 5 : 3.5
+    c.fillRect(miniX(u.pos.x) - s / 2, miniZ(u.pos.z) - s / 2, s, s)
+    if (selected.has(u.id)) {
+      c.strokeStyle = '#fff'
+      c.lineWidth = 1
+      c.strokeRect(miniX(u.pos.x) - s / 2 - 1, miniZ(u.pos.z) - s / 2 - 1, s + 2, s + 2)
+    }
+  }
+  // 성주 — 흰 점
+  c.fillStyle = '#fff'
+  c.beginPath()
+  c.arc(miniX(state.lord.pos.x), miniZ(state.lord.pos.z), 2.4, 0, Math.PI * 2)
+  c.fill()
+}
 
 // ---------------------------------------------------------------- 루프
 // 재시작 때 새 판으로 갈아끼우므로 let (모듈 스코프라 아래 클로저들이 새 참조를 그대로 본다)
@@ -1332,8 +1434,14 @@ function updateSelPanel(): void {
       chip.style.cssText =
         'width:34px;cursor:pointer;text-align:center;font-family:monospace;font-size:12px;' +
         'background:#1a2430;border:1px solid #456;border-radius:4px;padding:2px 0 3px;color:#cde'
+      const grp = groupOf(u.id)
+      chip.style.position = 'relative'
       chip.innerHTML = `${KIND_SHORT[u.kind] ?? '?'}<div style="height:4px;background:#0009;margin:2px 3px 0">
-        <div class="c-hp" style="height:100%;width:100%;background:#62c462"></div></div>`
+        <div class="c-hp" style="height:100%;width:100%;background:#62c462"></div></div>` +
+        (grp !== null
+          ? `<div style="position:absolute;top:-5px;right:-4px;font-size:9px;line-height:1;
+               background:#345;border-radius:3px;padding:1px 3px;color:#ffd870">${grp}</div>`
+          : '')
       chip.addEventListener('pointerdown', (e) => {
         e.stopPropagation()
         selected.clear()
@@ -1460,6 +1568,7 @@ function syncScene(now: number): void {
   }
 
   // HUD
+  drawMinimap()
   document.getElementById('wall')!.textContent = `${state.wallHp}/${state.wallHpMax}`
   const wallBar = document.getElementById('wallbar') as HTMLDivElement
   wallBar.style.width = `${(state.wallHp / state.wallHpMax) * 100}%`
