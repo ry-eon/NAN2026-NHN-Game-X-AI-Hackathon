@@ -47,8 +47,10 @@ const renderer = new THREE.WebGLRenderer({
 })
 renderer.setSize(window.innerWidth, window.innerHeight)
 // 동적 해상도: iGPU(UHD 630)는 fill-rate 한계라 화면이 크면 어떤 최적화로도 60이 안 나온다.
-// fps를 보고 내부 렌더 스케일을 0.7~1.5 사이에서 자동 조절 (RTS라 약간 소프트해도 무방)
-const RES_MAX = Math.min(window.devicePixelRatio, 1.5)
+// fps를 보고 내부 렌더 스케일을 0.7~1.0 사이에서 자동 조절 (RTS라 약간 소프트해도 무방)
+// 상한 1.0: 1.5 슈퍼샘플링은 Retina(DPR 2)에서 시작부터 fill 폭탄이었다 —
+// 2026-08-06 계측에서 스케일 1.0=42fps, 0.7=60fps로 fill-rate bound 확인.
+const RES_MAX = Math.min(window.devicePixelRatio, 1.0)
 const RES_MIN = 0.7
 let resScale = RES_MAX
 renderer.setPixelRatio(resScale)
@@ -1740,20 +1742,36 @@ function applyResScale(): void {
   composer.setSize(window.innerWidth, window.innerHeight)
 }
 
-/** 동적 해상도 조절 — 하락은 빠르게(-0.2), 회복은 천천히(+0.05, 헌팅 방지).
+/** 동적 해상도 조절 — 하락은 빠르게(-0.2), 회복은 천천히.
  *  최저 스케일에서도 40 미만이면 블룸까지 끄고, 여유가 돌아오면 순서대로 복구.
- *  초기 3초는 에셋 로딩 히치라 판단 유보 */
+ *  초기 3초는 에셋 로딩 히치라 판단 유보.
+ *
+ *  스케일 변경 = 렌더 타깃 재할당 = 그 프레임이 히치다. 2026-08-06 계측에서
+ *  구버전(+0.05/500ms, 문턱 57)이 0.7↔0.85를 무한 왕복하며 20초에 재할당 ~10회 —
+ *  "낮은 fps"가 아니라 이 진동이 체감 버벅임이었다. 그래서:
+ *  - 변경 사이 쿨다운(하락 1.5s / 상승 5s) — 진동 주기를 구조적으로 차단
+ *  - 상승은 58fps가 쿨다운 내내 유지될 때만 — 한계선 근처에서는 오르지 않는다 */
 const ADAPT_WARMUP_MS = 3000
+const DOWN_COOLDOWN_MS = 1500
+const UP_COOLDOWN_MS = 5000
+let lastScaleChange = 0
+let sustainedHigh = 0 // 58fps 연속 유지 시작 시각 (0 = 미달)
 function adaptQuality(fps: number, now: number): void {
   if (now < ADAPT_WARMUP_MS) return
+  if (fps <= 58) sustainedHigh = 0
+  else if (sustainedHigh === 0) sustainedHigh = now
   if (fps < 45 && resScale > RES_MIN) {
+    if (now - lastScaleChange < DOWN_COOLDOWN_MS) return
     resScale = Math.max(RES_MIN, resScale - 0.2)
+    lastScaleChange = now
     applyResScale()
   } else if (fps < 40 && resScale <= RES_MIN && bloom.enabled) {
-    bloom.enabled = false
-  } else if (fps > 57) {
+    bloom.enabled = false // 블룸 토글은 재할당이 없어 쿨다운 불요
+  } else if (sustainedHigh > 0 && now - sustainedHigh >= UP_COOLDOWN_MS) {
     if (resScale < RES_MAX) {
-      resScale = Math.min(RES_MAX, resScale + 0.05)
+      if (now - lastScaleChange < UP_COOLDOWN_MS) return
+      resScale = Math.min(RES_MAX, resScale + 0.1)
+      lastScaleChange = now
       applyResScale()
     } else if (!bloom.enabled) {
       bloom.enabled = true
