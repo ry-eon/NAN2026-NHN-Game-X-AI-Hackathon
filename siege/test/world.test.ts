@@ -318,6 +318,35 @@ describe('M2b 전투', () => {
     })
   })
 
+  describe('어택땅·정지 (2026-08-06)', () => {
+    it('A 이동은 사거리 안에 적이 있으면 멈춰 교전하고, 일반 이동은 지나친다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const hero = state.units.find((u) => u.kind === 'hero')!
+      state.units = [hero]
+      placeEnemy(state, 'grunt', hero.pos.x, hero.pos.z + 6, 660).atWall = true
+      const to = { x: hero.pos.x, z: hero.pos.z + 12, h: 0 }
+      // 어택땅: 명령 틱에 이미 사거리(13) 안 — 같은 틱 접적 판정에서 경로를 버린다
+      stepSiege(state, spawns, { unitMove: { ids: [hero.id], to, attack: true } })
+      expect(hero.path).toHaveLength(0)
+      expect(hero.aggro).toBe(false)
+      // 일반 이동: 같은 상황에서도 목적지로 계속 간다
+      stepSiege(state, spawns, { unitMove: { ids: [hero.id], to } })
+      expect(hero.path.length).toBeGreaterThan(0)
+    })
+
+    it('S 정지는 경로를 즉시 버린다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const hero = state.units.find((u) => u.kind === 'hero')!
+      stepSiege(state, spawns, { unitMove: { ids: [hero.id], to: { x: hero.pos.x, z: hero.pos.z + 12, h: 0 } } })
+      expect(hero.path.length).toBeGreaterThan(0)
+      stepSiege(state, spawns, { unitStop: { ids: [hero.id] } })
+      expect(hero.path).toHaveLength(0)
+      expect(hero.target).toBeNull()
+    })
+  })
+
   describe('투사체 비행', () => {
     it('포탄은 날아가는 동안 피해가 없고, 도착해서야 터진다', () => {
       const { state, spawns } = createSiege(SEED)

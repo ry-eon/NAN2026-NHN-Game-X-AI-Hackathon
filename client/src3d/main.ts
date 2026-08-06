@@ -411,6 +411,8 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') spaceLatch = true
   if (e.code === 'KeyM') muted = Sfx.toggleMute()
   if (e.code === 'KeyG') toggleCrewSelection()
+  if (e.code === 'KeyA') enterAttackMove()
+  if (e.code === 'KeyS') stopSelected()
 })
 
 // ---- 조작 액션 (키보드·커맨드 카드 버튼 공용 — 규칙이 두 벌 되지 않게 함수를 공유)
@@ -456,6 +458,32 @@ function castSkill(): void {
   const hero = heroes.find((h) => selected.has(h.id)) ?? heroes[0]
   if (hero) triggerSkill(hero)
 }
+
+/** 선택 중 이동 가능(비고정) 유닛 id */
+function selectedMovers(): number[] {
+  return [...selected].filter((id) => {
+    const u = state.units.find((v) => v.id === id)
+    return u && !state.kinds.units[u.kind]!.emplaced
+  })
+}
+
+/** A — 어택땅 모드 진입: 다음 좌클릭 지점으로 이동하되 접적 시 멈춰 교전 */
+let attackMove = false
+function enterAttackMove(): void {
+  if (selectedMovers().length === 0) return
+  attackMove = true
+  document.body.style.cursor = 'crosshair'
+}
+function cancelAttackMove(): void {
+  attackMove = false
+  document.body.style.cursor = ''
+}
+
+/** S — 정지: 경로를 버리고 그 자리에서 교전 태세 */
+function stopSelected(): void {
+  const ids = selectedMovers()
+  if (ids.length > 0) pendingUnitStop = { ids }
+}
 window.addEventListener('pointerdown', () => Sfx.unlock())
 
 // 부감 카메라: 남쪽에서 북쪽을 내려다봄 (서=성벽=왼쪽, 동=적=오른쪽). 휠 줌.
@@ -496,8 +524,9 @@ function pickPoint(clientX: number, clientY: number): { x: number; z: number; h:
 
 // ---- 스타크래프트식 부대 선택 (좌클릭 드래그) + 명령 (우클릭)
 let pendingMove: { x: number; z: number; h?: number } | undefined
-let pendingUnitMove: { ids: number[]; to: { x: number; z: number; h?: number } } | undefined
+let pendingUnitMove: { ids: number[]; to: { x: number; z: number; h?: number }; attack?: boolean } | undefined
 let pendingUnitAim: { ids: number[]; to: { x: number; z: number } } | undefined
+let pendingUnitStop: { ids: number[] } | undefined
 const selected = new Set<number>()
 let inspectedEnemy: number | null = null // 클릭 조사 대상 (상태창)
 let lastClickUnit = -1 // 더블클릭 판정
@@ -519,6 +548,19 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     aiming = false
     aimingHeroId = null
     aimReticle.visible = false
+    return
+  }
+  // 어택땅 모드: 좌클릭 = 접적 이동 명령, 우클릭 = 취소 (SC 관례)
+  if (attackMove) {
+    if (e.button === 0) {
+      const p = pickPoint(e.clientX, e.clientY)
+      const ids = selectedMovers()
+      if (p && ids.length > 0) {
+        pendingUnitMove = { ids, to: p, attack: true }
+        showMoveMarker(p.x, p.z, p.h, 0xff5a4a) // 어택땅은 적색 — 이동(녹)·조준(주황)과 구분
+      }
+    }
+    cancelAttackMove()
     return
   }
   if (e.button === 0) {
@@ -606,11 +648,13 @@ window.addEventListener('pointerup', (e) => {
       while (obj && !groupToUnitId.has(obj.uuid)) obj = obj.parent
       if (obj) {
         const id = groupToUnitId.get(obj.uuid)!
-        // 더블클릭 = 같은 병종 전체 선택 (스타크래프트 관례)
+        // 더블클릭·Ctrl+클릭 = 같은 병종 전체 (SC 관례) · Shift+클릭 = 추가/제외 토글
         const now = performance.now()
-        if (id === lastClickUnit && now - lastClickTime < 350) {
+        if (e.ctrlKey || e.metaKey || (id === lastClickUnit && now - lastClickTime < 350)) {
           const kind = state.units.find((u) => u.id === id)?.kind
           for (const u of state.units) if (u.kind === kind) selected.add(u.id)
+        } else if (e.shiftKey && selected.has(id)) {
+          selected.delete(id)
         } else {
           selected.add(id)
         }
@@ -650,6 +694,7 @@ window.addEventListener('keydown', (e) => {
     aiming = false
     aimingHeroId = null
     aimReticle.visible = false
+    cancelAttackMove()
   }
 })
 
@@ -779,32 +824,44 @@ hud.innerHTML = `
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
   <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
   <div id="fps" style="position:absolute;top:14px;right:16px;font-size:12px;color:#88a088"></div>
-  <!-- SC식 하단 컨트롤 바: 좌 미니맵 / 중앙 영웅 카드·선택 부대·상세 / 우 커맨드 카드 -->
-  <canvas id="minimap" width="190" height="150" style="position:absolute;left:16px;bottom:14px;
-       pointer-events:auto;background:#0a0e14d8;border:1px solid #345;border-radius:4px"></canvas>
-  <div id="deck" style="position:absolute;bottom:14px;left:50%;transform:translateX(-50%);
-       display:flex;gap:10px;align-items:flex-end">
-    <div id="herobar" style="display:flex;gap:8px;align-items:flex-end"></div>
-    <div id="selpanel" style="pointer-events:auto;display:none;background:#000d;border:1px solid #345;
-         border-radius:6px;padding:8px 10px;max-width:340px">
-      <div id="selcount" style="font-size:11px;color:#9fc4a8;margin-bottom:5px"></div>
-      <div id="selgrid" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+  <!-- SC식 하단 컨트롤 바 — 전폭 통합 패널: 미니맵 ‖ 영웅 ‖ 선택/상세 ‖ 커맨드 카드 -->
+  <div id="bottombar" style="position:absolute;left:0;right:0;bottom:0;height:178px;
+       background:linear-gradient(180deg,#131a24e8 0%,#0c1119f6 28%,#090d13fc 100%);
+       border-top:1px solid #33445c;box-shadow:0 -10px 28px #000a;pointer-events:auto;
+       display:flex;align-items:stretch;padding:12px 16px;box-sizing:border-box">
+    <div style="align-self:center">
+      <div style="font-size:10px;color:#5a708c;letter-spacing:2px;margin:0 0 4px 1px">전황</div>
+      <canvas id="minimap" width="190" height="132" style="display:block;background:#0a0e14;
+           border:1px solid #3a4a5e;border-radius:3px"></canvas>
     </div>
-    <div id="panel" style="width:215px;background:#000b;
-         border:1px solid #333;border-radius:4px;padding:10px 12px;font-size:12px;display:none">
-      <div id="p-name" style="font-size:14px;font-weight:bold;margin-bottom:5px"></div>
-      <div id="p-hptext"></div>
-      <div style="width:100%;height:8px;background:#0008;margin:3px 0 7px">
-        <div id="p-hpbar" style="height:100%;background:#62c462"></div>
+    <div style="width:1px;background:#232f40;margin:4px 16px"></div>
+    <div id="herobar" style="display:flex;gap:8px;align-items:flex-end;align-self:flex-end"></div>
+    <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:16px;min-width:0;padding:0 10px">
+      <div id="selhint" style="color:#3d4c60;font-size:12px;letter-spacing:1px">
+        드래그로 부대 선택 · 우클릭 이동/조준 · <b>A</b> 어택땅</div>
+      <div id="selpanel" style="display:none">
+        <div id="selcount" style="font-size:11px;color:#9fc4a8;margin-bottom:6px"></div>
+        <div id="selgrid" style="display:flex;flex-wrap:wrap;gap:4px;max-width:470px"></div>
       </div>
-      <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
+      <div id="panel" style="width:205px;display:none;border-left:1px solid #232f40;
+           padding-left:16px;font-size:12px;flex-shrink:0">
+        <div id="p-name" style="font-size:14px;font-weight:bold;margin-bottom:5px"></div>
+        <div id="p-hptext"></div>
+        <div style="width:100%;height:8px;background:#0008;margin:3px 0 7px">
+          <div id="p-hpbar" style="height:100%;background:#62c462"></div>
+        </div>
+        <div id="p-stats" style="color:#b8b8c8;line-height:1.6"></div>
+      </div>
+    </div>
+    <div style="width:1px;background:#232f40;margin:4px 16px"></div>
+    <div id="cmdwrap" style="align-self:center">
+      <div style="font-size:10px;color:#5a708c;letter-spacing:2px;margin:0 0 4px 1px">명령</div>
+      <div id="cmdcard" style="display:grid;grid-template-columns:repeat(4,54px);gap:5px"></div>
     </div>
   </div>
-  <div id="cmdcard" style="position:absolute;bottom:14px;right:16px;pointer-events:auto;
-       display:grid;grid-template-columns:repeat(3,58px);gap:5px"></div>
-  <div style="position:absolute;top:100px;left:16px;font-size:11px;color:#8a8aa0;max-width:420px;line-height:1.7">
-    드래그: 선택 · 더블클릭: 같은 병종 · <b>Ctrl/Shift+1~9</b>: 부대 지정/추가 · <b>1~9</b>: 호출 ·
-    우클릭(화면·미니맵): 조준/이동 · 화면 가장자리·미니맵 좌클릭: 카메라 · ESC: 해제 · <b>M</b>: 음소거
+  <div style="position:absolute;top:100px;left:16px;font-size:11px;color:#8a8aa0;max-width:430px;line-height:1.7">
+    드래그: 선택 (Shift 추가/제외 · Ctrl클릭/더블클릭: 같은 병종) · <b>Ctrl/Shift+1~9</b>: 부대 지정/추가 · <b>1~9</b>: 호출 ·
+    우클릭: 이동/조준 · <b>A</b>: 어택땅 · <b>S</b>: 정지 · 가장자리·화살표·미니맵: 카메라 · ESC: 해제 · <b>M</b>: 음소거
   </div>
   <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
        background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
@@ -859,6 +916,8 @@ window.addEventListener('pointerup', () => (miniCamDrag = false))
 // 키보드와 같은 함수를 호출한다 — 버튼과 단축키의 동작이 갈라질 수 없다
 const CMD_BUTTONS: Array<{ id: string; label: string; key: string; fn: () => void }> = [
   { id: 'cmd-e', label: '업화', key: 'E', fn: castSkill },
+  { id: 'cmd-a', label: '어택', key: 'A', fn: enterAttackMove },
+  { id: 'cmd-s', label: '정지', key: 'S', fn: stopSelected },
   { id: 'cmd-t', label: '자동', key: 'T', fn: () => (skillAuto = !skillAuto) },
   { id: 'cmd-g', label: '병사', key: 'G', fn: toggleCrewSelection },
   { id: 'cmd-f2', label: '전군', key: 'F2', fn: selectAllArmy },
@@ -1702,6 +1761,14 @@ function syncScene(now: number): void {
   drawMinimap()
   const tLbl = document.querySelector('#cmd-t .lbl') as HTMLElement | null
   if (tLbl) tLbl.textContent = skillAuto ? '자동' : '수동'
+  // 어택땅 대기 중엔 버튼을 점등 — 다음 클릭이 명령이 된다는 상태 표시
+  const aBtn = document.getElementById('cmd-a')
+  if (aBtn) aBtn.style.borderColor = attackMove ? '#ff5a4a' : '#3a4a5e'
+  // 아무것도 선택·조사하지 않았을 때만 중앙 힌트
+  const selPanelEl = document.getElementById('selpanel')!
+  const infoPanelEl = document.getElementById('panel')!
+  document.getElementById('selhint')!.style.display =
+    selPanelEl.style.display === 'none' && infoPanelEl.style.display === 'none' ? 'block' : 'none'
   document.getElementById('wall')!.textContent = `${state.wallHp}/${state.wallHpMax}`
   const wallBar = document.getElementById('wallbar') as HTMLDivElement
   wallBar.style.width = `${(state.wallHp / state.wallHpMax) * 100}%`
@@ -1851,7 +1918,9 @@ function resetGame(): void {
   pendingMove = undefined
   pendingUnitMove = undefined
   pendingUnitAim = undefined
+  pendingUnitStop = undefined
   pendingHeroSkill = undefined
+  cancelAttackMove()
 
   const fresh = createSiege(SEED)
   state = fresh.state
@@ -1945,6 +2014,10 @@ function frame(now: number): void {
     if (pendingUnitAim) {
       input.unitAim = pendingUnitAim
       pendingUnitAim = undefined
+    }
+    if (pendingUnitStop) {
+      input.unitStop = pendingUnitStop
+      pendingUnitStop = undefined
     }
     if (pendingHeroSkill) {
       input.heroSkill = pendingHeroSkill

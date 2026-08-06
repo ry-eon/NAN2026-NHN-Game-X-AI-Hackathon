@@ -17,7 +17,8 @@ describe('봇 러너', () => {
       const b = playout(SHIPPING_SEED, p)
       expect({ ...a, commands: a.commands.length }).toEqual({ ...b, commands: b.commands.length })
     }
-  })
+    // 6판 완주라 기본 5초를 넘긴다 (greedy 스킬 기준 상향으로 밀집 계산 빈도가 늘어 더 느려짐)
+  }, 30000)
 
   it('봇이 남긴 커맨드를 재생하면 같은 판이 나온다 (리플레이 포맷 보증)', () => {
     for (const p of POLICIES) {

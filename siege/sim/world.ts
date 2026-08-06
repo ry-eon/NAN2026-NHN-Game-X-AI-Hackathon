@@ -507,6 +507,8 @@ export interface FriendlyUnit {
   aim: Vec2 | null
   /** 조작 병사 전용 — 담당 병기의 유닛 id. 이 병사가 곁에 있어야 그 병기가 쏜다 */
   crewOf?: number
+  /** 어택땅 이동 중 — 사거리 안에 적이 들어오면 정지·교전 (접적 시 해제) */
+  aggro?: boolean
 }
 
 /** 조작 판정 반경 — 겹침 분리의 정지 거리(반경 합 ≈1.45)보다 넉넉해야 곁에 선 병사가 항상 잡힌다 */
@@ -546,8 +548,12 @@ export type SiegeStatus = 'prep' | 'assault' | 'won' | 'lost'
 export interface SiegeInput {
   /** 성주 이동 명령 (우클릭 지점 + 클릭한 면의 높이 힌트 — 보도 위 vs 터널 구분) */
   moveTo?: Vec2 & { h?: number }
-  /** 부대 이동 명령 (스타크래프트식 선택 → 우클릭). 대형은 sim이 결정론으로 분산 */
-  unitMove?: { ids: number[]; to: Vec2 & { h?: number } }
+  /** 부대 이동 명령 (스타크래프트식 선택 → 우클릭). 대형은 sim이 결정론으로 분산.
+   *  attack = 어택땅(A) — 이동 중 사거리 안에 적이 들어오면 멈춰 교전한다
+   *  (정지 상태에서만 사격하는 룰과 맞물려, 목적지가 아니라 접적이 이동을 끝낸다) */
+  unitMove?: { ids: number[]; to: Vec2 & { h?: number }; attack?: boolean }
+  /** 정지 명령 (S) — 경로·목표를 즉시 버리고 그 자리에서 교전 태세 */
+  unitStop?: { ids: number[] }
   /** 고정 병기 조준 명령 — 옮기는 대신 겨눈다. 이게 화망을 그리는 유일한 수단이다 */
   unitAim?: { ids: number[]; to: Vec2 }
   /** 영웅 스킬 시전 지점 — 사거리·쿨다운은 sim이 검증. heroId 생략 시 첫 영웅 (다영웅 대비) */
@@ -1016,7 +1022,19 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       if (state.kinds.units[u.kind]!.emplaced) continue // 고정 병기는 못 옮긴다 — 조준만
       const off = FORMATION[Math.min(slot, FORMATION.length - 1)]!
       commandMove(u, { x: to.x + off[0], z: to.z + off[1] }, to.h ?? 0)
+      u.aggro = input.unitMove.attack === true // 일반 이동은 어택땅을 해제한다
       slot++
+    }
+  }
+
+  // 정지 명령 — 그 자리에서 경로를 버린다 (정지 = 사격 가능 상태)
+  if (input.unitStop) {
+    for (const id of [...input.unitStop.ids].sort((a, b) => a - b)) {
+      const u = state.units.find((v) => v.id === id)
+      if (!u) continue
+      u.path = []
+      u.target = null
+      u.aggro = false
     }
   }
 
@@ -1032,6 +1050,20 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   }
   for (const u of state.units) {
     if (u.skillCd > 0) u.skillCd--
+    // 어택땅 — 이동 중 사거리(+반경) 안에 적이 들어오면 그 자리에 멈춰 교전.
+    // 재개는 없다(SC와 달리): 웨이브가 계속 밀려오는 판이라 접적 후엔 그 자리가 전선이다.
+    if (u.aggro && u.path.length > 0) {
+      const def = state.kinds.units[u.kind]!
+      const engage = def.range + def.radius
+      for (const e of state.enemies) {
+        if (Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z) <= engage) {
+          u.path = []
+          u.target = null
+          u.aggro = false
+          break
+        }
+      }
+    }
     stepMover(u, state.kinds.units[u.kind]!.speed)
   }
 
