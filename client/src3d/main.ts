@@ -498,7 +498,16 @@ const EDGE_PX = 18
 let mouseX = -1
 let mouseY = -1
 let mouseIn = false
-document.documentElement.addEventListener('mouseleave', () => (mouseIn = false))
+// 커서가 창 밖으로 나가도(듀얼 모니터) 팬을 끊지 않는다 — 브라우저는 커서를 화면에 가둘 수
+// 없으므로, 나간 변의 띠로 좌표를 고정해 그 방향으로 계속 민다. 창모드 RTS의 표준 동작.
+// 멈추는 조건은 blur(다른 앱/창 클릭) 또는 커서 복귀뿐.
+document.documentElement.addEventListener('mouseleave', (e) => {
+  if (e.clientX <= 0) mouseX = 0
+  else if (e.clientX >= window.innerWidth - 1) mouseX = window.innerWidth - 1
+  if (e.clientY <= 0) mouseY = 0
+  else if (e.clientY >= window.innerHeight - 1) mouseY = window.innerHeight - 1
+})
+window.addEventListener('blur', () => (mouseIn = false))
 window.addEventListener('contextmenu', (e) => e.preventDefault())
 window.addEventListener('wheel', (e) => {
   camDist = Math.max(9, Math.min(42, camDist + e.deltaY * 0.02))
