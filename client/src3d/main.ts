@@ -408,11 +408,17 @@ let muted = false
 window.addEventListener('keydown', (e) => {
   // 브라우저 정책상 사용자 제스처 전에는 오디오가 안 난다 — 첫 입력에서 연다
   Sfx.unlock()
-  if (e.code === 'Space') spaceLatch = true
+  // Space: 준비 단계 = 침공 개시, 전투 중 = 성주 카메라 복귀 (LoL 관례 — Space는 내 캐릭터)
+  if (e.code === 'Space') {
+    if (state.status === 'prep') spaceLatch = true
+    else camFollow = true
+    e.preventDefault()
+  }
   if (e.code === 'KeyM') muted = Sfx.toggleMute()
   if (e.code === 'KeyG') toggleCrewSelection()
   if (e.code === 'KeyA') enterAttackMove()
-  if (e.code === 'KeyS') stopSelected()
+  // H = 홀드 (SC·LoL 공통 관례). 이 게임은 정지 시에만 사격하므로 홀드와 정지가 동치다
+  if (e.code === 'KeyS' || e.code === 'KeyH') stopSelected()
 })
 
 // ---- 조작 액션 (키보드·커맨드 카드 버튼 공용 — 규칙이 두 벌 되지 않게 함수를 공유)
@@ -537,6 +543,11 @@ let pendingUnitMove: { ids: number[]; to: { x: number; z: number; h?: number }; 
 let pendingUnitAim: { ids: number[]; to: { x: number; z: number } } | undefined
 let pendingUnitStop: { ids: number[] } | undefined
 const selected = new Set<number>()
+// 성주도 선택 체계의 일원 (SC 관례 — 조작 가능한 개체는 전부 같은 선택·명령 규칙을 탄다).
+// sim의 units에는 없으므로 클라이언트 선택 집합에서만 쓰는 전용 id.
+// 게임은 성주 선택 상태로 시작 — 준비 단계의 첫 우클릭이 그대로 성주 이동이 된다.
+const LORD_ID = -1
+selected.add(LORD_ID)
 let inspectedEnemy: number | null = null // 클릭 조사 대상 (상태창)
 let lastClickUnit = -1 // 더블클릭 판정
 let lastClickTime = 0
@@ -583,29 +594,28 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   issueCommand(p)
 })
 
-// 우클릭 명령 공통 — 화면 클릭과 미니맵 클릭이 같은 의미를 갖는다
+// 우클릭 명령 공통 — 화면 클릭과 미니맵 클릭이 같은 의미를 갖는다.
+// SC 관례: 빈 선택의 우클릭은 명령이 아니다 (구 "선택 없으면 성주 이동" 폴백은
+// 성주 단일 조작 시절의 잔재라 2026-08-07 폐지 — 성주도 선택해서 명령한다)
 function issueCommand(p: { x: number; z: number; h?: number }): void {
-  if (selected.size > 0) {
-    // 고정 병기(대포·발리스타)는 못 옮긴다 — 같은 우클릭이 **조준 명령**이 된다.
-    // 한 번의 명령으로 둘이 섞여도 각자 맞는 쪽으로 간다.
-    const guns: number[] = []
-    const movers: number[] = []
-    for (const id of selected) {
-      const u = state.units.find((v) => v.id === id)
-      if (!u) continue
-      ;(state.kinds.units[u.kind]?.emplaced ? guns : movers).push(id)
-    }
-    if (guns.length > 0) {
-      pendingUnitAim = { ids: guns, to: { x: p.x, z: p.z } }
-      showMoveMarker(p.x, p.z, p.h, 0xffb347) // 조준은 주황 — 이동(녹색)과 구분
-    }
-    if (movers.length > 0) {
-      pendingUnitMove = { ids: movers, to: p }
-      if (guns.length === 0) showMoveMarker(p.x, p.z, p.h, 0x53d6a2)
-    }
-  } else {
-    pendingMove = p
-    showMoveMarker(p.x, p.z, p.h)
+  if (selected.size === 0) return
+  // 고정 병기(대포·발리스타)는 못 옮긴다 — 같은 우클릭이 **조준 명령**이 된다.
+  // 한 번의 명령으로 성주·보행·병기가 섞여도 각자 맞는 쪽으로 간다.
+  const guns: number[] = []
+  const movers: number[] = []
+  for (const id of selected) {
+    const u = state.units.find((v) => v.id === id)
+    if (!u) continue
+    ;(state.kinds.units[u.kind]?.emplaced ? guns : movers).push(id)
+  }
+  if (selected.has(LORD_ID)) pendingMove = p
+  if (guns.length > 0) {
+    pendingUnitAim = { ids: guns, to: { x: p.x, z: p.z } }
+    showMoveMarker(p.x, p.z, p.h, 0xffb347) // 조준은 주황 — 이동(녹색)과 구분
+  }
+  if (movers.length > 0 || selected.has(LORD_ID)) {
+    if (movers.length > 0) pendingUnitMove = { ids: movers, to: p }
+    if (guns.length === 0) showMoveMarker(p.x, p.z, p.h, 0x53d6a2)
   }
 }
 
@@ -672,6 +682,12 @@ window.addEventListener('pointerup', (e) => {
       }
       return
     }
+    // 성주 픽킹 — 아군 유닛과 같은 규칙 (선택 → 우클릭 이동)
+    if (raycaster.intersectObject(lordMesh, true).length > 0) {
+      if (e.shiftKey && selected.has(LORD_ID)) selected.delete(LORD_ID)
+      else selected.add(LORD_ID)
+      return
+    }
     const enemyHits = raycaster.intersectObjects(
       [...enemyVisuals.values()].map((v) => v.group),
       true,
@@ -693,6 +709,13 @@ window.addEventListener('pointerup', (e) => {
     const sx = ((p.x + 1) / 2) * window.innerWidth
     const sy = ((1 - p.y) / 2) * window.innerHeight
     if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1 && p.z < 1) selected.add(u.id)
+  }
+  // 성주도 박스에 든다 — 부대와 성주를 한 번에 끌어 같이 명령할 수 있게
+  {
+    const p = new THREE.Vector3(state.lord.pos.x, state.lord.h + 1, state.lord.pos.z).project(camera)
+    const sx = ((p.x + 1) / 2) * window.innerWidth
+    const sy = ((1 - p.y) / 2) * window.innerHeight
+    if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1 && p.z < 1) selected.add(LORD_ID)
   }
 })
 
@@ -733,17 +756,21 @@ window.addEventListener('keydown', (e) => {
     const ids = ctrlGroups.get(slot)
     if (!ids || ids.length === 0) return
     selected.clear()
-    for (const id of ids) if (state.units.some((u) => u.id === id)) selected.add(id)
+    for (const id of ids) if (id === LORD_ID || state.units.some((u) => u.id === id)) selected.add(id)
   }
 })
 
-// 전군/영웅/카메라: F2 = 전군 선택 (SC2 관례), H = 영웅 선택, C = 성주 카메라 복귀
+// 전군/영웅/카메라: F2 = 전군 (SC2 관례), F1 = 영웅 (LoL 관례 — F1은 내 챔피언), C = 성주 카메라
+// H는 영웅 선택에서 홀드로 반납 — SC·LoL 근육기억(H=홀드)과 충돌했다 (2026-08-07)
 window.addEventListener('keydown', (e) => {
   if (e.code === 'F2') {
     selectAllArmy()
     e.preventDefault()
   }
-  if (e.code === 'KeyH') selectHero()
+  if (e.code === 'F1') {
+    selectHero()
+    e.preventDefault()
+  }
   if (e.code === 'KeyC') camFollow = true
 })
 
@@ -842,6 +869,14 @@ hud.innerHTML = `
       <div style="font-size:10px;color:#5a708c;letter-spacing:2px;margin:0 0 4px 1px">전황</div>
       <canvas id="minimap" width="190" height="132" style="display:block;background:#0a0e14;
            border:1px solid #3a4a5e;border-radius:3px"></canvas>
+      <div style="margin-top:5px;display:flex;gap:5px">
+        <div id="btn-army" style="flex:1;cursor:pointer;text-align:center;font-size:11px;
+             background:#131b26d8;border:1px solid #3a4a5e;border-radius:4px;padding:4px 0;color:#cfe0f0;
+             user-select:none">전군 <b>F2</b></div>
+        <div id="btn-hero" style="flex:1;cursor:pointer;text-align:center;font-size:11px;
+             background:#131b26d8;border:1px solid #3a4a5e;border-radius:4px;padding:4px 0;color:#cfe0f0;
+             user-select:none">영웅 <b>F1</b></div>
+      </div>
     </div>
     <div style="width:1px;background:#232f40;margin:4px 16px"></div>
     <div id="herobar" style="display:flex;gap:8px;align-items:flex-end;align-self:flex-end"></div>
@@ -869,8 +904,9 @@ hud.innerHTML = `
     </div>
   </div>
   <div style="position:absolute;top:100px;left:16px;font-size:11px;color:#8a8aa0;max-width:430px;line-height:1.7">
-    드래그: 선택 (Shift 추가/제외 · Ctrl클릭/더블클릭: 같은 병종) · <b>Ctrl/Shift+1~9</b>: 부대 지정/추가 · <b>1~9</b>: 호출 ·
-    우클릭: 이동/조준 · <b>A</b>: 어택땅 · <b>S</b>: 정지 · 가장자리·화살표·미니맵: 카메라 · ESC: 해제 · <b>M</b>: 음소거
+    드래그: 선택 — 성주 포함 (Shift 추가/제외 · Ctrl클릭/더블클릭: 같은 병종) · <b>Ctrl/Shift+1~9</b>: 부대 지정/추가 · <b>1~9</b>: 호출 ·
+    우클릭: 이동/조준 · <b>A</b>: 어택땅 · <b>S/H</b>: 정지 · <b>F1</b>: 영웅 · <b>F2</b>: 전군 ·
+    <b>Space/C</b>: 성주 카메라 · 가장자리·화살표·미니맵: 카메라 · ESC: 해제 · <b>M</b>: 음소거
   </div>
   <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
        background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
@@ -922,16 +958,16 @@ window.addEventListener('pointermove', (e) => {
 window.addEventListener('pointerup', () => (miniCamDrag = false))
 
 // ---------------------------------------------------------------- 커맨드 카드 (SC식)
-// 키보드와 같은 함수를 호출한다 — 버튼과 단축키의 동작이 갈라질 수 없다
+// SC의 조직 원리: **카드 = 현재 선택이 할 수 있는 일**. 유닛 명령만 올라온다 —
+// 전군/영웅 같은 선택 유틸과 카메라는 명령이 아니므로 카드 밖(키·미니맵 옆)이다.
+// 슬롯 위치는 고정(근육기억), 해당 없는 명령은 흐려진다, 빈 선택이면 카드 자체가 없다.
+// 키보드와 같은 함수를 호출한다 — 버튼과 단축키의 동작이 갈라질 수 없다.
 const CMD_BUTTONS: Array<{ id: string; label: string; key: string; fn: () => void }> = [
-  { id: 'cmd-e', label: '업화', key: 'E', fn: castSkill },
   { id: 'cmd-a', label: '어택', key: 'A', fn: enterAttackMove },
-  { id: 'cmd-s', label: '정지', key: 'S', fn: stopSelected },
-  { id: 'cmd-t', label: '자동', key: 'T', fn: () => (skillAuto = !skillAuto) },
+  { id: 'cmd-s', label: '정지', key: 'S·H', fn: stopSelected },
   { id: 'cmd-g', label: '병사', key: 'G', fn: toggleCrewSelection },
-  { id: 'cmd-f2', label: '전군', key: 'F2', fn: selectAllArmy },
-  { id: 'cmd-h', label: '영웅', key: 'H', fn: selectHero },
-  { id: 'cmd-c', label: '성주', key: 'C', fn: () => (camFollow = true) },
+  { id: 'cmd-e', label: '업화', key: 'E', fn: castSkill },
+  { id: 'cmd-t', label: '자동', key: 'T', fn: () => (skillAuto = !skillAuto) },
 ]
 {
   const card = document.getElementById('cmdcard')!
@@ -948,6 +984,16 @@ const CMD_BUTTONS: Array<{ id: string; label: string; key: string; fn: () => voi
       if (e.button === 0) b.fn()
     })
     card.appendChild(btn)
+  }
+  // 선택 유틸 — 명령이 아니므로 카드 밖, 미니맵 아래 (키보드와 같은 함수)
+  for (const [id, fn] of [
+    ['btn-army', selectAllArmy],
+    ['btn-hero', selectHero],
+  ] as const) {
+    document.getElementById(id)!.addEventListener('pointerdown', (e) => {
+      e.stopPropagation()
+      if (e.button === 0) fn()
+    })
   }
 }
 
@@ -1589,19 +1635,34 @@ let selPanelKey = ''
 
 function updateSelPanel(): void {
   const sel = state.units.filter((u) => selected.has(u.id))
+  const lordSel = selected.has(LORD_ID)
   const panel = document.getElementById('selpanel')!
-  if (sel.length === 0) {
+  if (sel.length === 0 && !lordSel) {
     panel.style.display = 'none'
     selPanelKey = ''
     return
   }
   panel.style.display = 'block'
-  const key = sel.map((u) => u.id).join(',')
+  const key = (lordSel ? 'L,' : '') + sel.map((u) => u.id).join(',')
   if (key !== selPanelKey) {
     selPanelKey = key
     const grid = document.getElementById('selgrid')!
     grid.innerHTML = ''
     selChips.clear()
+    if (lordSel) {
+      // 성주 칩 — HP 없는 유일한 개체라 게이지 없이 이름표 색으로 구분
+      const chip = document.createElement('div')
+      chip.style.cssText =
+        'width:34px;cursor:pointer;text-align:center;font-family:monospace;font-size:12px;' +
+        'background:#241a18;border:1px solid #ff9a7a;border-radius:4px;padding:2px 0 3px;color:#ffcaba'
+      chip.textContent = '성'
+      chip.addEventListener('pointerdown', (e) => {
+        e.stopPropagation()
+        selected.clear()
+        selected.add(LORD_ID)
+      })
+      grid.appendChild(chip)
+    }
     for (const u of sel) {
       const chip = document.createElement('div')
       chip.style.cssText =
@@ -1627,7 +1688,8 @@ function updateSelPanel(): void {
   const counts = new Map<string, number>()
   for (const u of sel) counts.set(u.kind, (counts.get(u.kind) ?? 0) + 1)
   document.getElementById('selcount')!.textContent =
-    `선택 ${sel.length} — ` + [...counts].map(([k, n]) => `${state.kinds.units[k]!.name} ${n}`).join(' · ')
+    `선택 ${sel.length + (lordSel ? 1 : 0)} — ` +
+    [...(lordSel ? ['성주 1'] : []), ...[...counts].map(([k, n]) => `${state.kinds.units[k]!.name} ${n}`)].join(' · ')
   for (const u of sel) {
     const chip = selChips.get(u.id)
     if (chip) chip.hp.style.width = `${Math.max(0, (u.hp / state.kinds.units[u.kind]!.hp) * 100)}%`
@@ -1712,6 +1774,13 @@ function syncScene(now: number): void {
       ring.position.set(ux, uy + 0.06, uz)
     }
   }
+  // 성주 선택 링 — 유닛과 같은 규칙 (렌더 좌표는 위에서 이미 보간된 lordMesh 위치)
+  if (selected.has(LORD_ID)) {
+    const ring = getSelectionRing(ringIdx++)
+    ring.visible = true
+    ring.scale.setScalar(1.15)
+    ring.position.set(lordMesh.position.x, lordMesh.position.y + 0.06, lordMesh.position.z)
+  }
   for (let i = ringIdx; i < selectionRings.length; i++) selectionRings[i]!.visible = false
   // 스테일 스윕 — fastForward(검증 훅)는 이벤트를 버리므로 unitDied 연출 없이 사라진 유닛 정리
   for (const [id, v] of unitVisuals) {
@@ -1768,6 +1837,32 @@ function syncScene(now: number): void {
 
   // HUD
   drawMinimap()
+  // 커맨드 카드 = f(선택): 해당 없는 명령은 흐려지고, 올릴 명령이 없으면 카드 자체가 사라진다
+  const hasMovers = selectedMovers().length > 0
+  const hasHero = state.units.some((u) => u.kind === 'hero' && selected.has(u.id))
+  let hasCrewPair = false
+  for (const id of selected) {
+    const u = state.units.find((v) => v.id === id)
+    if (u && (u.crewOf !== undefined || state.units.some((v) => v.crewOf === u.id))) {
+      hasCrewPair = true
+      break
+    }
+  }
+  const cmdApplicable: Record<string, boolean> = {
+    'cmd-a': hasMovers,
+    'cmd-s': hasMovers,
+    'cmd-g': hasCrewPair,
+    'cmd-e': hasHero,
+    'cmd-t': hasHero,
+  }
+  document.getElementById('cmdwrap')!.style.display =
+    Object.values(cmdApplicable).some(Boolean) ? '' : 'none'
+  for (const [id, on] of Object.entries(cmdApplicable)) {
+    const el = document.getElementById(id)
+    if (!el) continue
+    el.style.opacity = on ? '1' : '0.28'
+    el.style.pointerEvents = on ? '' : 'none'
+  }
   const tLbl = document.querySelector('#cmd-t .lbl') as HTMLElement | null
   if (tLbl) tLbl.textContent = skillAuto ? '자동' : '수동'
   // 어택땅 대기 중엔 버튼을 점등 — 다음 클릭이 명령이 된다는 상태 표시
@@ -1917,6 +2012,7 @@ function resetGame(): void {
   for (const ring of selectionRings) ring.visible = false
 
   selected.clear()
+  selected.add(LORD_ID) // 새 판도 성주 선택으로 시작 — 첫 우클릭이 곧 성주 이동
   ctrlGroups.clear()
   inspectedEnemy = null
   aimingHeroId = null
