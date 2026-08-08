@@ -229,7 +229,8 @@ export function makeKnight(
   archer = false,
   // 직군 소품 (2026-08-08 사용자: "전사는 검, 마법사는 지팡이, 성주는 지휘봉").
   // held는 오른손(rArm)에 붙어 팔과 함께 흔들리고, robe는 다리를 덮는 로브 치마.
-  opts: { held?: 'sword' | 'staff' | 'baton'; robe?: boolean } = {},
+  // regalia는 성주 예장(왕관·어깨 맨틀·확장 케이프) — 2026-08-09 "갑옷이 동일하다" 반려로 추가.
+  opts: { held?: 'sword' | 'staff' | 'baton'; robe?: boolean; regalia?: boolean } = {},
 ): Rig {
   const root = new THREE.Group()
   const cloth = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.95 })
@@ -376,13 +377,13 @@ export function makeKnight(
   )
   visor.position.y = 1.8
   torso.add(visor)
-  // 크레스트 (세로 볏) — 궁수는 없음 (실루엣 구분)
-  if (!archer) {
+  // 크레스트 (세로 볏) — 궁수는 없음(실루엣 구분), 예장은 왕관이 대체
+  if (!archer && !opts.regalia) {
     const crest = bevelBox(0.035, 0.22, 0.38, cloth, 0.012)
     crest.position.set(0, 2.04, -0.02)
     torso.add(crest)
   }
-  if (gilded) {
+  if (gilded && !opts.regalia) {
     const circlet = new THREE.Mesh(new THREE.TorusGeometry(0.165, 0.022, 8, 18), MATS.gold)
     circlet.rotation.x = Math.PI / 2
     circlet.position.y = 1.88
@@ -390,8 +391,10 @@ export function makeKnight(
     torso.add(circlet)
   }
 
-  // ---- 망토 (등 뒤, 바람 애니메이션 대상)
-  const cloakGeo = new THREE.PlaneGeometry(0.55, 1.05, 4, 8)
+  // ---- 망토 (등 뒤, 바람 애니메이션 대상) — 예장은 더 넓고 긴 케이프
+  const cloakGeo = opts.regalia
+    ? new THREE.PlaneGeometry(0.78, 1.35, 4, 8)
+    : new THREE.PlaneGeometry(0.55, 1.05, 4, 8)
   cloakGeo.translate(0, -0.52, 0)
   const cloak = new THREE.Mesh(
     cloakGeo,
@@ -444,7 +447,7 @@ export function makeKnight(
     torso.add(scabbard)
   }
 
-  // ---- 로브 (마법사) — 허리에서 발목까지 덮는 치마. 다리는 그 안에서 그대로 젓는다
+  // ---- 로브 치마 — 허리에서 발목까지. 다리는 그 안에서 그대로 젓는다
   if (opts.robe) {
     const robe = lathe(
       [
@@ -456,6 +459,37 @@ export function makeKnight(
       16,
     )
     torso.add(robe)
+  }
+
+  // ---- 성주 예장 (regalia) — "같은 갑옷"을 벗어나는 실루엣: 왕관·어깨 맨틀·확장 케이프
+  if (opts.regalia) {
+    // 왕관 — 투구 위 금륜 + 뾰족 5개 (원래의 크레스트·서클릿을 대체하는 상위 표식)
+    const crownBase = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.028, 8, 18), MATS.gold)
+    crownBase.rotation.x = Math.PI / 2
+    crownBase.position.y = 1.98
+    crownBase.castShadow = true
+    torso.add(crownBase)
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2
+      const spike = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.13, 5), MATS.gold)
+      spike.position.set(Math.sin(a) * 0.15, 2.06, Math.cos(a) * 0.15)
+      torso.add(spike)
+    }
+    // 어깨 맨틀 — 견갑 위에 드리운 검은 천 깃 + 금 테두리
+    const mantle = lathe(
+      [
+        [0.2, 1.6],
+        [0.4, 1.46],
+        [0.44, 1.36],
+      ],
+      MATS.clothDark,
+      16,
+    )
+    torso.add(mantle)
+    const mantleRim = new THREE.Mesh(new THREE.TorusGeometry(0.43, 0.016, 6, 18), MATS.gold)
+    mantleRim.rotation.x = Math.PI / 2
+    mantleRim.position.y = 1.37
+    torso.add(mantleRim)
   }
 
   // ---- 손에 드는 직군 소품 — 오른손(rArm 하단) 부착, 팔 스윙과 함께 움직인다
@@ -540,6 +574,165 @@ export function makeKnight(
     mats: ownMaterials(root),
     atkStyle: archer ? 'bow' : 'sword',
     atkDur: archer ? 460 : 430,
+  }
+}
+
+/**
+ * 화염 마법사 (신장 ≈1.95) — 기사 몸체 재사용이 아니라 **전신 로브 별도 조형**.
+ * (2026-08-09 사용자 반려 "갑옷을 동일하게 입고 있다" — 색 스왑이 아니라 실루엣을 가른다)
+ * 판금 없음: 통짜 로브 + 후드(얼굴은 어둠) + 넓은 소매 + 화염 구슬 지팡이.
+ * Rig 계약(다리·팔 피벗)은 기사와 동일 — 같은 보행/공격 애니메이션을 탄다.
+ */
+export function makeMage(accent = 0x6e2027): Rig {
+  const root = new THREE.Group()
+  const cloth = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.96 })
+  const clothDeep = new THREE.MeshStandardMaterial({
+    color: new THREE.Color(accent).multiplyScalar(0.55), roughness: 0.97,
+  })
+
+  // ---- 다리 — 로브 밑단 아래로 살짝 보이는 검은 부츠만 (판금 정강이 없음)
+  const mkLeg = (side: number): THREE.Group => {
+    const leg = new THREE.Group()
+    leg.position.set(side * 0.14, 0.95, 0)
+    const boot = bevelBox(0.16, 0.12, 0.3, MATS.clothDark, 0.02)
+    boot.position.set(0, -0.89, 0.05)
+    leg.add(boot)
+    return leg
+  }
+  const lLeg = mkLeg(-1)
+  const rLeg = mkLeg(1)
+
+  // ---- 몸통 = 통짜 로브 (어깨→가슴→허리→밑단이 한 프로파일)
+  const torso = new THREE.Group()
+  const robe = lathe(
+    [
+      [0.19, 1.6],
+      [0.27, 1.42],
+      [0.24, 1.1],
+      [0.3, 0.6],
+      [0.44, 0.03],
+    ],
+    cloth,
+    18,
+  )
+  torso.add(robe)
+  // 앞자락 띠 — 어두운 세로 패널 + 허리 노끈
+  const panel = bevelBox(0.14, 1.28, 0.02, clothDeep, 0.008)
+  panel.position.set(0, 0.86, 0.27)
+  torso.add(panel)
+  const rope = lathe(
+    [
+      [0.26, 1.08],
+      [0.26, 1.03],
+    ],
+    MATS.gold,
+    14,
+  )
+  torso.add(rope)
+  // 가슴 화염 문장 (금 마름모 — 병종 식별 포인트)
+  const emblem = bevelBox(0.1, 0.1, 0.02, MATS.gold, 0.008)
+  emblem.rotation.z = Math.PI / 4
+  emblem.position.set(0, 1.3, 0.26)
+  torso.add(emblem)
+
+  // ---- 후드 — 머리를 감싸는 천 돔, 얼굴은 어둠 (기사의 '얼굴 없음' 문법 공유)
+  const hood = lathe(
+    [
+      [0.17, 1.58],
+      [0.21, 1.72],
+      [0.19, 1.88],
+      [0.07, 1.98],
+      [0.0, 2.0],
+    ],
+    clothDeep,
+    16,
+  )
+  torso.add(hood)
+  const face = new THREE.Mesh(
+    new THREE.SphereGeometry(0.13, 12, 8),
+    new THREE.MeshBasicMaterial({ color: 0x000000 }),
+  )
+  face.position.set(0, 1.76, 0.06)
+  torso.add(face)
+
+  // ---- 팔 — 판금 없이 넓은 소매(손목으로 갈수록 벌어짐) + 검은 손
+  const mkArm = (side: number): THREE.Group => {
+    const arm = new THREE.Group()
+    arm.position.set(side * 0.3, 1.46, 0)
+    const sleeve = lathe(
+      [
+        [0.08, 0],
+        [0.09, -0.28],
+        [0.14, -0.52],
+      ],
+      cloth,
+      10,
+    )
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), MATS.clothDark)
+    hand.position.y = -0.58
+    arm.add(sleeve, hand)
+    return arm
+  }
+  const lArm = mkArm(-1)
+  const rArm = mkArm(1)
+
+  // ---- 지팡이 — 긴 나무 대 + 화염 구슬 (자체 발광, 화염 속성 식별)
+  const staff = new THREE.Group()
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.04, 1.85, 8), MATS.leather)
+  rod.position.y = 0.35
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.018, 6, 12), MATS.gold)
+  collar.rotation.x = Math.PI / 2
+  collar.position.y = 1.16
+  const orb = new THREE.Mesh(
+    new THREE.SphereGeometry(0.1, 10, 8),
+    new THREE.MeshStandardMaterial({
+      color: 0xff8a30, emissive: 0xff5a10, emissiveIntensity: 1.4, roughness: 0.4,
+    }),
+  )
+  orb.position.y = 1.3
+  staff.add(rod, collar, orb)
+  staff.position.set(0, -0.58, 0.08)
+  rArm.add(staff)
+
+  // ---- 등 뒤 케이프 (바람 애니메이션 대상 — 기사와 같은 계약)
+  const cloakGeo = new THREE.PlaneGeometry(0.5, 1.1, 4, 8)
+  cloakGeo.translate(0, -0.52, 0)
+  const cloak = new THREE.Mesh(
+    cloakGeo,
+    new THREE.MeshStandardMaterial({ color: accent, roughness: 0.98, side: THREE.DoubleSide }),
+  )
+  cloak.position.set(0, 1.52, -0.24)
+  cloak.castShadow = true
+  torso.add(cloak)
+
+  root.add(lLeg, rLeg, torso, lArm, rArm)
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh) {
+      o.geometry.computeBoundingSphere()
+      o.castShadow = (o.geometry.boundingSphere?.radius ?? 1) > 0.16
+    }
+  })
+  mergeStatic(torso, [cloak])
+  mergeStatic(lArm)
+  mergeStatic(rArm)
+  mergeStatic(lLeg)
+  mergeStatic(rLeg)
+  setCast(torso, true)
+  setCast(lLeg, true)
+  setCast(rLeg, true)
+  setCast(lArm, false)
+  setCast(rArm, false)
+  return {
+    root,
+    lArm,
+    rArm,
+    lLeg,
+    rLeg,
+    torso,
+    cloak,
+    mats: ownMaterials(root),
+    atkStyle: 'sword', // 시전 모션 = 검 내려치기 재사용 (지팡이 휘두름으로 읽힌다)
+    atkDur: 430,
   }
 }
 

@@ -35,6 +35,7 @@ import {
   makeCannon,
   makeFire,
   makeKnight,
+  makeMage,
   makeMonster,
   ownMaterials,
   setFlash,
@@ -203,9 +204,9 @@ composer.addPass(grade)
 composer.addPass(new OutputPass())
 
 // 성주 — 절차 조형 풀아머 기사 (금장, 검증 슬라이스 v2)
-// 성주 — 흑색 갑주 + 금장 + 지휘봉 (2026-08-08 사용자: "높은 직급으로 보이게").
-// 무기가 아니라 지휘봉을 든 유일한 개체 — 전투원이 아니라 지휘관이라는 실루엣
-const lordRig = makeKnight(0x15151d, true, false, { held: 'baton' })
+// 성주 — 흑색 갑주 + 왕관·어깨 맨틀·확장 케이프(예장) + 지휘봉.
+// "높은 직급으로 보이게"(8/8) + "갑옷이 동일하다" 반려(8/9) — 왕관과 맨틀이 실루엣을 가른다
+const lordRig = makeKnight(0x15151d, true, false, { held: 'baton', regalia: true })
 const lordMesh = lordRig.root
 lordMesh.add(makeNameplate('성주', '#ff9a7a').translateY(2.5))
 scene.add(lordMesh)
@@ -299,12 +300,10 @@ function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
     rig.root.scale.setScalar(0.94)
     v = { group: rig.root, rig, mats: rig.mats, kind: u.kind }
   } else if (u.kind === 'hero' || u.kind === 'mage') {
-    // 영웅 2종 — 전사(청색+금장, 뽑아 든 검) / 마법사(진홍 로브 + 화염 구슬 지팡이).
-    // 이름표 + 상시 링으로 부감 식별 (2026-08-08 직군 소품 확정)
+    // 영웅 2종 — 전사(판금 기사 + 뽑아 든 검) / 마법사(전신 로브 별도 조형 + 화염 지팡이).
+    // 마법사는 기사 몸체 재사용이 아니라 makeMage — "갑옷이 동일하다" 반려(2026-08-09) 반영
     const isMage = u.kind === 'mage'
-    const rig = isMage
-      ? makeKnight(0x7a2830, true, false, { held: 'staff', robe: true })
-      : makeKnight(0x1d4e8c, true, false, { held: 'sword' })
+    const rig = isMage ? makeMage() : makeKnight(0x1d4e8c, true, false, { held: 'sword' })
     rig.root.scale.setScalar(isMage ? 1.08 : 1.15)
     rig.root.add(
       makeNameplate(state.kinds.units[u.kind]!.name, isMage ? '#ff9d5c' : '#ffd870').translateY(2.5),
