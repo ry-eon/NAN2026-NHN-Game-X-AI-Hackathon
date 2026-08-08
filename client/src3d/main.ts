@@ -372,10 +372,15 @@ function getSelectionRing(i: number): THREE.Mesh {
 // 스킬 조준 레티클 (원신식 — 반경이 그대로 보인다). 반경 1로 만들고 스킬별로 스케일한다
 const aimReticle = new THREE.Group()
 {
+  // 레티클도 벽 너머로 보인다 — 성벽 뒤 지점을 겨눌 때 가려지면 조준이 불가능하다
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.94, 1.0, 48),
-    new THREE.MeshBasicMaterial({ color: 0xff7a3a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
+    new THREE.MeshBasicMaterial({
+      color: 0xff7a3a, transparent: true, opacity: 0.9, side: THREE.DoubleSide,
+      depthWrite: false, depthTest: false,
+    }),
   )
+  ring.renderOrder = 998
   const disc = new THREE.Mesh(
     new THREE.CircleGeometry(1.0, 48),
     new THREE.MeshBasicMaterial({ color: 0xff5a2a, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false }),
@@ -440,6 +445,7 @@ function updateAimLines(): void {
 function spawnSkillRing(
   x: number, z: number, y: number, radius: number, color: number, durMs: number,
   mode: 'pulse' | 'boundary' = 'pulse',
+  follow?: () => { x: number; y: number; z: number }, // 성주 오라 — 링이 시전자를 따라간다
 ): void {
   const mat = new THREE.MeshBasicMaterial({
     color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false,
@@ -457,6 +463,10 @@ function spawnSkillRing(
       ring.geometry.dispose()
       mat.dispose()
       return
+    }
+    if (follow) {
+      const f = follow()
+      ring.position.set(f.x, f.y, f.z)
     }
     if (mode === 'pulse') {
       ring.scale.setScalar(radius * (0.3 + 0.7 * k))
@@ -531,12 +541,16 @@ let pendingCast: { casterId?: number; slot: number; x?: number; z?: number } | u
 
 // 시전 사거리 원 — 조준 중 시전자 둘레에 그린다. "어디까지 닿는지"가 안 보이면
 // 사거리 제한이 버그처럼 느껴진다 (2026-08-09 "시전되는 곳이 정해져 있는 것 같다")
+// depthTest를 끈다 — 지휘 오버레이(조준선과 같은 규칙). 켜두면 성벽이 원의 위쪽(먼 쪽)을
+// 삼켜 "표시 범위와 실제 시전 범위가 다르다"로 읽힌다 (2026-08-09 실측 반려)
 const rangeRing = new THREE.Mesh(
   new THREE.RingGeometry(0.985, 1.0, 64),
   new THREE.MeshBasicMaterial({
-    color: 0x9fc2ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false,
+    color: 0x9fc2ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide,
+    depthWrite: false, depthTest: false,
   }),
 )
+rangeRing.renderOrder = 998
 rangeRing.rotation.x = -Math.PI / 2
 rangeRing.visible = false
 scene.add(rangeRing)
@@ -1652,11 +1666,14 @@ function handleEvents(events: SiegeEvent[]): void {
           spawnLight(new THREE.Vector3(ev.x, 2.6, ev.z), 0xffd870, 60, 900)
           Sfx.global('horn')
         } else {
-          // Q 군기(금) / W 진군 나팔(청록) — 확장 펄스 + 지속시간 내내 남는 영역 링
+          // Q 군기(금) / W 진군 나팔(청록) — 확장 펄스 + **성주를 따라다니는 오라 링**
+          // (2026-08-09: 버프는 시전 지점 고정이 아니라 성주로부터의 거리 — sim과 일치)
           const color = ev.slot === 0 ? 0xffd870 : 0x53d6c8
           const durMs = (LORD_SKILLS[ev.slot]!.buff?.sec ?? 6) * 1000
           spawnSkillRing(ev.x, ev.z, lordY, ev.radius, color, 550)
-          spawnSkillRing(ev.x, ev.z, lordY, ev.radius, color, durMs, 'boundary')
+          spawnSkillRing(ev.x, ev.z, lordY, ev.radius, color, durMs, 'boundary', () => ({
+            x: lordMesh.position.x, y: lordMesh.position.y + 0.08, z: lordMesh.position.z,
+          }))
           spawnLight(new THREE.Vector3(ev.x, 2.2, ev.z), color, 34, 600)
           Sfx.at('rally', ev.x, ev.z)
         }

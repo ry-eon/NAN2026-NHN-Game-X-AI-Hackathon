@@ -646,6 +646,9 @@ export interface ActiveEffect {
   dps?: number
   mult?: number
   global?: boolean
+  /** 성주 오라 — 시전 지점 고정이 아니라 **성주의 현재 위치**를 중심으로 잰다
+   *  (2026-08-09 사용자: "성주 Q/W는 성주로부터의 거리로 계산해야") */
+  followLord?: boolean
 }
 
 export type SiegeStatus = 'prep' | 'assault' | 'won' | 'lost'
@@ -1130,7 +1133,8 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     let m = 1
     for (const ef of state.effects) {
       if (ef.type !== 'move') continue
-      if (Math.hypot(p.x - ef.x, p.z - ef.z) <= ef.radius) m = Math.max(m, ef.mult ?? 1)
+      const c = ef.followLord ? state.lord.pos : ef
+      if (Math.hypot(p.x - c.x, p.z - c.z) <= ef.radius) m = Math.max(m, ef.mult ?? 1)
     }
     return m
   }
@@ -1262,6 +1266,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
           state.effects.push({
             type: def.buff.stat, x: from.x, z: from.z, radius: def.radius,
             until: state.tick + Math.round(def.buff.sec * TICKS_PER_SECOND), mult: def.buff.mult, global: def.buff.global,
+            followLord: !caster, // 성주 버프는 성주를 따라다니는 오라
           })
         }
         state.events.push({
@@ -1413,7 +1418,8 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     if (allBuff) return true
     for (const ef of state.effects) {
       if (ef.type !== 'reload') continue
-      if (Math.hypot(u.pos.x - ef.x, u.pos.z - ef.z) <= ef.radius) return true
+      const c = ef.followLord ? state.lord.pos : ef
+      if (Math.hypot(u.pos.x - c.x, u.pos.z - c.z) <= ef.radius) return true
     }
     return false
   }
