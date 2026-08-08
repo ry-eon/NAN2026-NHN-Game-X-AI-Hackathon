@@ -808,13 +808,16 @@ function initialUnits(loadout: Loadout, nextId: () => number): FriendlyUnit[] {
     const crewKind = loadout.unitKinds[p.kind]!.crew
     if (crewKind && loadout.unitKinds[crewKind]) crews++
   }
-  // 안뜰 집결 대형 — 성문 안쪽, 동벽에서 한 발 물러난 2열 종대(열 6명, z 간격 3).
+  // 안뜰 집결 대형 — 성문 안쪽, 동벽에서 한 발 물러난 2열 종대(열 6명, z 간격 2).
+  // z 범위는 **두 경사로 입구(z≈±5) 사이**로 제한한다: 경사로는 바닥 끝에서만 오를 수
+  // 있어서(중턱 옆은 Δh>1.5), 집결이 입구 밖(±7.5)에 있으면 절반이 목표를 등지고 걷다
+  // 유턴하는 그림이 나온다 — "계단 올라가는 게 어색하다" 원인 실측(2026-08-08).
   // 내성 관통 차단 구간(x < west+10.5)과 영웅 초기 위치(WALL_X-6, 0)를 피한다.
   const crewKind = Object.values(loadout.unitKinds).find((d) => d.crew)?.crew
   for (let i = 0; i < crews; i++) {
     const row = Math.floor(i / 6)
     const col = i % 6
-    spawn(crewKind!, WALL_X - 7 - row * 2, -7.5 + col * 3, 0)
+    spawn(crewKind!, WALL_X - 7 - row * 2, -5 + col * 2, 0)
   }
   return units
 }
