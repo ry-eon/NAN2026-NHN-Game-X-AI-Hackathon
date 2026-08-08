@@ -6,7 +6,8 @@ import {
   CASTLE,
   ENEMY_KINDS,
   findPath,
-  HERO_SKILL,
+  MAGE_SKILLS,
+  WARRIOR_SKILLS,
   stepHeight,
   WALL_HP,
   WALL_X,
@@ -44,6 +45,7 @@ function placeEnemy(state: SiegeState, kind: string, x: number, z: number, hp: n
     via: null,
     raiseCd: 0,
     mode: 'wall',
+    stunT: 0,
   }
   state.enemies.push(e)
   return e
@@ -555,26 +557,96 @@ describe('M2b 전투', () => {
     })
   })
 
-  it('영웅 스킬: 반경 내 광역 피해 + 쿨다운·사거리 검증', () => {
-    const { state, spawns } = createSiege(SEED)
-    stepSiege(state, spawns, { startAssault: true })
-    const hero = state.units.find((u) => u.kind === 'hero')!
-    state.units = [hero] // 다른 유닛 사격이 수치 단언에 끼지 않게
-    // 시전점 (2,0) — 영웅(-12,0)에서 d=14 ≤ 사거리 18. 반경 4.5 안 2마리 + 밖 1마리
-    placeEnemy(state, 'grunt', 2, 0, 700)
-    placeEnemy(state, 'grunt', 3, 1.5, 700)
-    placeEnemy(state, 'grunt', 2, 8, 700)
-    stepSiege(state, spawns, { heroSkill: { x: 2, z: 0 } })
-    expect(state.enemies.filter((e) => e.hp === 700 - HERO_SKILL.dmg)).toHaveLength(2)
-    expect(state.enemies.filter((e) => e.hp === 700).length).toBeGreaterThanOrEqual(1)
-    expect(hero.skillCd).toBeGreaterThan(0)
-    // 쿨다운 중 재시전은 무시된다
-    const cdBefore = hero.skillCd
-    stepSiege(state, spawns, { heroSkill: { x: 2, z: 0 } })
-    expect(hero.skillCd).toBe(cdBefore - 1)
-    // 사거리 밖 시전은 쿨다운도 소모하지 않는다
-    hero.skillCd = 0
-    stepSiege(state, spawns, { heroSkill: { x: 40, z: 0 } })
-    expect(hero.skillCd).toBe(0)
+  describe('스킬 3×3 (2026-08-08 개편 — 전사 공격기·마법사 화염·성주 버프, E=궁극)', () => {
+    it('마법사 궁극 업화(E): 반경 내 광역 피해 + 쿨다운·사거리 검증', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const mage = state.units.find((u) => u.kind === 'mage')!
+      state.units = [mage] // 다른 유닛 사격이 수치 단언에 끼지 않게
+      mage.cooldown = 100000 // 기본 공격이 스킬 수치 단언에 끼지 않게
+      const ult = MAGE_SKILLS[2]!
+      // 시전점 (2,3) — 마법사(-12,3)에서 d=14 ≤ 사거리 18. 반경 5.5 안 2마리 + 밖 1마리
+      placeEnemy(state, 'grunt', 2, 3, 700)
+      placeEnemy(state, 'grunt', 3, 4.5, 700)
+      placeEnemy(state, 'grunt', 2, 12, 700)
+      stepSiege(state, spawns, { castSkill: { casterId: mage.id, slot: 2, x: 2, z: 3 } })
+      expect(state.enemies.filter((e) => e.hp === 700 - ult.dmg!)).toHaveLength(2)
+      expect(state.enemies.filter((e) => e.hp === 700).length).toBeGreaterThanOrEqual(1)
+      expect(mage.cds[2]).toBeGreaterThan(0)
+      // 쿨다운 중 재시전은 무시된다
+      const cdBefore = mage.cds[2]!
+      stepSiege(state, spawns, { castSkill: { casterId: mage.id, slot: 2, x: 2, z: 3 } })
+      expect(mage.cds[2]).toBe(cdBefore - 1)
+      // 사거리 밖 시전은 쿨다운도 소모하지 않는다
+      mage.cds[2] = 0
+      stepSiege(state, spawns, { castSkill: { casterId: mage.id, slot: 2, x: 40, z: 0 } })
+      expect(mage.cds[2]).toBe(0)
+    })
+
+    it('마법사 불의 장막(W): 장판 위의 적이 초당 피해를 입고, 지속시간이 끝나면 꺼진다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const mage = state.units.find((u) => u.kind === 'mage')!
+      state.units = [mage]
+      mage.cooldown = 100000 // 기본 공격 배제 — 장판 피해만 잰다
+      const zone = MAGE_SKILLS[1]!
+      const inZone = placeEnemy(state, 'tank', mage.pos.x + 8, mage.pos.z, 2050)
+      inZone.aim = { ...inZone.pos } // 제자리에 묶는다
+      inZone.atWall = true
+      stepSiege(state, spawns, { castSkill: { casterId: mage.id, slot: 1, x: inZone.pos.x, z: inZone.pos.z } })
+      expect(state.effects.filter((e) => e.type === 'zone')).toHaveLength(1)
+      for (let i = 0; i < 30; i++) stepSiege(state, spawns, {}) // 1초
+      const afterOneSec = inZone.hp
+      expect(2050 - afterOneSec).toBeGreaterThan(zone.zone!.dps * 0.8) // 초당 피해가 실제로 들어간다
+      // 지속시간 경과 후 장판 소멸 + 피해 정지
+      for (let i = 0; i < 30 * zone.zone!.sec; i++) stepSiege(state, spawns, {})
+      expect(state.effects.filter((e) => e.type === 'zone')).toHaveLength(0)
+    })
+
+    it('전사 대지파쇄(E): 반경 피해 + 기절 — 기절 중엔 접전 중인 적도 때리지 못한다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const hero = state.units.find((u) => u.kind === 'hero')!
+      state.units = [hero]
+      const e = placeEnemy(state, 'grunt', hero.pos.x + 1.0, hero.pos.z, 660)
+      e.atWall = true
+      stepSiege(state, spawns, { castSkill: { casterId: hero.id, slot: 2 } }) // 자기 중심 — 지점 불필요
+      expect(e.hp).toBeLessThan(660)
+      expect(e.stunT).toBeGreaterThan(0)
+      const hpBefore = hero.hp
+      for (let i = 0; i < Math.round(1.5 * 30) - 2; i++) stepSiege(state, spawns, {})
+      expect(hero.hp).toBe(hpBefore) // 기절 동안 접전 피해 없음
+    })
+
+    it('전사 돌진(Q): 경로상 적에게 피해를 주며 지점으로 즉시 이동한다', () => {
+      const { state, spawns } = createSiege(SEED)
+      stepSiege(state, spawns, { startAssault: true })
+      const hero = state.units.find((u) => u.kind === 'hero')!
+      state.units = [hero]
+      hero.cooldown = 100000 // 기본 공격 배제 — 돌진 피해만 잰다
+      const start = { ...hero.pos }
+      const mid = placeEnemy(state, 'grunt', hero.pos.x + 5, hero.pos.z, 660)
+      mid.atWall = true
+      stepSiege(state, spawns, { castSkill: { casterId: hero.id, slot: 0, x: hero.pos.x + 10, z: hero.pos.z } })
+      expect(mid.hp).toBe(660 - WARRIOR_SKILLS[0]!.dmg!) // 경로에 걸렸다
+      expect(hero.pos.x).toBeGreaterThan(start.x + 8) // 지점 근처까지 이동했다
+    })
+
+    it('성주 군기(Q): 반경 내 병기의 재장전이 빨라진다 — 총력전(E)은 전역', () => {
+      const { state, spawns } = createSiege(SEED)
+      mountAll(state)
+      stepSiege(state, spawns, { startAssault: true })
+      const gun = state.units.find((u) => u.kind === 'cannon')!
+      // 성주를 대포 곁으로 순간이동 — 군기 반경(12) 안에 들어오게
+      state.lord.pos.x = gun.pos.x - 4
+      state.lord.pos.z = gun.pos.z
+      gun.cooldown = 60
+      stepSiege(state, spawns, { castSkill: { slot: 0 } }) // casterId 생략 = 성주
+      expect(state.effects.filter((e) => e.type === 'reload')).toHaveLength(1)
+      const before = gun.cooldown
+      stepSiege(state, spawns, {})
+      expect(before - gun.cooldown).toBe(2) // 틱당 2씩 줄어든다 (재장전 2배)
+      expect(state.lord.cds[0]).toBeGreaterThan(0)
+    })
   })
 })

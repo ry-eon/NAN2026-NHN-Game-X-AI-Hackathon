@@ -13,7 +13,7 @@
 //   greedy = 적극 플레이        → 플레이어의 개입이 보상되는가
 //   random = 장착 후 아무렇게나 → 심사자가 대충 조작해도 무너지지 않는가
 
-import { CASTLE, CREW_MAN_RADIUS, FIELD, HERO_SKILL, TICKS_PER_SECOND, WALL_X, manningMap, mountPoint } from '../sim/world'
+import { CASTLE, CREW_MAN_RADIUS, FIELD, MAGE_SKILLS, TICKS_PER_SECOND, WALL_X, manningMap, mountPoint } from '../sim/world'
 import type { SiegeInput, SiegeState, Vec2 } from '../sim/world'
 
 export interface BotPolicy {
@@ -134,20 +134,22 @@ const clampWallZ = (z: number): number => Math.max(CASTLE.north + 2, Math.min(CA
 
 export const greedy: BotPolicy = {
   name: 'greedy',
-  desc: '표준 장착 뒤, 전선 쪽으로 병기를 겨누고 흐름이 몰리는 구간으로 영웅을 옮겨 업화로 끊는다 — 적극 플레이',
+  desc: '표준 장착 뒤, 전선 쪽으로 병기를 겨누고 흐름이 몰리는 구간으로 마법사를 옮겨 궁극 업화로 끊는다 — 적극 플레이',
   act(s) {
     if (s.status === 'prep') return deployPrep(s) ?? { startAssault: true }
     if (s.status !== 'assault') return undefined
 
-    const hero = s.units.find((u) => u.kind === 'hero')
-    if (!hero) return undefined
+    // 스킬 개편(2026-08-08) 후 역할: 업화는 마법사의 궁극(슬롯 2)이 됐다.
+    // 봇의 스킬·재배치 로직은 마법사가 계승하고, 전사는 안뜰 대응 1순위로 쓴다.
+    const mage = s.units.find((u) => u.kind === 'mage')
+    const ult = MAGE_SKILLS[2]!
 
-    // 1) 스킬 — 쿨이 돌고 반경 안에 3기 이상 몰렸을 때만 (2026-08-06 상주 조작제 재검증에서
+    // 1) 궁극 업화 — 쿨이 돌고 반경 안에 3기 이상 몰렸을 때만 (2026-08-06 재검증에서
     //    2기 기준이 과소비로 판명 — 6시드 스윕에서 3기 기준이 전 시드 우세)
-    if (hero.skillCd === 0 && s.enemies.length > 0) {
-      const spot = densestPoint(s, HERO_SKILL.radius)
-      if (spot && spot.n >= 3 && dist(hero.pos, spot) <= HERO_SKILL.range) {
-        return { heroSkill: { x: spot.x, z: spot.z, heroId: hero.id } }
+    if (mage && (mage.cds[2] ?? 1) <= 0 && s.enemies.length > 0) {
+      const spot = densestPoint(s, ult.radius)
+      if (spot && spot.n >= 3 && dist(mage.pos, spot) <= ult.range) {
+        return { castSkill: { casterId: mage.id, slot: 2, x: spot.x, z: spot.z } }
       }
     }
 
@@ -170,6 +172,11 @@ export const greedy: BotPolicy = {
     //    성벽 위 화력은 터널·안뜰에 닿지 않으므로, 여기서만은 지상 전력이 유일한 답이다.
     const intruders = s.enemies.filter((e) => e.mode === 'breach' && e.pos.x < CASTLE.east - CASTLE.wallT / 2)
     if (intruders.length > 0) {
+      // 전사 먼저 — 지상전 전담(2026-08-08 킷). 어택땅으로 보내 접적 시 그 자리에서 교전
+      const warrior = s.units.find((u) => u.kind === 'hero')
+      if (warrior && warrior.path.length === 0 && dist(warrior.pos, intruders[0]!.pos) > 6) {
+        return { unitMove: { ids: [warrior.id], to: { x: intruders[0]!.pos.x, z: intruders[0]!.pos.z, h: 0 }, attack: true } }
+      }
       const map = manningMap(s)
       const manning = new Set(map.values())
       const crewKinds = new Set(Object.values(s.kinds.units).filter((d) => d.crew).map((d) => d.crew!))
@@ -201,11 +208,11 @@ export const greedy: BotPolicy = {
       }
     }
 
-    // 5) 영웅 — 성벽 안쪽 지상을 따라 움직여 업화 사거리(18) 안에 전선을 넣는다.
+    // 5) 마법사 — 성벽 안쪽 지상을 따라 움직여 궁극 사거리(18) 안에 전선을 넣는다.
     //    문턱 10: 이동 중엔 못 쏘므로 재배치는 참을수록 이득 (6시드 스윕으로 확정)
-    if (s.tick % sec(6) !== 0) return undefined
-    if (Math.abs(hero.pos.z - tz) <= 10) return undefined
-    return { unitMove: { ids: [hero.id], to: { x: WALL_X - 6, z: clampWallZ(tz) } } }
+    if (!mage || s.tick % sec(6) !== 0) return undefined
+    if (Math.abs(mage.pos.z - tz) <= 10) return undefined
+    return { unitMove: { ids: [mage.id], to: { x: WALL_X - 6, z: clampWallZ(tz) } } }
   },
 }
 

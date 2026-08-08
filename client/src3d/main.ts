@@ -5,7 +5,8 @@ import * as THREE from 'three'
 import {
   CASTLE,
   FIELD,
-  HERO_SKILL,
+  LORD_SKILLS,
+  MAGE_SKILLS,
   SEGMENTS,
   createSiege,
   isCrewManned,
@@ -14,7 +15,7 @@ import {
   stepSiege,
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
-import type { FriendlyUnit, SiegeEvent, SiegeInput } from '../../siege/sim/world'
+import type { FriendlyUnit, SiegeEvent, SiegeInput, SkillDef } from '../../siege/sim/world'
 import { Sfx, type SfxName } from './audio'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
@@ -293,14 +294,19 @@ function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
     const rig = makeKnight(0x6a6f7a, false, false)
     rig.root.scale.setScalar(0.94)
     v = { group: rig.root, rig, mats: rig.mats, kind: u.kind }
-  } else if (u.kind === 'hero') {
-    // 영웅 — 크게, 청색+금장, 이름표, 상시 금색 링
-    const rig = makeKnight(0x1d4e8c, true)
-    rig.root.scale.setScalar(1.15)
-    rig.root.add(makeNameplate('영웅', '#ffd870').translateY(2.5))
+  } else if (u.kind === 'hero' || u.kind === 'mage') {
+    // 영웅 2종 — 전사(청색+금장) / 마법사(진홍 로브색). 이름표 + 상시 링으로 부감 식별
+    const isMage = u.kind === 'mage'
+    const rig = makeKnight(isMage ? 0x7a2830 : 0x1d4e8c, true)
+    rig.root.scale.setScalar(isMage ? 1.08 : 1.15)
+    rig.root.add(
+      makeNameplate(state.kinds.units[u.kind]!.name, isMage ? '#ff9d5c' : '#ffd870').translateY(2.5),
+    )
     const ring = new THREE.Mesh(
       new THREE.RingGeometry(0.62, 0.74, 28),
-      new THREE.MeshBasicMaterial({ color: 0xd8a832, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({
+        color: isMage ? 0xd05a2a : 0xd8a832, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false,
+      }),
     )
     ring.rotation.x = -Math.PI / 2
     ring.position.y = 0.05
@@ -355,15 +361,15 @@ function getSelectionRing(i: number): THREE.Mesh {
   return selectionRings[i]!
 }
 
-// 영웅 스킬 조준 레티클 (원신식 — 반경이 그대로 보인다)
+// 스킬 조준 레티클 (원신식 — 반경이 그대로 보인다). 반경 1로 만들고 스킬별로 스케일한다
 const aimReticle = new THREE.Group()
 {
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(HERO_SKILL.radius - 0.18, HERO_SKILL.radius, 48),
+    new THREE.RingGeometry(0.94, 1.0, 48),
     new THREE.MeshBasicMaterial({ color: 0xff7a3a, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }),
   )
   const disc = new THREE.Mesh(
-    new THREE.CircleGeometry(HERO_SKILL.radius, 48),
+    new THREE.CircleGeometry(1.0, 48),
     new THREE.MeshBasicMaterial({ color: 0xff5a2a, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false }),
   )
   ring.rotation.x = -Math.PI / 2
@@ -408,10 +414,10 @@ function updateAimLines(): void {
   aimLineGeo.setDrawRange(0, n * 4)
   aimLines.visible = n > 0
 }
+// 스킬 조준 상태 (QWE 개편 2026-08-08) — 지점 스킬만 레티클 조준, 자기 중심·버프는 즉발
 let aiming = false
-let aimingHeroId: number | null = null // 수동 조준 중인 영웅
-let skillAuto = true // 자동/수동 토글 (T)
-let pendingHeroSkill: { x: number; z: number; heroId?: number } | undefined
+let aimingCast: { casterId: number; slot: number; def: SkillDef } | null = null
+let pendingCast: { casterId?: number; slot: number; x?: number; z?: number } | undefined
 
 // ---------------------------------------------------------------- 입력 (LoL식)
 let spaceLatch = false
@@ -460,20 +466,42 @@ function selectAllArmy(): void {
   for (const u of state.units) selected.add(u.id)
 }
 
-/** H — 영웅 선택 */
+/** F1 — 영웅 선택 (전사 ↔ 마법사 순환 — SC의 영웅 탭 관례) */
 function selectHero(): void {
-  const hero = state.units.find((u) => u.kind === 'hero')
-  if (hero) {
-    selected.clear()
-    selected.add(hero.id)
-  }
+  const heroes = state.units.filter((u) => state.kinds.units[u.kind]?.skills)
+  if (heroes.length === 0) return
+  const curIdx = heroes.findIndex((h) => selected.size === 1 && selected.has(h.id))
+  const next = heroes[(curIdx + 1) % heroes.length]!
+  selected.clear()
+  selected.add(next.id)
 }
 
-/** E — 영웅 스킬 (선택 중인 영웅 우선, 없으면 첫 영웅) */
-function castSkill(): void {
-  const heroes = state.units.filter((u) => u.kind === 'hero')
-  const hero = heroes.find((h) => selected.has(h.id)) ?? heroes[0]
-  if (hero) triggerSkill(hero)
+/** 현재 QWE의 시전자 — 선택된 영웅(낮은 id) 우선, 없으면 선택된 성주(버프) */
+function activeCaster(): { caster: FriendlyUnit | null; skills: SkillDef[] } | null {
+  const hero = state.units
+    .filter((u) => state.kinds.units[u.kind]?.skills && selected.has(u.id))
+    .sort((a, b) => a.id - b.id)[0]
+  if (hero) return { caster: hero, skills: state.kinds.units[hero.kind]!.skills! }
+  if (selected.has(LORD_ID)) return { caster: null, skills: LORD_SKILLS }
+  return null
+}
+
+/** Q/W/E — 스킬 시전. 지점 스킬은 레티클 조준 진입, 자기 중심·버프는 즉발 */
+function castSlot(slot: number): void {
+  const ac = activeCaster()
+  if (!ac) return
+  const def = ac.skills[slot]
+  if (!def) return
+  const cds = ac.caster ? ac.caster.cds : state.lord.cds
+  if ((cds[slot] ?? 1) > 0) return
+  if (def.targeted && ac.caster) {
+    aiming = true
+    aimingCast = { casterId: ac.caster.id, slot, def }
+    aimReticle.scale.setScalar(def.radius)
+    aimReticle.visible = true
+  } else {
+    pendingCast = ac.caster ? { casterId: ac.caster.id, slot } : { slot }
+  }
 }
 
 /** 선택 중 이동 가능(비고정) 유닛 id */
@@ -589,14 +617,14 @@ document.body.appendChild(dragBox)
 let dragStart: { x: number; y: number } | null = null
 
 renderer.domElement.addEventListener('pointerdown', (e) => {
-  // 수동 조준 중: 좌클릭 = 시전, 우클릭 = 취소 (드래그 선택·이동 명령은 봉인)
+  // 스킬 조준 중: 좌클릭 = 시전, 우클릭 = 취소 (드래그 선택·이동 명령은 봉인)
   if (aiming) {
-    if (e.button === 0) {
+    if (e.button === 0 && aimingCast) {
       const p = pickPoint(e.clientX, e.clientY)
-      if (p) pendingHeroSkill = { x: p.x, z: p.z, heroId: aimingHeroId ?? undefined }
+      if (p) pendingCast = { casterId: aimingCast.casterId, slot: aimingCast.slot, x: p.x, z: p.z }
     }
     aiming = false
-    aimingHeroId = null
+    aimingCast = null
     aimReticle.visible = false
     return
   }
@@ -658,11 +686,11 @@ window.addEventListener('pointermove', (e) => {
   mouseIn = true
   if (aiming) {
     const p = pickPoint(e.clientX, e.clientY)
-    if (p) {
+    if (p && aimingCast) {
       aimReticle.position.set(p.x, p.h + 0.08, p.z)
       // 사거리 밖이면 흐리게 — 시전해도 sim이 무시한다는 시각 피드백
-      const hero = state.units.find((u) => u.id === aimingHeroId)
-      const inRange = hero && Math.hypot(p.x - hero.pos.x, p.z - hero.pos.z) <= HERO_SKILL.range
+      const caster = state.units.find((u) => u.id === aimingCast!.casterId)
+      const inRange = caster && Math.hypot(p.x - caster.pos.x, p.z - caster.pos.z) <= aimingCast.def.range
       for (const c of aimReticle.children)
         ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(inRange ? 0xff7a3a : 0x5a5a66)
     }
@@ -757,7 +785,7 @@ window.addEventListener('keydown', (e) => {
     selected.clear()
     inspectedEnemy = null
     aiming = false
-    aimingHeroId = null
+    aimingCast = null
     aimReticle.visible = false
     cancelAttackMove()
   }
@@ -817,45 +845,16 @@ window.addEventListener('keydown', (e) => {
 })
 window.addEventListener('keyup', (e) => keysPan.delete(e.code))
 
-/** 자동 조준: 사거리 내에서 "반경에 가장 많이 쓸려드는" 적 위치 (동률 시 앞선 스폰) */
-function bestSkillTarget(hero: FriendlyUnit): { x: number; z: number } | null {
-  let best: { x: number; z: number } | null = null
-  let bestScore = 0
-  for (const e of state.enemies) {
-    if (Math.hypot(e.pos.x - hero.pos.x, e.pos.z - hero.pos.z) > HERO_SKILL.range) continue
-    let n = 0
-    for (const o of state.enemies)
-      if (Math.hypot(o.pos.x - e.pos.x, o.pos.z - e.pos.z) <= HERO_SKILL.radius) n++
-    if (n > bestScore) {
-      bestScore = n
-      best = { x: e.pos.x, z: e.pos.z }
-    }
-  }
-  return best
-}
-
-/** 스킬 발동 (E 키·영웅 카드 버튼 공용) — 자동이면 즉시, 수동이면 조준 모드 진입 */
-function triggerSkill(hero: FriendlyUnit): void {
-  if (hero.skillCd > 0) return
-  if (skillAuto) {
-    const t = bestSkillTarget(hero)
-    if (t) pendingHeroSkill = { ...t, heroId: hero.id }
-  } else if (!aiming) {
-    aiming = true
-    aimingHeroId = hero.id
-    aimReticle.position.set(hero.pos.x, hero.h + 0.08, hero.pos.z)
-    aimReticle.visible = true
-  }
-}
-
 window.addEventListener('keydown', (e) => {
   // 재시작은 판이 끝난 뒤에만 — 전투 중 오타로 판이 날아가면 안 된다
   if (e.code === 'KeyR' && (state.status === 'won' || state.status === 'lost')) {
     resetGame()
     return
   }
-  if (e.code === 'KeyT') skillAuto = !skillAuto
-  if (e.code === 'KeyE') castSkill()
+  // Q/W/E — 선택된 영웅(전사·마법사)/성주의 스킬 (2026-08-08 개편, 구 E=업화·T=자동조준 폐지)
+  if (e.code === 'KeyQ') castSlot(0)
+  if (e.code === 'KeyW') castSlot(1)
+  if (e.code === 'KeyE') castSlot(2)
 })
 
 // 이동 마커 (LoL식 클릭 링) — 성주 초록, 부대 명령 청록
@@ -933,13 +932,13 @@ hud.innerHTML = `
     <div style="width:1px;background:#232f40;margin:4px 16px"></div>
     <div id="cmdwrap" style="align-self:center">
       <div style="font-size:10px;color:#5a708c;letter-spacing:2px;margin:0 0 4px 1px">명령</div>
-      <div id="cmdcard" style="display:grid;grid-template-columns:repeat(4,54px);gap:5px"></div>
+      <div id="cmdcard" style="display:grid;grid-template-columns:repeat(3,72px);gap:5px"></div>
     </div>
   </div>
   <div style="position:absolute;top:100px;left:16px;font-size:11px;color:#8a8aa0;max-width:430px;line-height:1.7">
     드래그: 선택 — 성주 포함 (Shift 추가/제외 · Ctrl클릭/더블클릭: 같은 병종) · <b>Ctrl/Shift+1~9</b>: 부대 지정/추가 · <b>1~9</b>: 호출 ·
-    우클릭: 이동/조준 · <b>A</b>: 어택땅 · <b>S/H</b>: 정지 · <b>F1</b>: 영웅 · <b>F2</b>: 전군 ·
-    <b>Space/C</b>: 성주 카메라 · 가장자리·화살표·미니맵: 카메라 · ESC: 해제 · <b>M</b>: 음소거
+    우클릭: 이동/조준/장착 · <b>A</b>: 어택땅 · <b>S/H</b>: 정지 · <b>Q/W/E</b>: 스킬(영웅·성주) ·
+    <b>F1</b>: 영웅 순환 · <b>F2</b>: 전군 · <b>Space/C</b>: 성주 카메라 · ESC: 해제 · <b>M</b>: 음소거
   </div>
   <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
        background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
@@ -999,8 +998,10 @@ const CMD_BUTTONS: Array<{ id: string; label: string; key: string; fn: () => voi
   { id: 'cmd-a', label: '어택', key: 'A', fn: enterAttackMove },
   { id: 'cmd-s', label: '정지', key: 'S·H', fn: stopSelected },
   { id: 'cmd-g', label: '병사', key: 'G', fn: toggleCrewSelection },
-  { id: 'cmd-e', label: '업화', key: 'E', fn: castSkill },
-  { id: 'cmd-t', label: '자동', key: 'T', fn: () => (skillAuto = !skillAuto) },
+  // Q/W/E — 스킬 3슬롯 (2026-08-08 개편). 라벨은 선택된 시전자의 스킬 이름으로 매 프레임 갱신
+  { id: 'cmd-q', label: 'Q', key: 'Q', fn: () => castSlot(0) },
+  { id: 'cmd-w', label: 'W', key: 'W', fn: () => castSlot(1) },
+  { id: 'cmd-e', label: 'E', key: 'E', fn: () => castSlot(2) },
 ]
 {
   const card = document.getElementById('cmdcard')!
@@ -1060,9 +1061,9 @@ function drawMinimap(): void {
   }
   // 아군 — 녹색(조작 병사가 비운 병기는 회색), 영웅 금색, 선택은 흰 테두리
   for (const u of state.units) {
-    const hero = u.kind === 'hero'
+    const hero = state.kinds.units[u.kind]?.skills !== undefined
     const idle = state.kinds.units[u.kind]?.emplaced && !isCrewManned(state, u)
-    c.fillStyle = hero ? '#ffd870' : idle ? '#4a5a52' : '#53d6a2'
+    c.fillStyle = hero ? (u.kind === 'mage' ? '#ff9d5c' : '#ffd870') : idle ? '#4a5a52' : '#53d6a2'
     const s = hero ? 5 : 3.5
     c.fillRect(miniX(u.pos.x) - s / 2, miniZ(u.pos.z) - s / 2, s, s)
     if (selected.has(u.id)) {
@@ -1366,26 +1367,50 @@ function handleEvents(events: SiegeEvent[]): void {
       const uy = v ? v.group.position.y : 0
       fx.smoke(ev.pos.x, uy + 0.3, ev.pos.z, { count: 3, scale: 0.9, rise: 0.4, spread: 0.5, dur: 850, tint: 0xa8a196, opacity: 0.4 })
       Sfx.at('unitDie', ev.pos.x, ev.pos.z)
-    } else if (ev.type === 'heroSkillCast') {
-      spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 8, 0xffa040, 650)
-      spawnFlash(new THREE.Vector3(ev.x, 3.6, ev.z), 4.5, 0xfff0c0, 450)
-      spawnShockwave(ev.x, ev.z, HERO_SKILL.radius + 1.2)
-      spawnLight(new THREE.Vector3(ev.x, 2.5, ev.z), 0xff8030, 90, 700)
-      // 화염 기둥 — 1.2초간 타오른다
-      const fire = makeFire(2.6)
-      fire.group.position.set(ev.x, 0.1, ev.z)
-      scene.add(fire.group)
-      fireCols.push({ fx: fire, t0: performance.now(), dur: 1200 })
-      addTrauma(0.75, ev.x, ev.z)
-      Sfx.at('skill', ev.x, ev.z)
-      // 업화 뒤에 남는 검은 연기와 튀어오르는 잔해 — 폭심이 오래 읽히게
-      fx.smoke(ev.x, 1.2, ev.z, { count: 6, scale: 2.2, rise: 2.2, spread: 1.6, dur: 2000, tint: 0x6b6259, opacity: 0.5 })
-      fx.debris(ev.x, 0.4, ev.z, { count: 10, speed: 7, kind: 'ember' })
-      fx.debris(ev.x, 0.3, ev.z, { count: 6, speed: 5.5, kind: 'dirt' })
-      // 반경 안 전원이 밖으로 밀려난다 (피해는 sim이 이미 확정)
-      for (const e of state.enemies) {
-        if (Math.hypot(e.pos.x - ev.x, e.pos.z - ev.z) > HERO_SKILL.radius) continue
-        hitEnemy(e.id, e.pos.x - ev.x, e.pos.z - ev.z, 1, 1.2)
+    } else if (ev.type === 'skillCast') {
+      // 스킬별 연출 (QWE 개편 2026-08-08). 피해·판정은 sim이 이미 확정 — 여기는 그림·소리만
+      if (ev.casterKind === 'mage') {
+        // 화염 계열 공통 — 규모는 반경에 비례
+        const k = ev.radius / 5.5 // 업화(5.5) 기준 스케일
+        spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 8 * k + 1, 0xffa040, 650)
+        spawnFlash(new THREE.Vector3(ev.x, 3.6, ev.z), 4.5 * k + 0.8, 0xfff0c0, 450)
+        spawnShockwave(ev.x, ev.z, ev.radius + 1.2)
+        spawnLight(new THREE.Vector3(ev.x, 2.5, ev.z), 0xff8030, 90 * k + 15, 700)
+        const fire = makeFire(1.2 + 1.4 * k)
+        fire.group.position.set(ev.x, 0.1, ev.z)
+        scene.add(fire.group)
+        // 불의 장막(W)은 장판 지속시간만큼 타오른다 — 장판이 안 보이면 스킬이 없는 것과 같다
+        const zoneSec = ev.slot === 1 ? (MAGE_SKILLS[1]!.zone?.sec ?? 1.2) : 0
+        fireCols.push({ fx: fire, t0: performance.now(), dur: zoneSec > 0 ? zoneSec * 1000 : 1200 })
+        addTrauma(ev.slot === 2 ? 0.75 : 0.3, ev.x, ev.z)
+        Sfx.at('skill', ev.x, ev.z)
+        fx.smoke(ev.x, 1.2, ev.z, { count: 3 + Math.round(3 * k), scale: 2.2 * k + 0.6, rise: 2.2, spread: 1.6, dur: 2000, tint: 0x6b6259, opacity: 0.5 })
+        fx.debris(ev.x, 0.4, ev.z, { count: 4 + Math.round(6 * k), speed: 7, kind: 'ember' })
+        if (ev.slot === 2) {
+          for (const e of state.enemies) {
+            if (Math.hypot(e.pos.x - ev.x, e.pos.z - ev.z) > ev.radius) continue
+            hitEnemy(e.id, e.pos.x - ev.x, e.pos.z - ev.z, 1, 1.2)
+          }
+        }
+      } else if (ev.casterKind === 'hero') {
+        // 전사 — 돌진(Q)·회전베기(W)·대지파쇄(E)
+        spawnShockwave(ev.x, ev.z, ev.radius + 0.8)
+        if (ev.slot === 2) {
+          addTrauma(0.85, ev.x, ev.z)
+          fx.debris(ev.x, 0.3, ev.z, { count: 12, speed: 6.5, kind: 'stone' })
+          fx.smoke(ev.x, 0.8, ev.z, { count: 6, scale: 1.8, rise: 1.2, spread: 2.2, dur: 1400, tint: 0x8b8378, opacity: 0.5 })
+          Sfx.at('wallHit', ev.x, ev.z)
+        } else {
+          addTrauma(0.25, ev.x, ev.z)
+          fx.debris(ev.x, 0.8, ev.z, { count: 5, speed: 4, kind: 'ember' })
+          Sfx.at('heroSwing', ev.x, ev.z)
+        }
+      } else {
+        // 성주 버프 — 반경이 곧 효과 범위라 링으로 그린다. 총력전(E)은 전역이라 뿔피리
+        showMoveMarker(ev.x, ev.z, 0.05, 0xffd870, Math.max(2.5, ev.radius / 2))
+        spawnLight(new THREE.Vector3(ev.x, 2.2, ev.z), 0xffd870, 30, 600)
+        if (ev.slot === 2) Sfx.global('horn')
+        else Sfx.at('mount', ev.x, ev.z)
       }
     } else if (ev.type === 'meleeHit') {
       enemyAttackT.set(ev.enemyId, performance.now())
@@ -1569,19 +1594,22 @@ interface HeroCard {
 }
 const heroCards = new Map<number, HeroCard>()
 
-function buildHeroCard(heroId: number, index: number): HeroCard {
+function buildHeroCard(heroId: number, kind: string): HeroCard {
+  const def = state.kinds.units[kind]!
+  const ult = def.skills![2]!
+  const isMage = kind === 'mage'
   const root = document.createElement('div')
   root.style.cssText =
     'pointer-events:auto;width:172px;background:#000d;border:1px solid #345;border-radius:6px;' +
     'padding:8px 10px;cursor:pointer;font-family:monospace;color:#e8e8f0;user-select:none'
   root.innerHTML = `
     <div style="display:flex;gap:8px;align-items:center">
-      <div style="width:38px;height:38px;border-radius:5px;border:1px solid #57a;flex:none;
+      <div style="width:38px;height:38px;border-radius:5px;border:1px solid ${isMage ? '#a75' : '#57a'};flex:none;
            display:flex;align-items:center;justify-content:center;font-size:20px;
-           background:radial-gradient(circle at 35% 30%, #2d64b0, #122340)">⚔</div>
+           background:radial-gradient(circle at 35% 30%, ${isMage ? '#b0522d, #401812' : '#2d64b0, #122340'})">${isMage ? '🔥' : '⚔'}</div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <b style="color:#7ab0ff;font-size:13px">영웅${index > 0 ? ` ${index + 1}` : ''}</b>
+          <b style="color:${isMage ? '#ffab7a' : '#7ab0ff'};font-size:13px">${def.name}</b>
           <span class="hp-t" style="font-size:10px"></span>
         </div>
         <div style="width:100%;height:7px;background:#0009;margin-top:4px;border-radius:2px">
@@ -1598,8 +1626,8 @@ function buildHeroCard(heroId: number, index: number): HeroCard {
         <span class="sk-cd" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
               font-size:12px;font-weight:bold;text-shadow:0 1px 2px #000"></span>
       </div>
-      <div style="font-size:11px;color:#c8b890;line-height:1.35">${HERO_SKILL.name}<br>
-        <span class="sk-mode" style="color:#8898a8"></span></div>
+      <div style="font-size:11px;color:#c8b890;line-height:1.35">${ult.name} (궁극)<br>
+        <span class="sk-mode" style="color:#8898a8">Q·W·E는 커맨드 카드</span></div>
     </div>`
   // 카드 클릭 = 해당 영웅만 선택 (LoL 초상 클릭 관례)
   root.addEventListener('pointerdown', (e) => {
@@ -1610,8 +1638,9 @@ function buildHeroCard(heroId: number, index: number): HeroCard {
   const skillBtn = root.querySelector('.sk') as HTMLDivElement
   skillBtn.addEventListener('pointerdown', (e) => {
     e.stopPropagation()
-    const hero = state.units.find((u) => u.id === heroId)
-    if (hero) triggerSkill(hero)
+    selected.clear()
+    selected.add(heroId)
+    castSlot(2)
   })
   const card: HeroCard = {
     root,
@@ -1627,7 +1656,7 @@ function buildHeroCard(heroId: number, index: number): HeroCard {
 }
 
 function updateHeroBar(): void {
-  const heroes = state.units.filter((u) => u.kind === 'hero')
+  const heroes = state.units.filter((u) => state.kinds.units[u.kind]?.skills)
   // 전사한 영웅 카드 제거
   for (const [id, card] of heroCards) {
     if (!heroes.some((h) => h.id === id)) {
@@ -1635,34 +1664,36 @@ function updateHeroBar(): void {
       heroCards.delete(id)
     }
   }
-  heroes.forEach((h, i) => {
+  for (const h of heroes) {
     let card = heroCards.get(h.id)
     if (!card) {
-      card = buildHeroCard(h.id, i)
+      card = buildHeroCard(h.id, h.kind)
       heroCards.set(h.id, card)
     }
-    const maxHp = state.kinds.units.hero!.hp
+    const def = state.kinds.units[h.kind]!
+    const maxHp = def.hp
     card.hpText.textContent = `${h.hp}/${maxHp}`
     card.hpBar.style.width = `${Math.max(0, (h.hp / maxHp) * 100)}%`
     card.hpBar.style.background = h.hp / maxHp > 0.35 ? '#62c462' : '#d05050'
     card.root.style.borderColor = selected.has(h.id) ? '#ffd870' : '#345'
-    const cdMax = HERO_SKILL.cooldown * TICKS_PER_SECOND
-    if (h.skillCd > 0) {
+    const ult = def.skills![2]!
+    const cdMax = ult.cooldown * TICKS_PER_SECOND
+    const cd = h.cds[2] ?? 0
+    if (cd > 0) {
       // 쿨다운 스윕 — 아래에서 위로 차오르는 LoL식 오버레이
-      card.skillOv.style.height = `${(h.skillCd / cdMax) * 100}%`
-      card.skillCd.textContent = `${Math.ceil(h.skillCd / TICKS_PER_SECOND)}`
-      card.mode.textContent = skillAuto ? '자동' : '수동'
+      card.skillOv.style.height = `${(cd / cdMax) * 100}%`
+      card.skillCd.textContent = `${Math.ceil(cd / TICKS_PER_SECOND)}`
     } else {
       card.skillOv.style.height = '0'
       card.skillCd.textContent = ''
-      card.mode.textContent =
-        aiming && aimingHeroId === h.id ? '조준 중…' : skillAuto ? '자동 (T)' : '수동 (T)'
     }
-  })
+    card.mode.textContent =
+      aiming && aimingCast?.casterId === h.id ? '조준 중…' : 'Q·W·E 커맨드 카드'
+  }
 }
 
 // 선택 부대 패널 (SC식) — 칩 그리드, 칩 클릭 = 단독 선택
-const KIND_SHORT: Record<string, string> = { soldier: '궁', ballista: '발', cannon: '포', hero: '영', guard: '수' }
+const KIND_SHORT: Record<string, string> = { soldier: '궁', ballista: '발', cannon: '포', hero: '전', mage: '마', guard: '수' }
 const selChips = new Map<number, { root: HTMLDivElement; hp: HTMLDivElement }>()
 let selPanelKey = ''
 
@@ -1894,7 +1925,6 @@ function syncScene(now: number): void {
   drawMinimap()
   // 커맨드 카드 = f(선택): 해당 없는 명령은 흐려지고, 올릴 명령이 없으면 카드 자체가 사라진다
   const hasMovers = selectedMovers().length > 0
-  const hasHero = state.units.some((u) => u.kind === 'hero' && selected.has(u.id))
   // 장착제: 쌍은 동적 배정 — 선택이 조작 중인 병기이거나 조작 중인 수비병일 때만 G가 산다
   const manning = manningMap(state)
   // 장착 상태 피드백 — 미장착 병기: 흰 점멸 링 / 장착 성사 순간: 금색 펄스 + 걸쇠음.
@@ -1920,12 +1950,15 @@ function syncScene(now: number): void {
       break
     }
   }
+  // Q/W/E 스킬 버튼 — 라벨은 현재 시전자의 스킬 이름, 쿨다운 중이면 남은 초 표시
+  const ac = activeCaster()
   const cmdApplicable: Record<string, boolean> = {
     'cmd-a': hasMovers,
     'cmd-s': hasMovers,
     'cmd-g': hasCrewPair,
-    'cmd-e': hasHero,
-    'cmd-t': hasHero,
+    'cmd-q': ac !== null,
+    'cmd-w': ac !== null,
+    'cmd-e': ac !== null,
   }
   document.getElementById('cmdwrap')!.style.display =
     Object.values(cmdApplicable).some(Boolean) ? '' : 'none'
@@ -1935,8 +1968,18 @@ function syncScene(now: number): void {
     el.style.opacity = on ? '1' : '0.28'
     el.style.pointerEvents = on ? '' : 'none'
   }
-  const tLbl = document.querySelector('#cmd-t .lbl') as HTMLElement | null
-  if (tLbl) tLbl.textContent = skillAuto ? '자동' : '수동'
+  for (const [slot, id] of [['0', 'cmd-q'], ['1', 'cmd-w'], ['2', 'cmd-e']] as const) {
+    const lbl = document.querySelector(`#${id} .lbl`) as HTMLElement | null
+    if (!lbl) continue
+    if (ac) {
+      const def = ac.skills[Number(slot)]
+      const cds = ac.caster ? ac.caster.cds : state.lord.cds
+      const cd = cds[Number(slot)] ?? 0
+      lbl.textContent = def ? (cd > 0 ? `${def.name} ${Math.ceil(cd / TICKS_PER_SECOND)}` : def.name) : '—'
+    } else {
+      lbl.textContent = ['Q', 'W', 'E'][Number(slot)]!
+    }
+  }
   // 어택땅 대기 중엔 버튼을 점등 — 다음 클릭이 명령이 된다는 상태 표시
   const aBtn = document.getElementById('cmd-a')
   if (aBtn) aBtn.style.borderColor = attackMove ? '#ff5a4a' : '#3a4a5e'
@@ -1974,9 +2017,7 @@ function syncScene(now: number): void {
         `${Math.max(0, (first.hp / def.hp) * 100)}%`
       document.getElementById('p-stats')!.innerHTML =
         `공격 ${def.dmg}${def.aoe ? ` (광역 ${def.aoe})` : ''} · 사거리 ${def.range}<br>공속 ${def.atkInterval}초` +
-        (first.kind === 'hero'
-          ? `<br>스킬 ${HERO_SKILL.name}: 피해 ${HERO_SKILL.dmg} · 반경 ${HERO_SKILL.radius}`
-          : '')
+        (def.skills ? `<br>스킬 ${def.skills.map((s) => `${s.key} ${s.name}`).join(' · ')}` : '')
       shown = true
     }
   } else if (inspectedEnemy !== null) {
@@ -2098,7 +2139,8 @@ function resetGame(): void {
   selected.add(LORD_ID) // 새 판도 성주 선택으로 시작 — 첫 우클릭이 곧 성주 이동
   ctrlGroups.clear()
   inspectedEnemy = null
-  aimingHeroId = null
+  aiming = false
+  aimingCast = null
   aimReticle.visible = false
   trauma = 0
   wallHitT = -1e9
@@ -2107,7 +2149,7 @@ function resetGame(): void {
   pendingUnitMove = undefined
   pendingUnitAim = undefined
   pendingUnitStop = undefined
-  pendingHeroSkill = undefined
+  pendingCast = undefined
   cancelAttackMove()
 
   const fresh = createSiege(SEED)
@@ -2207,9 +2249,9 @@ function frame(now: number): void {
       input.unitStop = pendingUnitStop
       pendingUnitStop = undefined
     }
-    if (pendingHeroSkill) {
-      input.heroSkill = pendingHeroSkill
-      pendingHeroSkill = undefined
+    if (pendingCast) {
+      input.castSkill = pendingCast
+      pendingCast = undefined
     }
     const before = state.status
     stepSiege(state, spawns, input)

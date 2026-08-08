@@ -323,6 +323,8 @@ export interface ActiveEnemy {
   raiseCd: number
   /** 'wall' = 성벽을 깬다 / 'breach' = 성문으로 들어가 지상 병력을 문다 (성벽은 안 때린다) */
   mode: 'wall' | 'breach'
+  /** 기절 남은 틱 (전사 대지파쇄) — 이동·공격·부활 전부 정지 */
+  stunT: number
 }
 
 /**
@@ -489,7 +491,50 @@ export interface UnitKindDef {
    *  2026-08-06 상주 조작제(고정 짝 상주)→ 그 전은 dismount 편도 커맨드였다.)
    */
   crew?: string
+  /** 스킬 3슬롯 (Q/W/E) — 영웅 병종만. 성주는 LORD_SKILLS (유닛이 아니므로 별도) */
+  skills?: SkillDef[]
 }
+
+/**
+ * 스킬 정의 — 영웅(전사·마법사)·성주가 Q/W/E 3슬롯을 갖는다 (2026-08-08 기획 확정).
+ * E는 궁극기 슬롯(긴 쿨·판을 바꾸는 효과). 전사는 공격기만, 마법사는 화염 속성 통일,
+ * 성주는 버프 계열만(성벽 회복류는 기획에서 제외). 시전은 castSkill 커맨드 하나로 통일.
+ */
+export interface SkillDef {
+  key: 'Q' | 'W' | 'E'
+  name: string
+  cooldown: number // 초
+  /** true면 지점 지정(사거리 검증), false면 시전자 중심 즉발 */
+  targeted: boolean
+  range: number
+  radius: number // 효과 반경. dash는 경로 폭
+  dmg?: number
+  /** 돌진 — 시전자가 지점까지 즉시 주파하며 경로상 적에게 피해 (지형 검증, 같은 층만) */
+  dash?: boolean
+  /** 반경 내 적 기절 초 (이동·공격·부활 정지) */
+  stunSec?: number
+  /** 장판 — 지점에 남아 초당 피해 */
+  zone?: { sec: number; dps: number }
+  /** 버프 — reload: 반경 내 병기 재장전 2배 / move: 반경 내 아군 이속 배율 /
+   *  all: 전역 공격력 배율 + 재장전 2배 (궁극) */
+  buff?: { sec: number; stat: 'reload' | 'move' | 'all'; mult?: number; global?: boolean }
+}
+
+export const WARRIOR_SKILLS: SkillDef[] = [
+  { key: 'Q', name: '돌진', cooldown: 10, targeted: true, range: 14, radius: 1.6, dmg: 200, dash: true },
+  { key: 'W', name: '회전베기', cooldown: 8, targeted: false, range: 0, radius: 3.2, dmg: 260 },
+  { key: 'E', name: '대지파쇄', cooldown: 22, targeted: false, range: 0, radius: 5, dmg: 450, stunSec: 1.5 },
+]
+export const MAGE_SKILLS: SkillDef[] = [
+  { key: 'Q', name: '화염구', cooldown: 6, targeted: true, range: 18, radius: 2.5, dmg: 220 },
+  { key: 'W', name: '불의 장막', cooldown: 14, targeted: true, range: 16, radius: 3.5, zone: { sec: 10, dps: 90 } },
+  { key: 'E', name: '업화', cooldown: 24, targeted: true, range: 18, radius: 5.5, dmg: 650 },
+]
+export const LORD_SKILLS: SkillDef[] = [
+  { key: 'Q', name: '군기', cooldown: 20, targeted: false, range: 0, radius: 12, buff: { sec: 8, stat: 'reload' } },
+  { key: 'W', name: '진군 나팔', cooldown: 16, targeted: false, range: 0, radius: 12, buff: { sec: 6, stat: 'move', mult: 1.5 } },
+  { key: 'E', name: '총력전', cooldown: 45, targeted: false, range: 0, radius: 0, buff: { sec: 6, stat: 'all', mult: 1.3, global: true } },
+]
 
 export const UNIT_KINDS: Record<string, UnitKindDef> = {
   soldier: { kind: 'soldier', name: '궁수', hp: 260, dmg: 33, atkInterval: 1.3, range: 14, speed: 3.5, radius: 0.4 },
@@ -506,7 +551,10 @@ export const UNIT_KINDS: Record<string, UnitKindDef> = {
   // 피해 상향은 비행 도입의 대가다. 실측 명중률 65% — 35%가 빗나가므로 그만큼 화력이 준다.
   // 속도로 우겨 히트스캔에 가깝게 만드는 대신, **맞으면 무겁게** 해서 상쇄했다(×1.3).
   // 대포 140 → 182, 발리스타 200 → 260.
-  hero: { kind: 'hero', name: '영웅', hp: 900, dmg: 110, atkInterval: 0.9, range: 13, speed: HERO_SPEED, radius: 0.5 },
+  // 영웅 2종 (2026-08-08 확정: "기존 영웅은 전사, 마법사 추가"). kind 'hero'를 유지하는 이유:
+  // 프리셋·봇·테스트가 참조하는 식별자라 개명은 name(표시)만.
+  hero: { kind: 'hero', name: '전사', hp: 900, dmg: 110, atkInterval: 0.9, range: 13, speed: HERO_SPEED, radius: 0.5, skills: WARRIOR_SKILLS },
+  mage: { kind: 'mage', name: '마법사', hp: 700, dmg: 70, atkInterval: 1.1, range: 16, speed: 3.4, radius: 0.5, skills: MAGE_SKILLS },
   // 병기에서 내려온 조작 병사 — 사거리 1.6은 사실상 백병전이다. 배치가 아니라 병기에서 나온다
   guard: { kind: 'guard', name: '수비병', hp: 320, dmg: 62, atkInterval: 0.8, range: 1.6, speed: 3.4, radius: 0.4 },
 }
@@ -521,8 +569,8 @@ export interface FriendlyUnit {
   target: Vec2 | null
   path: Vec2[]
   cooldown: number // 틱
-  /** 영웅 전용 — 스킬 남은 쿨다운 (틱) */
-  skillCd: number
+  /** 영웅 전용 — 스킬 슬롯별 남은 쿨다운 (틱, Q/W/E = 0/1/2) */
+  cds: number[]
   /** 고정 병기 전용 — 겨누고 있는 지점. 화망의 실체이자 괴수가 읽는 위협의 출처 */
   aim: Vec2 | null
   /** 어택땅 이동 중 — 사거리 안에 적이 들어오면 정지·교전 (접적 시 해제) */
@@ -574,10 +622,6 @@ export function isCrewManned(state: SiegeState, u: FriendlyUnit): boolean {
   return manningMap(state).has(u.id)
 }
 
-/** 영웅 스킬 「업화」 — 지점 지정 광역 화염. 조준(자동/수동)은 클라이언트 보조,
- *  sim은 커맨드(지점)만 받아 사거리·쿨다운을 검증한다 = 리플레이 가능 */
-export const HERO_SKILL = { name: '업화', dmg: 500, radius: 4.5, range: 18, cooldown: 14 /* 초 */ }
-
 export interface LordState {
   pos: Vec2
   /** 향하고 있는 방향 (렌더링용) */
@@ -588,6 +632,20 @@ export interface LordState {
   path: Vec2[]
   /** 현재 서 있는 높이 (2층 구조 대응 — 성문 위 보도 vs 아래 터널) */
   h: number
+  /** 버프 스킬 슬롯별 남은 쿨다운 (틱) — LORD_SKILLS와 짝 */
+  cds: number[]
+}
+
+/** 지속 효과 — 장판·버프. until은 틱 기준 (스킬은 침공 중에만 의미가 있다) */
+export interface ActiveEffect {
+  type: 'zone' | 'reload' | 'move' | 'all'
+  x: number
+  z: number
+  radius: number
+  until: number
+  dps?: number
+  mult?: number
+  global?: boolean
 }
 
 export type SiegeStatus = 'prep' | 'assault' | 'won' | 'lost'
@@ -603,8 +661,9 @@ export interface SiegeInput {
   unitStop?: { ids: number[] }
   /** 고정 병기 조준 명령 — 옮기는 대신 겨눈다. 이게 화망을 그리는 유일한 수단이다 */
   unitAim?: { ids: number[]; to: Vec2 }
-  /** 영웅 스킬 시전 지점 — 사거리·쿨다운은 sim이 검증. heroId 생략 시 첫 영웅 (다영웅 대비) */
-  heroSkill?: Vec2 & { heroId?: number }
+  /** 스킬 시전 (2026-08-08 — 구 heroSkill 대체·확장): casterId 생략 = 성주.
+   *  slot = Q/W/E(0/1/2). 지점 스킬만 x/z 필요 — 사거리·쿨다운은 sim이 검증한다. */
+  castSkill?: { casterId?: number; slot: number; x?: number; z?: number }
   /** 준비 종료 → 침공 개시 */
   startAssault?: boolean
 }
@@ -628,6 +687,8 @@ export interface SiegeState {
   corpses: Corpse[]
   /** 비행 중인 투사체 (히트스캔이 아닌 병기) */
   shots: Projectile[]
+  /** 지속 효과 — 불의 장막·성주 버프 (skillCast로 생성, until 지나면 소멸) */
+  effects: ActiveEffect[]
   spawnCursor: number
   nextId: number
   /** 이번 틱 이벤트 (렌더러 소비) */
@@ -648,7 +709,7 @@ export type SiegeEvent =
       flight: number
     }
   | { type: 'shotLanded'; x: number; z: number; unitKind: string; aoe?: number }
-  | { type: 'heroSkillCast'; x: number; z: number }
+  | { type: 'skillCast'; casterKind: string; slot: number; name: string; x: number; z: number; radius: number }
   | { type: 'meleeHit'; enemyId: number; unitId: number }
   | { type: 'enemyDied'; id: number; kind: string; pos: Vec2 }
   | { type: 'enemyRaised'; id: number; kind: string; pos: Vec2; byId: number }
@@ -732,7 +793,8 @@ export const DEFAULT_LOADOUT: Loadout = {
     { kind: 'ballista', x: WALL_X, z: 1.6, h: C.wallH },
     { kind: 'ballista', x: -14, z: C.north, h: C.wallH }, // 북벽 동쪽 끝 — 회절 레인 대응
     { kind: 'ballista', x: -14, z: C.south, h: C.wallH }, // 남벽 동쪽 끝
-    { kind: 'hero', x: WALL_X - 6, z: 0, h: 0 }, // 성문 안쪽 지상 — 출격 가능
+    { kind: 'hero', x: WALL_X - 6, z: 0, h: 0 }, // 전사 — 성문 안쪽 지상, 출격 가능
+    { kind: 'mage', x: WALL_X - 6, z: 3, h: 0 }, // 마법사 (2026-08-08 영웅 2종 확정)
   ],
   // 난이도 재조정 [2026-08-04]. 유도 도입 + 대포 6으로 무개입이 너무 쉬워졌다(잔존 1550 > 상한 1400).
   // 봇 스윕으로 후보 11종을 돌려 고른 구성 — 무개입 6/6·여유 대역 6/6·개입 보상 6/6, 평균 93초.
@@ -795,7 +857,7 @@ function initialUnits(loadout: Loadout, nextId: () => number): FriendlyUnit[] {
       target: null,
       path: [],
       cooldown: 0,
-      skillCd: 0,
+      cds: [0, 0, 0],
       // 초기값은 **자동 조준**(null = 사거리 내 최근접). 플레이어가 겨눠야 비로소 화망이
       // 좁아지고 흐름이 생긴다. 처음부터 좁게 겨눈 상태로 시작하면 손대지 않은 판이
       // 성립하지 않아서(무개입 0/6으로 측정됨) "조준은 선택적 개선"이라는 전제가 깨진다.
@@ -837,11 +899,12 @@ export function createSiege(
       wallHpMax: loadout.wallHp,
       kinds: { units: loadout.unitKinds, enemies: loadout.enemyKinds },
       loadout: loadout.name,
-      lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null, path: [], h: 0 },
+      lord: { pos: { x: WALL_X - 9, z: 2 }, facing: 0, target: null, path: [], h: 0, cds: [0, 0, 0] },
       units,
       enemies: [],
       corpses: [],
       shots: [],
+      effects: [],
       spawnCursor: 0,
       nextId: id,
       events: [],
@@ -980,6 +1043,7 @@ function makeEnemy(state: SiegeState, kind: string, pos: Vec2, hpRatio: number, 
     via: seg.via ? { ...seg.via } : null,
     raiseCd: 0,
     mode: 'wall',
+    stunT: 0,
   }
   // 성문 돌파 — **성문 구간을 목표로 뽑힌 개체만**, 성문 앞 화망이 얇을 때.
   //
@@ -1060,9 +1124,21 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   if (state.status === 'won' || state.status === 'lost') return state
   state.tick++
 
+  // 만료된 지속 효과 정리 + 이동 버프 배율 (진군 나팔 — 반경 안 아군만)
+  if (state.effects.length > 0) state.effects = state.effects.filter((e) => e.until > state.tick)
+  const moveMult = (p: Vec2): number => {
+    let m = 1
+    for (const ef of state.effects) {
+      if (ef.type !== 'move') continue
+      if (Math.hypot(p.x - ef.x, p.z - ef.z) <= ef.radius) m = Math.max(m, ef.mult ?? 1)
+    }
+    return m
+  }
+
   // 성주 이동 (우클릭 명령 → BFS 경로 추종 — 계단·성문 자동 경유)
   if (input.moveTo) commandMove(state.lord, input.moveTo, input.moveTo.h ?? 0)
-  stepMover(state.lord, LORD_SPEED)
+  stepMover(state.lord, LORD_SPEED * moveMult(state.lord.pos))
+  for (let i = 0; i < state.lord.cds.length; i++) if (state.lord.cds[i]! > 0) state.lord.cds[i]!--
 
   // 부대 이동 명령 — id 정렬 후 대형 오프셋 배정 (결정론)
   if (input.unitMove) {
@@ -1102,7 +1178,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     }
   }
   for (const u of state.units) {
-    if (u.skillCd > 0) u.skillCd--
+    for (let i = 0; i < u.cds.length; i++) if (u.cds[i]! > 0) u.cds[i]!--
     // 어택땅 — 이동 중 사거리(+반경) 안에 적이 들어오면 그 자리에 멈춰 교전.
     // 재개는 없다(SC와 달리): 웨이브가 계속 밀려오는 판이라 접적 후엔 그 자리가 전선이다.
     if (u.aggro && u.path.length > 0) {
@@ -1117,23 +1193,81 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
         }
       }
     }
-    stepMover(u, state.kinds.units[u.kind]!.speed)
+    stepMover(u, state.kinds.units[u.kind]!.speed * moveMult(u.pos))
   }
 
-  // 영웅 스킬 「업화」 — 지점 광역. 사거리 밖·쿨다운 중이면 무시 (결정론 검증)
-  if (input.heroSkill) {
-    const wantId = input.heroSkill.heroId
-    const hero = state.units.find((u) => u.kind === 'hero' && (wantId === undefined || u.id === wantId))
-    if (hero && hero.skillCd <= 0) {
-      const d = Math.hypot(input.heroSkill.x - hero.pos.x, input.heroSkill.z - hero.pos.z)
-      if (d <= HERO_SKILL.range) {
-        hero.skillCd = Math.round(HERO_SKILL.cooldown * TICKS_PER_SECOND)
-        hero.facing = Math.atan2(input.heroSkill.x - hero.pos.x, input.heroSkill.z - hero.pos.z)
-        for (const e of state.enemies) {
-          if (Math.hypot(e.pos.x - input.heroSkill.x, e.pos.z - input.heroSkill.z) <= HERO_SKILL.radius)
-            e.hp -= HERO_SKILL.dmg
+  // 스킬 시전 Q/W/E (2026-08-08 개편) — 성주는 버프, 전사는 공격기, 마법사는 화염.
+  // 사거리 밖·쿨다운 중·시전자 없음이면 무시 (결정론 검증 — 봇과 플레이어가 같은 규칙)
+  if (input.castSkill) {
+    const c = input.castSkill
+    const caster = c.casterId === undefined ? null : state.units.find((u) => u.id === c.casterId)
+    const def = c.casterId === undefined ? LORD_SKILLS[c.slot] : state.kinds.units[caster?.kind ?? '']?.skills?.[c.slot]
+    const cds = caster ? caster.cds : state.lord.cds
+    const from = caster ? caster.pos : state.lord.pos
+    const fromH = caster ? caster.h : state.lord.h
+    if (def && (c.casterId === undefined || caster) && (cds[c.slot] ?? 1) <= 0) {
+      // 지점 스킬은 지점·사거리 검증, 자기 중심 스킬은 시전자 위치가 곧 지점
+      const at =
+        !def.targeted
+          ? { x: from.x, z: from.z }
+          : c.x !== undefined && c.z !== undefined && Math.hypot(c.x - from.x, c.z - from.z) <= def.range
+            ? { x: c.x, z: c.z }
+            : null
+      if (at) {
+        cds[c.slot] = Math.round(def.cooldown * TICKS_PER_SECOND)
+        if (caster && def.targeted) caster.facing = Math.atan2(at.x - from.x, at.z - from.z)
+        if (def.dash && caster) {
+          // 돌진 — 같은 층 연속 지형만 밟아 닿는 데까지 즉시 주파, 경로 폭 안의 적 피해
+          const dx = at.x - from.x
+          const dz = at.z - from.z
+          const dist = Math.hypot(dx, dz) || 1
+          const start = { x: from.x, z: from.z }
+          let end = { x: from.x, z: from.z, h: fromH }
+          for (let s = 0.5; s <= dist + 1e-6; s += 0.5) {
+            const px = start.x + (dx / dist) * s
+            const pz = start.z + (dz / dist) * s
+            const nh = stepHeight(end.h, px, pz)
+            if (nh === null) break
+            end = { x: px, z: pz, h: nh }
+          }
+          const segX = end.x - start.x
+          const segZ = end.z - start.z
+          const segLen2 = segX * segX + segZ * segZ || 1
+          for (const e of state.enemies) {
+            const t = Math.max(0, Math.min(1, ((e.pos.x - start.x) * segX + (e.pos.z - start.z) * segZ) / segLen2))
+            const qx = start.x + segX * t - e.pos.x
+            const qz = start.z + segZ * t - e.pos.z
+            if (Math.hypot(qx, qz) <= def.radius + state.kinds.enemies[e.kind]!.radius) e.hp -= def.dmg!
+          }
+          caster.pos.x = end.x
+          caster.pos.z = end.z
+          caster.h = end.h
+          caster.path = []
+          caster.target = null
+        } else if (def.dmg) {
+          for (const e of state.enemies) {
+            if (Math.hypot(e.pos.x - at.x, e.pos.z - at.z) <= def.radius) {
+              e.hp -= def.dmg
+              if (def.stunSec) e.stunT = Math.max(e.stunT, Math.round(def.stunSec * TICKS_PER_SECOND))
+            }
+          }
         }
-        state.events.push({ type: 'heroSkillCast', x: input.heroSkill.x, z: input.heroSkill.z })
+        if (def.zone) {
+          state.effects.push({
+            type: 'zone', x: at.x, z: at.z, radius: def.radius,
+            until: state.tick + Math.round(def.zone.sec * TICKS_PER_SECOND), dps: def.zone.dps,
+          })
+        }
+        if (def.buff) {
+          state.effects.push({
+            type: def.buff.stat, x: from.x, z: from.z, radius: def.radius,
+            until: state.tick + Math.round(def.buff.sec * TICKS_PER_SECOND), mult: def.buff.mult, global: def.buff.global,
+          })
+        }
+        state.events.push({
+          type: 'skillCast', casterKind: caster ? caster.kind : 'lord',
+          slot: c.slot, name: def.name, x: at.x, z: at.z, radius: def.radius,
+        })
       }
     }
   }
@@ -1216,6 +1350,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     if (input.startAssault) {
       state.status = 'assault'
       state.tick = 0 // 침공 타임라인 기준으로 리셋
+      state.effects = [] // 준비 단계 시전분은 이월하지 않는다 (until이 틱 기준이라 리셋과 어긋남)
       state.events.push({ type: 'assaultStarted' })
     }
     return state
@@ -1260,9 +1395,32 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     }
   }
 
+  // 불의 장막 — 장판 위의 적에게 초당 피해 (마법사 W)
+  for (const ef of state.effects) {
+    if (ef.type !== 'zone') continue
+    const perTick = ef.dps! / TICKS_PER_SECOND
+    for (const e of state.enemies) {
+      if (Math.hypot(e.pos.x - ef.x, e.pos.z - ef.z) <= ef.radius + state.kinds.enemies[e.kind]!.radius) {
+        e.hp -= perTick
+      }
+    }
+  }
+
+  // 성주 버프 — 군기(반경 내 병기 재장전 2배) / 총력전(전역 재장전 2배 + 공격력 배율)
+  const allBuff = state.effects.find((e) => e.type === 'all')
+  const dmgMult = allBuff?.mult ?? 1
+  const reloadBoosted = (u: FriendlyUnit): boolean => {
+    if (allBuff) return true
+    for (const ef of state.effects) {
+      if (ef.type !== 'reload') continue
+      if (Math.hypot(u.pos.x - ef.x, u.pos.z - ef.z) <= ef.radius) return true
+    }
+    return false
+  }
+
   // 아군 사격 — 정지 상태에서만 (이동 중 발사 불가)
   for (const u of state.units) {
-    if (u.cooldown > 0) u.cooldown--
+    if (u.cooldown > 0) u.cooldown = Math.max(0, u.cooldown - (reloadBoosted(u) ? 2 : 1))
     if (u.path.length > 0 || u.cooldown > 0 || !isCrewManned(state, u)) continue // 조작 병사가 곁에 없는 병기는 침묵한다
     const def = state.kinds.units[u.kind]!
     const tgt = acquireTarget(u, state.enemies, def)
@@ -1285,15 +1443,15 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
         to,
         hitTick: state.tick + flight,
         flight,
-        dmg: def.dmg,
+        dmg: Math.round(def.dmg * dmgMult), // 총력전 중 발사분은 착탄까지 배율 유지
         aoe: def.aoe,
       })
     } else if (def.aoe) {
       for (const e of state.enemies) {
-        if (Math.hypot(e.pos.x - to.x, e.pos.z - to.z) <= def.aoe) e.hp -= def.dmg
+        if (Math.hypot(e.pos.x - to.x, e.pos.z - to.z) <= def.aoe) e.hp -= Math.round(def.dmg * dmgMult)
       }
     } else {
-      tgt.hp -= def.dmg
+      tgt.hp -= Math.round(def.dmg * dmgMult)
     }
     state.events.push({
       type: 'unitFired',
@@ -1308,6 +1466,11 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
 
   // 괴수: 지상 아군과 접전 > 성벽 공격 > 성벽으로 직진
   for (const e of state.enemies) {
+    // 기절 (전사 대지파쇄) — 이동·공격 전부 정지. 쿨다운도 얼린다(깨어나자마자 치지 않게)
+    if (e.stunT > 0) {
+      e.stunT--
+      continue
+    }
     const def = state.kinds.enemies[e.kind]!
     if (e.cooldown > 0) e.cooldown--
     // 접전 판정 — 지상(h<1) 아군만 (보도 위는 닿지 못한다)
@@ -1368,6 +1531,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
   // 대상 목록을 먼저 스냅샷한다 — 되살아난 개체가 같은 틱에 또 되살리면 폭주한다.
   const raisers = state.enemies.filter((e) => state.kinds.enemies[e.kind]!.raise)
   for (const boss of raisers) {
+    if (boss.stunT > 0) continue // 기절한 술사는 되살리지 못한다
     const r = state.kinds.enemies[boss.kind]!.raise!
     if (boss.raiseCd > 0) {
       boss.raiseCd--

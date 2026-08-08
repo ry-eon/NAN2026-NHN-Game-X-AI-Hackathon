@@ -17,11 +17,13 @@ describe('로드아웃', () => {
     // 2026-08-08 장착제: 기준선 봇이 afk → deploy(표준 장착 후 무개입)로 바뀌었지만
     // 장착 완료 상태는 구 상주 배치와 등가라 수치(614/104.6)는 그대로다 — 등가 증명이기도 하다.
     // 이 수치는 "지금 출고 중인 판"을 고정하는 단언이라, 밸런스를 손대면 여기가 먼저 깨진다.
+    // 2026-08-08 스킬 개편으로 재고정: 마법사 편입이 적 id를 밀어 시드 해시(구간 선택)가
+    // 통째로 달라졌다 — 614는 옛 판, 522가 새 출고 판이다 (마법사 기본 공격 포함).
     const run = playout(SHIPPING_SEED, deploy, DEFAULT_LOADOUT)
     expect(run.status).toBe('won')
-    expect(run.wallHp).toBe(614)
-    expect(run.seconds).toBe(104.6)
-    expect(describeLoadout(DEFAULT_LOADOUT)).toBe('대포 8 · 발리스타 4 · 영웅 1')
+    expect(run.wallHp).toBe(522)
+    expect(run.seconds).toBe(100.7)
+    expect(describeLoadout(DEFAULT_LOADOUT)).toBe('대포 8 · 발리스타 4 · 전사 1 · 마법사 1')
   })
 
   it('편성을 주입하면 배치와 결과가 실제로 바뀐다', () => {

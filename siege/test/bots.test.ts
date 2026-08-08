@@ -57,9 +57,9 @@ describe('봇 러너', () => {
   it('출고 시드는 표준 장착만으로 방어에 성공한다 (배치가 성립한다)', () => {
     const run = playout(SHIPPING_SEED, deploy)
     expect(run.status).toBe('won')
-    // 614 = 구 상주 조작제의 무개입 수치 그대로 — 걸어가 장착한 판과 처음부터 서 있던 판이
-    // 같은 결과라는 등가 증명. 장착제가 밸런스를 건드리지 않고 "시작 절차"만 바꿨다는 뜻.
-    expect(run.wallHp).toBe(614)
+    // 522 = 2026-08-08 스킬 개편 후 재고정 (구 614 — 마법사 편입으로 적 id가 밀려
+    // 시드 해시가 달라진 새 판. 장착제 자체의 등가 증명은 개편 전 614 재현으로 이미 남았다)
+    expect(run.wallHp).toBe(522)
     expect(run.seconds).toBeGreaterThan(60)
   })
 
