@@ -422,6 +422,97 @@ function updateAimLines(): void {
   aimLines.visible = n > 0
 }
 // 스킬 조준 상태 (QWE 개편 2026-08-08) — 지점 스킬만 레티클 조준, 자기 중심·버프는 즉발
+// ---- 스킬 전용 이펙트 헬퍼 (2026-08-09 "이펙트가 다 같다" 반려 — 스킬마다 고유 형태)
+
+/** 링 — pulse: 반경까지 확장 소멸(타격 순간) / boundary: 실제 효과 반경에 지속(장판·버프 영역) */
+function spawnSkillRing(
+  x: number, z: number, y: number, radius: number, color: number, durMs: number,
+  mode: 'pulse' | 'boundary' = 'pulse',
+): void {
+  const mat = new THREE.MeshBasicMaterial({
+    color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false,
+  })
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.92, 1.0, 48), mat)
+  ring.rotation.x = -Math.PI / 2
+  ring.position.set(x, y, z)
+  scene.add(ring)
+  const t0 = performance.now()
+  const anim = (): void => {
+    const t = performance.now() - t0
+    const k = t / durMs
+    if (k >= 1) {
+      scene.remove(ring)
+      ring.geometry.dispose()
+      mat.dispose()
+      return
+    }
+    if (mode === 'pulse') {
+      ring.scale.setScalar(radius * (0.3 + 0.7 * k))
+      mat.opacity = 0.85 * (1 - k)
+    } else {
+      ring.scale.setScalar(radius)
+      // 은은한 맥동, 마지막 15%에서 페이드 — "아직 유효하다"가 읽히게
+      mat.opacity = k > 0.85 ? 0.5 * ((1 - k) / 0.15) : 0.32 + 0.16 * Math.sin(t * 0.006)
+    }
+    requestAnimationFrame(anim)
+  }
+  anim()
+}
+
+/** 회전 검기 아크 — 시전자 둘레를 한 바퀴 도는 강철빛 호 (회전베기 전용) */
+function spawnSlashArc(x: number, z: number, y: number, radius: number): void {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xdfe8ff, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false,
+  })
+  const arc = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.06, 6, 26, Math.PI * 1.2), mat)
+  arc.rotation.x = -Math.PI / 2
+  arc.position.set(x, y, z)
+  scene.add(arc)
+  const t0 = performance.now()
+  const anim = (): void => {
+    const k = (performance.now() - t0) / 340
+    if (k >= 1) {
+      scene.remove(arc)
+      arc.geometry.dispose()
+      mat.dispose()
+      return
+    }
+    arc.rotation.z = k * Math.PI * 2.2 // 한 바퀴 이상 휘두른다
+    mat.opacity = 0.9 * (1 - k * k)
+    requestAnimationFrame(anim)
+  }
+  anim()
+}
+
+/** 돌진 잔상 — 출발점→도착점을 잇는 빛나는 세로 리본 (돌진 전용) */
+function spawnDashTrail(x0: number, z0: number, x1: number, z1: number, y: number): void {
+  const dx = x1 - x0
+  const dz = z1 - z0
+  const len = Math.hypot(dx, dz)
+  if (len < 0.5) return
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xbfd8ff, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false,
+  })
+  const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(len, 1.0), mat)
+  ribbon.position.set((x0 + x1) / 2, y, (z0 + z1) / 2)
+  ribbon.rotation.y = Math.atan2(-dz, dx)
+  scene.add(ribbon)
+  const t0 = performance.now()
+  const anim = (): void => {
+    const k = (performance.now() - t0) / 320
+    if (k >= 1) {
+      scene.remove(ribbon)
+      ribbon.geometry.dispose()
+      mat.dispose()
+      return
+    }
+    mat.opacity = 0.75 * (1 - k)
+    ribbon.scale.y = 1 - k * 0.6
+    requestAnimationFrame(anim)
+  }
+  anim()
+}
+
 let aiming = false
 let aimingCast: { casterId: number; slot: number; def: SkillDef } | null = null
 let pendingCast: { casterId?: number; slot: number; x?: number; z?: number } | undefined
@@ -1416,49 +1507,94 @@ function handleEvents(events: SiegeEvent[]): void {
       fx.smoke(ev.pos.x, uy + 0.3, ev.pos.z, { count: 3, scale: 0.9, rise: 0.4, spread: 0.5, dur: 850, tint: 0xa8a196, opacity: 0.4 })
       Sfx.at('unitDie', ev.pos.x, ev.pos.z)
     } else if (ev.type === 'skillCast') {
-      // 스킬별 연출 (QWE 개편 2026-08-08). 피해·판정은 sim이 이미 확정 — 여기는 그림·소리만
+      // 스킬 9종 각자 고유 연출 (2026-08-09 "이펙트가 다 같다" 반려로 전면 분화).
+      // 피해·판정은 sim이 이미 확정 — 여기는 그림·소리만. 형태 언어:
+      //   전사 = 강철빛 궤적(리본·호·석분) / 마법사 = 화염 3단(팝→장판→기둥) / 성주 = 영역 링
+      const caster = ev.casterId !== undefined ? state.units.find((x) => x.id === ev.casterId) : undefined
+      const groundY = (caster?.h ?? 0) + 0.08
       if (ev.casterKind === 'mage') {
-        // 화염 계열 공통 — 규모는 반경에 비례
-        const k = ev.radius / 5.5 // 업화(5.5) 기준 스케일
-        spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 8 * k + 1, 0xffa040, 650)
-        spawnFlash(new THREE.Vector3(ev.x, 3.6, ev.z), 4.5 * k + 0.8, 0xfff0c0, 450)
-        spawnShockwave(ev.x, ev.z, ev.radius + 1.2)
-        spawnLight(new THREE.Vector3(ev.x, 2.5, ev.z), 0xff8030, 90 * k + 15, 700)
-        const fire = makeFire(1.2 + 1.4 * k)
-        fire.group.position.set(ev.x, 0.1, ev.z)
-        scene.add(fire.group)
-        // 불의 장막(W)은 장판 지속시간만큼 타오른다 — 장판이 안 보이면 스킬이 없는 것과 같다
-        const zoneSec = ev.slot === 1 ? (MAGE_SKILLS[1]!.zone?.sec ?? 1.2) : 0
-        fireCols.push({ fx: fire, t0: performance.now(), dur: zoneSec > 0 ? zoneSec * 1000 : 1200 })
-        addTrauma(ev.slot === 2 ? 0.75 : 0.3, ev.x, ev.z)
-        Sfx.at('skill', ev.x, ev.z)
-        fx.smoke(ev.x, 1.2, ev.z, { count: 3 + Math.round(3 * k), scale: 2.2 * k + 0.6, rise: 2.2, spread: 1.6, dur: 2000, tint: 0x6b6259, opacity: 0.5 })
-        fx.debris(ev.x, 0.4, ev.z, { count: 4 + Math.round(6 * k), speed: 7, kind: 'ember' })
-        if (ev.slot === 2) {
+        if (ev.slot === 0) {
+          // Q 화염구 — 작고 빠른 팝. 기둥·충격파 없음 (속사감이 정체성)
+          spawnFlash(new THREE.Vector3(ev.x, 1.2, ev.z), 2.6, 0xffa040, 300)
+          spawnLight(new THREE.Vector3(ev.x, 1.8, ev.z), 0xff8030, 34, 320)
+          spawnSkillRing(ev.x, ev.z, 0.1, ev.radius, 0xff8a30, 280)
+          fx.debris(ev.x, 0.5, ev.z, { count: 5, speed: 5, kind: 'ember' })
+          Sfx.at('fireball', ev.x, ev.z)
+        } else if (ev.slot === 1) {
+          // W 불의 장막 — 낮게 깔린 화염 + **경계 링이 지속시간 내내** 남는다
+          const durMs = (MAGE_SKILLS[1]!.zone?.sec ?? 10) * 1000
+          const fire = makeFire(1.7)
+          fire.group.position.set(ev.x, 0.1, ev.z)
+          fire.group.scale.set(ev.radius / 1.5, 0.55, ev.radius / 1.5) // 기둥이 아니라 '깔린 불'
+          scene.add(fire.group)
+          fireCols.push({ fx: fire, t0: performance.now(), dur: durMs })
+          spawnSkillRing(ev.x, ev.z, 0.12, ev.radius, 0xff6a20, durMs, 'boundary')
+          fx.smoke(ev.x, 0.6, ev.z, { count: 4, scale: 1.4, rise: 0.8, spread: ev.radius * 0.5, dur: 1800, tint: 0x5c5049, opacity: 0.4 })
+          Sfx.at('firewall', ev.x, ev.z)
+        } else {
+          // E 업화(궁극) — 대형 화염 기둥 + 충격파 + 검은 연기 (판을 바꾸는 무게감)
+          spawnFlash(new THREE.Vector3(ev.x, 1.6, ev.z), 9, 0xffa040, 650)
+          spawnFlash(new THREE.Vector3(ev.x, 3.6, ev.z), 5.3, 0xfff0c0, 450)
+          spawnShockwave(ev.x, ev.z, ev.radius + 1.2)
+          spawnLight(new THREE.Vector3(ev.x, 2.5, ev.z), 0xff8030, 105, 700)
+          const fire = makeFire(2.6)
+          fire.group.position.set(ev.x, 0.1, ev.z)
+          scene.add(fire.group)
+          fireCols.push({ fx: fire, t0: performance.now(), dur: 1200 })
+          addTrauma(0.75, ev.x, ev.z)
+          Sfx.at('skill', ev.x, ev.z)
+          fx.smoke(ev.x, 1.2, ev.z, { count: 6, scale: 2.2, rise: 2.2, spread: 1.6, dur: 2000, tint: 0x6b6259, opacity: 0.5 })
+          fx.debris(ev.x, 0.4, ev.z, { count: 10, speed: 7, kind: 'ember' })
           for (const e of state.enemies) {
             if (Math.hypot(e.pos.x - ev.x, e.pos.z - ev.z) > ev.radius) continue
             hitEnemy(e.id, e.pos.x - ev.x, e.pos.z - ev.z, 1, 1.2)
           }
         }
       } else if (ev.casterKind === 'hero') {
-        // 전사 — 돌진(Q)·회전베기(W)·대지파쇄(E)
-        spawnShockwave(ev.x, ev.z, ev.radius + 0.8)
-        if (ev.slot === 2) {
+        if (ev.slot === 0) {
+          // Q 돌진 — 출발점→도착점 잔상 리본 (직전 틱 위치가 곧 출발점)
+          const prev = ev.casterId !== undefined ? prevUnits.get(ev.casterId) : undefined
+          if (caster && prev) {
+            spawnDashTrail(prev.x, prev.z, caster.pos.x, caster.pos.z, caster.h + 1.0)
+            fx.debris(prev.x, 0.3, prev.z, { count: 3, speed: 3, kind: 'dirt' })
+            fx.debris(caster.pos.x, 0.3, caster.pos.z, { count: 4, speed: 3.5, kind: 'dirt' })
+          }
+          Sfx.at('dash', ev.x, ev.z)
+        } else if (ev.slot === 1) {
+          // W 회전베기 — 둘레를 한 바퀴 도는 검기 호 + 불똥
+          spawnSlashArc(ev.x, ev.z, groundY + 1.0, 2.1)
+          fx.debris(ev.x, 1.0, ev.z, { count: 6, speed: 4.5, kind: 'ember' })
+          addTrauma(0.2, ev.x, ev.z)
+          Sfx.at('heroSwing', ev.x, ev.z)
+        } else {
+          // E 대지파쇄(궁극) — 이중 충격파 + 석분·흙먼지 + 강한 흔들림
+          spawnShockwave(ev.x, ev.z, ev.radius * 0.55)
+          spawnShockwave(ev.x, ev.z, ev.radius + 0.8)
+          spawnSkillRing(ev.x, ev.z, groundY, ev.radius, 0xc9b89a, 520)
           addTrauma(0.85, ev.x, ev.z)
           fx.debris(ev.x, 0.3, ev.z, { count: 12, speed: 6.5, kind: 'stone' })
           fx.smoke(ev.x, 0.8, ev.z, { count: 6, scale: 1.8, rise: 1.2, spread: 2.2, dur: 1400, tint: 0x8b8378, opacity: 0.5 })
           Sfx.at('wallHit', ev.x, ev.z)
-        } else {
-          addTrauma(0.25, ev.x, ev.z)
-          fx.debris(ev.x, 0.8, ev.z, { count: 5, speed: 4, kind: 'ember' })
-          Sfx.at('heroSwing', ev.x, ev.z)
         }
       } else {
-        // 성주 버프 — 반경이 곧 효과 범위라 링으로 그린다. 총력전(E)은 전역이라 뿔피리
-        showMoveMarker(ev.x, ev.z, 0.05, 0xffd870, Math.max(2.5, ev.radius / 2))
-        spawnLight(new THREE.Vector3(ev.x, 2.2, ev.z), 0xffd870, 30, 600)
-        if (ev.slot === 2) Sfx.global('horn')
-        else Sfx.at('mount', ev.x, ev.z)
+        // 성주 버프 — **실제 효과 반경**을 링으로 그린다 (범위가 안 보이면 버프가 없는 것과 같다)
+        const lordY = state.lord.h + 0.08
+        if (ev.slot === 2) {
+          // E 총력전(궁극) — 전역: 삼중 금 링이 서로 다른 속도로 퍼진다 + 뿔피리
+          spawnSkillRing(ev.x, ev.z, lordY, 14, 0xffd870, 500)
+          spawnSkillRing(ev.x, ev.z, lordY, 24, 0xffd870, 800)
+          spawnSkillRing(ev.x, ev.z, lordY, 36, 0xffe8a8, 1100)
+          spawnLight(new THREE.Vector3(ev.x, 2.6, ev.z), 0xffd870, 60, 900)
+          Sfx.global('horn')
+        } else {
+          // Q 군기(금) / W 진군 나팔(청록) — 확장 펄스 + 지속시간 내내 남는 영역 링
+          const color = ev.slot === 0 ? 0xffd870 : 0x53d6c8
+          const durMs = (LORD_SKILLS[ev.slot]!.buff?.sec ?? 6) * 1000
+          spawnSkillRing(ev.x, ev.z, lordY, ev.radius, color, 550)
+          spawnSkillRing(ev.x, ev.z, lordY, ev.radius, color, durMs, 'boundary')
+          spawnLight(new THREE.Vector3(ev.x, 2.2, ev.z), color, 34, 600)
+          Sfx.at('rally', ev.x, ev.z)
+        }
       }
     } else if (ev.type === 'meleeHit') {
       enemyAttackT.set(ev.enemyId, performance.now())

@@ -709,7 +709,7 @@ export type SiegeEvent =
       flight: number
     }
   | { type: 'shotLanded'; x: number; z: number; unitKind: string; aoe?: number }
-  | { type: 'skillCast'; casterKind: string; slot: number; name: string; x: number; z: number; radius: number }
+  | { type: 'skillCast'; casterKind: string; casterId?: number; slot: number; name: string; x: number; z: number; radius: number }
   | { type: 'meleeHit'; enemyId: number; unitId: number }
   | { type: 'enemyDied'; id: number; kind: string; pos: Vec2 }
   | { type: 'enemyRaised'; id: number; kind: string; pos: Vec2; byId: number }
@@ -1265,7 +1265,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
           })
         }
         state.events.push({
-          type: 'skillCast', casterKind: caster ? caster.kind : 'lord',
+          type: 'skillCast', casterKind: caster ? caster.kind : 'lord', casterId: caster?.id,
           slot: c.slot, name: def.name, x: at.x, z: at.z, radius: def.radius,
         })
       }

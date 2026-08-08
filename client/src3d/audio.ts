@@ -23,6 +23,10 @@ export type SfxName =
   | 'raise' // 부활 — 유일하게 상승하는 소리
   | 'horn' // 침공 개시
   | 'mount' // 수비병 장착 성사 — 걸쇠 클릭 (장착제 2026-08-08)
+  | 'fireball' // 마법사 Q — 짧은 화염 팝
+  | 'firewall' // 마법사 W — 낮게 타닥이는 장판 점화
+  | 'dash' // 전사 Q — 바람 가르는 돌진
+  | 'rally' // 성주 Q/W — 상승 브라스 2음 (버프 = 긍정 신호)
   | 'victory'
   | 'defeat'
 
@@ -177,6 +181,26 @@ class SoundKit {
         this.tone(out, { freq: 340, end: 310, dur: 0.05, type: 'square', vol: 0.11 * g })
         this.tone(out, { freq: 520, end: 660, dur: 0.08, type: 'triangle', vol: 0.15 * g, delay: 0.05 })
         this.noise(out, { dur: 0.04, vol: 0.09 * g, filter: 5200, sweepTo: 2200 })
+        break
+      case 'fireball':
+        // 화염구 — 짧은 휘익 + 팝 (업화의 묵직함과 대비되는 속사감)
+        this.noise(out, { dur: 0.16, vol: 0.2 * g, filter: 3800, sweepTo: 700 })
+        this.tone(out, { freq: 220, end: 70, dur: 0.18, type: 'triangle', vol: 0.22 * g, delay: 0.04 })
+        break
+      case 'firewall':
+        // 불의 장막 — 낮게 깔리며 오래 타닥거린다 (지속 장판이라 소리도 길다)
+        this.noise(out, { dur: 0.85, vol: 0.22 * g, filter: 2200, sweepTo: 500 })
+        this.tone(out, { freq: 110, end: 60, dur: 0.7, type: 'triangle', vol: 0.16 * g })
+        break
+      case 'dash':
+        // 돌진 — 바람을 가른다. 고역에서 뚝 떨어지는 스윕
+        this.noise(out, { dur: 0.22, vol: 0.24 * g, filter: 6000, sweepTo: 900 })
+        this.tone(out, { freq: 480, end: 140, dur: 0.16, type: 'sawtooth', vol: 0.1 * g })
+        break
+      case 'rally':
+        // 군기·나팔 — 상승 브라스 2음. 부활(sine 상승)과 달리 금관 배음
+        this.tone(out, { freq: 262, end: 262, dur: 0.16, type: 'sawtooth', vol: 0.16 * g })
+        this.tone(out, { freq: 392, end: 392, dur: 0.22, type: 'sawtooth', vol: 0.18 * g, delay: 0.14 })
         break
       case 'victory':
         this.arpeggio(out, [196, 262, 330, 392], 0.16, 0.22 * g, 'triangle')
