@@ -240,6 +240,7 @@ const FLASH_MS = 150 // 피격 플래시 길이 — 리액션(HIT_REACT_MS)보�
 const enemyHit = new Map<number, HitReact>()
 const unitHit = new Map<number, HitReact>() // 아군 피격 (meleeHit)
 const unitAttackT = new Map<number, number>() // unitFired 시각 — 활 놓기/검 스윙/병기 반동
+const mountedPrev = new Map<number, boolean>() // 병기별 직전 장착 상태 — 장착 성사 펄스 트리거용
 
 // 아군 유닛 비주얼 풀 — 병종별 절차 모델. 그룹→유닛 id 역참조는 피킹에 사용
 interface UnitVisual {
@@ -248,6 +249,8 @@ interface UnitVisual {
   weapon?: WeaponRig // 병기 본체 — 발사 반동
   mats: THREE.Material[] // 개체 전용 머티리얼 — 피격 플래시·소멸 페이드
   kind: string
+  /** 조작 필요 병기 전용 — 미장착 표시 링 (장착되면 숨김) */
+  mountRing?: THREE.Mesh
 }
 const unitVisuals = new Map<number, UnitVisual>()
 const groupToUnitId = new Map<string, number>()
@@ -310,6 +313,21 @@ function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
     const weapon = u.kind === 'cannon' ? makeCannon() : makeBallista()
     const weaponMats = ownMaterials(weapon.group)
     v = { group: weapon.group, weapon, mats: weaponMats, kind: u.kind }
+    // 미장착 링 — "이 병기는 아직 안 쏜다"를 바닥에 그린다. 장착 확인이 발사 말고는
+    // 없다는 피드백(2026-08-08)으로 추가: 준비 단계 배치 확인 + 전투 중 이탈 경보.
+    if (state.kinds.units[u.kind]?.crew) {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(1.05, 1.32, 28),
+        new THREE.MeshBasicMaterial({
+          color: 0xd8dee8, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false,
+        }),
+      )
+      ring.material.userData.owned = true // 개체 전용 — 재시작 시 disposeTree가 회수하게
+      ring.rotation.x = -Math.PI / 2
+      ring.position.y = 0.07
+      weapon.group.add(ring)
+      v.mountRing = ring
+    }
   }
   unitVisuals.set(u.id, v)
   groupToUnitId.set(v.group.uuid, u.id)
@@ -605,13 +623,13 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   const w = pickWeapon(e.clientX, e.clientY)
   const p = w ? mountPoint(w) : pickPoint(e.clientX, e.clientY)
   if (!p) return
-  issueCommand(p)
+  issueCommand(p, w !== null)
 })
 
 // 우클릭 명령 공통 — 화면 클릭과 미니맵 클릭이 같은 의미를 갖는다.
 // SC 관례: 빈 선택의 우클릭은 명령이 아니다 (구 "선택 없으면 성주 이동" 폴백은
 // 성주 단일 조작 시절의 잔재라 2026-08-07 폐지 — 성주도 선택해서 명령한다)
-function issueCommand(p: { x: number; z: number; h?: number }): void {
+function issueCommand(p: { x: number; z: number; h?: number }, mountSnap = false): void {
   if (selected.size === 0) return
   // 고정 병기(대포·발리스타)는 못 옮긴다 — 같은 우클릭이 **조준 명령**이 된다.
   // 한 번의 명령으로 성주·보행·병기가 섞여도 각자 맞는 쪽으로 간다.
@@ -629,7 +647,8 @@ function issueCommand(p: { x: number; z: number; h?: number }): void {
   }
   if (movers.length > 0 || selected.has(LORD_ID)) {
     if (movers.length > 0) pendingUnitMove = { ids: movers, to: p }
-    if (guns.length === 0) showMoveMarker(p.x, p.z, p.h, 0x53d6a2)
+    // 병기 우클릭 장착 스냅은 금색 — "이동"이 아니라 "장착하러 간다"로 읽히게
+    if (guns.length === 0) showMoveMarker(p.x, p.z, p.h, mountSnap ? 0xffd870 : 0x53d6a2, mountSnap ? 1.8 : 1)
   }
 }
 
@@ -840,9 +859,9 @@ window.addEventListener('keydown', (e) => {
 })
 
 // 이동 마커 (LoL식 클릭 링) — 성주 초록, 부대 명령 청록
-function showMoveMarker(x: number, z: number, y = 0.05, color = 0x62c462): void {
+function showMoveMarker(x: number, z: number, y = 0.05, color = 0x62c462, scale = 1): void {
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.4, 0.6, 24),
+    new THREE.RingGeometry(0.4 * scale, 0.6 * scale, 24),
     new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide }),
   )
   ring.rotation.x = -Math.PI / 2
@@ -1856,6 +1875,22 @@ function syncScene(now: number): void {
   const hasHero = state.units.some((u) => u.kind === 'hero' && selected.has(u.id))
   // 장착제: 쌍은 동적 배정 — 선택이 조작 중인 병기이거나 조작 중인 수비병일 때만 G가 산다
   const manning = manningMap(state)
+  // 장착 상태 피드백 — 미장착 병기: 흰 점멸 링 / 장착 성사 순간: 금색 펄스 + 걸쇠음.
+  // 준비 단계엔 적이 없어 발사라는 확인 수단 자체가 없다 — 이 링이 유일한 배치 피드백이다.
+  for (const u of state.units) {
+    if (!state.kinds.units[u.kind]?.crew) continue
+    const v = unitVisuals.get(u.id)
+    if (!v?.mountRing) continue
+    const manned = manning.has(u.id)
+    v.mountRing.visible = !manned
+    if (!manned)
+      (v.mountRing.material as THREE.MeshBasicMaterial).opacity = 0.32 + 0.22 * Math.sin(now * 0.006)
+    if (manned && mountedPrev.get(u.id) === false) {
+      showMoveMarker(u.pos.x, u.pos.z, u.h, 0xffd870, 2.4) // 장착! — 금색 확장 펄스
+      Sfx.at('mount', u.pos.x, u.pos.z)
+    }
+    mountedPrev.set(u.id, manned)
+  }
   let hasCrewPair = false
   for (const id of selected) {
     if (manning.has(id) || [...manning.values()].includes(id)) {
@@ -2017,6 +2052,7 @@ function resetGame(): void {
   groupToUnitId.clear()
   unitAttackT.clear()
   unitHit.clear()
+  mountedPrev.clear()
   for (const d of dying) {
     scene.remove(d.obj)
     disposeTree(d.obj)

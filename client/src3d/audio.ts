@@ -22,6 +22,7 @@ export type SfxName =
   | 'skill' // 업화
   | 'raise' // 부활 — 유일하게 상승하는 소리
   | 'horn' // 침공 개시
+  | 'mount' // 수비병 장착 성사 — 걸쇠 클릭 (장착제 2026-08-08)
   | 'victory'
   | 'defeat'
 
@@ -34,6 +35,7 @@ const THROTTLE: Partial<Record<SfxName, number>> = {
   melee: 80,
   wallHit: 90,
   enemyDie: 60,
+  mount: 120, // 부대 도착으로 여러 병기가 같은 프레임에 장착돼도 걸쇠음이 겹쳐 터지지 않게
 }
 
 /** 이 거리를 넘으면 안 들린다 (월드 유닛) */
@@ -169,6 +171,12 @@ class SoundKit {
         for (const [f, v, d] of [[146, 0.3, 0], [219, 0.16, 0.01], [292, 0.09, 0.02]] as const) {
           this.tone(out, { freq: f, end: f * 0.97, dur: 1.5, type: 'sawtooth', vol: v * g, delay: d })
         }
+        break
+      case 'mount':
+        // 장착 걸쇠 — 짧은 금속 이중 클릭, 끝이 올라간다 (긍정 피드백. 죽음=하강과 반대)
+        this.tone(out, { freq: 340, end: 310, dur: 0.05, type: 'square', vol: 0.11 * g })
+        this.tone(out, { freq: 520, end: 660, dur: 0.08, type: 'triangle', vol: 0.15 * g, delay: 0.05 })
+        this.noise(out, { dur: 0.04, vol: 0.09 * g, filter: 5200, sweepTo: 2200 })
         break
       case 'victory':
         this.arpeggio(out, [196, 262, 330, 392], 0.16, 0.22 * g, 'triangle')
