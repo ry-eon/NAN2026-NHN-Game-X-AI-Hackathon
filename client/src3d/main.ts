@@ -9,6 +9,7 @@ import {
   MAGE_SKILLS,
   SEGMENTS,
   createSiege,
+  heightNear,
   isCrewManned,
   manningMap,
   mountPoint,
@@ -856,9 +857,12 @@ window.addEventListener('pointermove', (e) => {
   if (aiming) {
     const raw = pickPoint(e.clientX, e.clientY)
     if (raw && aimingCast) {
-      // 레티클도 클램프된 실제 시전 지점을 보여준다 — 커서가 밖이어도 "여기에 떨어진다"
+      // 레티클도 클램프된 실제 시전 지점을 보여준다 — 커서가 밖이어도 "여기에 떨어진다".
+      // 높이는 **클램프된 xz의 지형**으로 재계산 — 클릭 지점 높이를 그대로 쓰면 성벽 위를
+      // 겨눴다 클램프될 때 레티클이 공중에 뜬다 ("위쪽은 마우스 이동이 안 된다" 2026-08-09)
       const p = clampToRange(raw)
-      aimReticle.position.set(p.x, (p.h ?? raw.h) + 0.08, p.z)
+      const y = p === raw ? raw.h : heightNear(p.x, p.z, 0)
+      aimReticle.position.set(p.x, y + 0.08, p.z)
       for (const c of aimReticle.children)
         ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(0xff7a3a)
     }
@@ -1554,23 +1558,43 @@ function handleEvents(events: SiegeEvent[]): void {
       const caster = ev.casterId !== undefined ? state.units.find((x) => x.id === ev.casterId) : undefined
       const groundY = (caster?.h ?? 0) + 0.08
       if (ev.casterKind === 'mage') {
+        // 시전 순간 지팡이 구슬 섬광 — "누가 쐈는지"가 스킬 낙하점만큼 중요하다
+        if (caster) {
+          spawnFlash(new THREE.Vector3(caster.pos.x, caster.h + 1.7, caster.pos.z), 1.3, 0xffb060, 260)
+          spawnLight(new THREE.Vector3(caster.pos.x, caster.h + 1.8, caster.pos.z), 0xff8030, 14, 280)
+        }
         if (ev.slot === 0) {
-          // Q 화염구 — 작고 빠른 팝. 기둥·충격파 없음 (속사감이 정체성)
-          spawnFlash(new THREE.Vector3(ev.x, 1.2, ev.z), 2.6, 0xffa040, 300)
-          spawnLight(new THREE.Vector3(ev.x, 1.8, ev.z), 0xff8030, 34, 320)
-          spawnSkillRing(ev.x, ev.z, 0.1, ev.radius, 0xff8a30, 280)
-          fx.debris(ev.x, 0.5, ev.z, { count: 5, speed: 5, kind: 'ember' })
+          // Q 화염구 — 빠른 화구 작렬: 순간 화염 + 팝. 기둥 없음 (속사감이 정체성)
+          spawnFlash(new THREE.Vector3(ev.x, 1.2, ev.z), 3.4, 0xffa040, 320)
+          spawnFlash(new THREE.Vector3(ev.x, 2.0, ev.z), 1.8, 0xfff0c0, 240)
+          spawnLight(new THREE.Vector3(ev.x, 1.8, ev.z), 0xff8030, 44, 340)
+          const puff = makeFire(0.9)
+          puff.group.position.set(ev.x, 0.1, ev.z)
+          scene.add(puff.group)
+          fireCols.push({ fx: puff, t0: performance.now(), dur: 450 })
+          spawnSkillRing(ev.x, ev.z, 0.1, ev.radius, 0xff8a30, 300)
+          fx.debris(ev.x, 0.6, ev.z, { count: 8, speed: 5.5, kind: 'ember' })
+          fx.smoke(ev.x, 0.8, ev.z, { count: 2, scale: 1.0, rise: 1.2, spread: 0.6, dur: 900, tint: 0x6b6259, opacity: 0.4 })
+          addTrauma(0.18, ev.x, ev.z)
           Sfx.at('fireball', ev.x, ev.z)
         } else if (ev.slot === 1) {
-          // W 불의 장막 — 낮게 깔린 화염 + **경계 링이 지속시간 내내** 남는다
+          // W 불의 장막 — 중앙 + 링 배치 화염 5기가 지속시간 내내 타오르는 '불의 벽'
           const durMs = (MAGE_SKILLS[1]!.zone?.sec ?? 10) * 1000
-          const fire = makeFire(1.7)
-          fire.group.position.set(ev.x, 0.1, ev.z)
-          fire.group.scale.set(ev.radius / 1.5, 0.55, ev.radius / 1.5) // 기둥이 아니라 '깔린 불'
-          scene.add(fire.group)
-          fireCols.push({ fx: fire, t0: performance.now(), dur: durMs })
+          const center = makeFire(1.3)
+          center.group.position.set(ev.x, 0.1, ev.z)
+          center.group.scale.y = 0.6
+          scene.add(center.group)
+          fireCols.push({ fx: center, t0: performance.now(), dur: durMs })
+          for (let i = 0; i < 4; i++) {
+            const a = (i / 4) * Math.PI * 2 + Math.PI / 4
+            const f = makeFire(0.9)
+            f.group.position.set(ev.x + Math.sin(a) * ev.radius * 0.62, 0.1, ev.z + Math.cos(a) * ev.radius * 0.62)
+            f.group.scale.y = 0.7
+            scene.add(f.group)
+            fireCols.push({ fx: f, t0: performance.now(), dur: durMs })
+          }
           spawnSkillRing(ev.x, ev.z, 0.12, ev.radius, 0xff6a20, durMs, 'boundary')
-          fx.smoke(ev.x, 0.6, ev.z, { count: 4, scale: 1.4, rise: 0.8, spread: ev.radius * 0.5, dur: 1800, tint: 0x5c5049, opacity: 0.4 })
+          fx.smoke(ev.x, 0.6, ev.z, { count: 5, scale: 1.4, rise: 0.9, spread: ev.radius * 0.55, dur: 2000, tint: 0x5c5049, opacity: 0.42 })
           Sfx.at('firewall', ev.x, ev.z)
         } else {
           // E 업화(궁극) — 대형 화염 기둥 + 충격파 + 검은 연기 (판을 바꾸는 무게감)
