@@ -1732,12 +1732,29 @@ function updateSelPanel(): void {
 let renderAlpha = 1
 let frameNo = 0
 
+/**
+ * 계단 표시 높이 — sim은 연속 경사(이동·검증의 진실)지만 렌더 계단은 14단 불연속이라,
+ * sim 높이 그대로 세우면 디딤판 앞쪽에서 최대 0.79(=11/14)만큼 하반신이 돌에 잠긴다
+ * ("계단 올라갈 때 하반신이 계단 아래로 간다" — 2026-08-08 사용자 지적).
+ * 표시 y만 지금 밟고 있는 디딤판 윗면으로 올린다 — sim 좌표 불변, 클릭·판정 영향 없음.
+ * 상수는 environment.ts의 계단 건설(STEPS 14, z 4.5~15)과 일치해야 한다.
+ */
+const STAIR_STEPS = 14
+function stairDisplayH(x: number, z: number, h: number): number {
+  const az = Math.abs(z)
+  const x0 = CASTLE.east - CASTLE.wallT / 2 - 2.4
+  const x1 = CASTLE.east - CASTLE.wallT / 2 + 0.2
+  if (x < x0 || x > x1 || az < 4.5 || az > 15) return h
+  const i = Math.min(STAIR_STEPS - 1, Math.floor(((az - 4.5) / 10.5) * STAIR_STEPS))
+  return Math.max(h, (CASTLE.wallH * (i + 1)) / STAIR_STEPS)
+}
+
 function syncScene(now: number): void {
   fadeOccluders(frameNo % 4 === 0)
   frameNo++
   const lx = THREE.MathUtils.lerp(prevLord.x, state.lord.pos.x, renderAlpha)
   const lz = THREE.MathUtils.lerp(prevLord.z, state.lord.pos.z, renderAlpha)
-  const ly = THREE.MathUtils.lerp(prevLordH, state.lord.h, renderAlpha)
+  const ly = stairDisplayH(lx, lz, THREE.MathUtils.lerp(prevLordH, state.lord.h, renderAlpha))
   lordMesh.position.set(lx, ly, lz)
   lordMesh.rotation.y = state.lord.facing
 
@@ -1788,7 +1805,7 @@ function syncScene(now: number): void {
     const prev = prevUnits.get(u.id)
     let ux = prev ? THREE.MathUtils.lerp(prev.x, u.pos.x, renderAlpha) : u.pos.x
     let uz = prev ? THREE.MathUtils.lerp(prev.z, u.pos.z, renderAlpha) : u.pos.z
-    const uy = prev ? THREE.MathUtils.lerp(prev.h, u.h, renderAlpha) : u.h
+    const uy = stairDisplayH(ux, uz, prev ? THREE.MathUtils.lerp(prev.h, u.h, renderAlpha) : u.h)
     const uhit = unitHit.get(u.id)
     if (uhit) {
       const q = 1 - (now - uhit.t0) / HIT_REACT_MS
