@@ -228,8 +228,8 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
@@ -441,14 +441,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 654,
+            "step": 630,
             "tick": 360,
             "input": {
               "unitMove": {
@@ -463,7 +463,7 @@
             }
           },
           {
-            "step": 1014,
+            "step": 990,
             "tick": 720,
             "input": {
               "unitMove": {
@@ -478,7 +478,7 @@
             }
           },
           {
-            "step": 1374,
+            "step": 1350,
             "tick": 1080,
             "input": {
               "unitMove": {
@@ -493,7 +493,7 @@
             }
           },
           {
-            "step": 1734,
+            "step": 1710,
             "tick": 1440,
             "input": {
               "unitMove": {
@@ -508,7 +508,7 @@
             }
           },
           {
-            "step": 2094,
+            "step": 2070,
             "tick": 1800,
             "input": {
               "unitMove": {
@@ -523,7 +523,7 @@
             }
           },
           {
-            "step": 2274,
+            "step": 2250,
             "tick": 1980,
             "input": {
               "unitMove": {
@@ -538,7 +538,7 @@
             }
           },
           {
-            "step": 2634,
+            "step": 2610,
             "tick": 2340,
             "input": {
               "unitMove": {
@@ -553,7 +553,7 @@
             }
           },
           {
-            "step": 2747,
+            "step": 2723,
             "tick": 2453,
             "input": {
               "heroSkill": {
@@ -570,9 +570,9 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3090,
-        "seconds": 103,
-        "wallHp": 458,
+        "ticks": 3054,
+        "seconds": 101.8,
+        "wallHp": 368,
         "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
@@ -770,14 +770,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 1044,
+            "step": 1020,
             "tick": 750,
             "input": {
               "unitMove": {
@@ -792,7 +792,7 @@
             }
           },
           {
-            "step": 1344,
+            "step": 1320,
             "tick": 1050,
             "input": {
               "unitMove": {
@@ -807,7 +807,7 @@
             }
           },
           {
-            "step": 1944,
+            "step": 1920,
             "tick": 1650,
             "input": {
               "unitMove": {
@@ -822,7 +822,7 @@
             }
           },
           {
-            "step": 2544,
+            "step": 2520,
             "tick": 2250,
             "input": {
               "unitMove": {
@@ -837,7 +837,7 @@
             }
           },
           {
-            "step": 3144,
+            "step": 3120,
             "tick": 2850,
             "input": {
               "unitMove": {
@@ -1086,8 +1086,8 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
@@ -1299,14 +1299,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 2094,
+            "step": 2070,
             "tick": 1800,
             "input": {
               "unitMove": {
@@ -1321,7 +1321,7 @@
             }
           },
           {
-            "step": 2274,
+            "step": 2250,
             "tick": 1980,
             "input": {
               "unitMove": {
@@ -1336,7 +1336,7 @@
             }
           },
           {
-            "step": 2898,
+            "step": 2874,
             "tick": 2604,
             "input": {
               "heroSkill": {
@@ -1353,9 +1353,9 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3216,
-        "seconds": 107.2,
-        "wallHp": 464,
+        "ticks": 3135,
+        "seconds": 104.5,
+        "wallHp": 908,
         "unitsAlive": 25,
         "enemiesKilled": 72,
         "unitsLost": 0,
@@ -1553,14 +1553,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 594,
+            "step": 570,
             "tick": 300,
             "input": {
               "unitMove": {
@@ -1575,7 +1575,7 @@
             }
           },
           {
-            "step": 744,
+            "step": 720,
             "tick": 450,
             "input": {
               "unitMove": {
@@ -1590,7 +1590,7 @@
             }
           },
           {
-            "step": 1344,
+            "step": 1320,
             "tick": 1050,
             "input": {
               "unitMove": {
@@ -1605,7 +1605,7 @@
             }
           },
           {
-            "step": 2694,
+            "step": 2670,
             "tick": 2400,
             "input": {
               "unitMove": {
@@ -1620,7 +1620,7 @@
             }
           },
           {
-            "step": 2994,
+            "step": 2970,
             "tick": 2700,
             "input": {
               "unitMove": {
@@ -1635,7 +1635,7 @@
             }
           },
           {
-            "step": 3144,
+            "step": 3120,
             "tick": 2850,
             "input": {
               "unitMove": {
@@ -1645,21 +1645,6 @@
                 "to": {
                   "x": -17.009171951562166,
                   "z": -11.227760310284793
-                }
-              }
-            }
-          },
-          {
-            "step": 3444,
-            "tick": 3150,
-            "input": {
-              "unitMove": {
-                "ids": [
-                  13
-                ],
-                "to": {
-                  "x": -13.919238911941648,
-                  "z": 3.895431524142623
                 }
               }
             }
@@ -1899,8 +1884,8 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
@@ -2112,14 +2097,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 1374,
+            "step": 1350,
             "tick": 1080,
             "input": {
               "unitMove": {
@@ -2134,7 +2119,7 @@
             }
           },
           {
-            "step": 1570,
+            "step": 1546,
             "tick": 1276,
             "input": {
               "heroSkill": {
@@ -2145,7 +2130,7 @@
             }
           },
           {
-            "step": 2454,
+            "step": 2430,
             "tick": 2160,
             "input": {
               "unitMove": {
@@ -2160,7 +2145,7 @@
             }
           },
           {
-            "step": 2826,
+            "step": 2802,
             "tick": 2532,
             "input": {
               "heroSkill": {
@@ -2377,14 +2362,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 294,
+            "step": 270,
             "tick": 0,
             "input": {
               "unitMove": {
@@ -2399,7 +2384,7 @@
             }
           },
           {
-            "step": 744,
+            "step": 720,
             "tick": 450,
             "input": {
               "unitMove": {
@@ -2414,7 +2399,7 @@
             }
           },
           {
-            "step": 1044,
+            "step": 1020,
             "tick": 750,
             "input": {
               "unitMove": {
@@ -2429,7 +2414,7 @@
             }
           },
           {
-            "step": 1494,
+            "step": 1470,
             "tick": 1200,
             "input": {
               "unitMove": {
@@ -2444,7 +2429,7 @@
             }
           },
           {
-            "step": 1644,
+            "step": 1620,
             "tick": 1350,
             "input": {
               "unitMove": {
@@ -2459,7 +2444,7 @@
             }
           },
           {
-            "step": 1944,
+            "step": 1920,
             "tick": 1650,
             "input": {
               "unitMove": {
@@ -2474,7 +2459,7 @@
             }
           },
           {
-            "step": 2394,
+            "step": 2370,
             "tick": 2100,
             "input": {
               "unitMove": {
@@ -2489,7 +2474,7 @@
             }
           },
           {
-            "step": 2694,
+            "step": 2670,
             "tick": 2400,
             "input": {
               "unitMove": {
@@ -2504,7 +2489,7 @@
             }
           },
           {
-            "step": 3144,
+            "step": 3120,
             "tick": 2850,
             "input": {
               "unitMove": {
@@ -2519,7 +2504,7 @@
             }
           },
           {
-            "step": 3294,
+            "step": 3270,
             "tick": 3000,
             "input": {
               "unitMove": {
@@ -2534,7 +2519,7 @@
             }
           },
           {
-            "step": 3444,
+            "step": 3420,
             "tick": 3150,
             "input": {
               "unitMove": {
@@ -2783,8 +2768,8 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
@@ -2996,14 +2981,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 1734,
+            "step": 1710,
             "tick": 1440,
             "input": {
               "unitMove": {
@@ -3018,7 +3003,7 @@
             }
           },
           {
-            "step": 2094,
+            "step": 2070,
             "tick": 1800,
             "input": {
               "unitMove": {
@@ -3033,7 +3018,7 @@
             }
           },
           {
-            "step": 2634,
+            "step": 2610,
             "tick": 2340,
             "input": {
               "unitMove": {
@@ -3048,7 +3033,7 @@
             }
           },
           {
-            "step": 2696,
+            "step": 2672,
             "tick": 2402,
             "input": {
               "heroSkill": {
@@ -3059,7 +3044,7 @@
             }
           },
           {
-            "step": 3354,
+            "step": 3330,
             "tick": 3060,
             "input": {
               "unitMove": {
@@ -3080,9 +3065,9 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3166,
-        "seconds": 105.5,
-        "wallHp": 546,
+        "ticks": 3276,
+        "seconds": 109.2,
+        "wallHp": 915,
         "unitsAlive": 25,
         "enemiesKilled": 72,
         "unitsLost": 0,
@@ -3280,14 +3265,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 294,
+            "step": 270,
             "tick": 0,
             "input": {
               "unitMove": {
@@ -3302,7 +3287,7 @@
             }
           },
           {
-            "step": 1044,
+            "step": 1020,
             "tick": 750,
             "input": {
               "unitMove": {
@@ -3317,7 +3302,7 @@
             }
           },
           {
-            "step": 1344,
+            "step": 1320,
             "tick": 1050,
             "input": {
               "unitMove": {
@@ -3332,7 +3317,7 @@
             }
           },
           {
-            "step": 1944,
+            "step": 1920,
             "tick": 1650,
             "input": {
               "unitMove": {
@@ -3347,7 +3332,7 @@
             }
           },
           {
-            "step": 2244,
+            "step": 2220,
             "tick": 1950,
             "input": {
               "unitMove": {
@@ -3362,7 +3347,7 @@
             }
           },
           {
-            "step": 2394,
+            "step": 2370,
             "tick": 2100,
             "input": {
               "unitMove": {
@@ -3377,7 +3362,7 @@
             }
           },
           {
-            "step": 2844,
+            "step": 2820,
             "tick": 2550,
             "input": {
               "unitMove": {
@@ -3392,7 +3377,7 @@
             }
           },
           {
-            "step": 2994,
+            "step": 2970,
             "tick": 2700,
             "input": {
               "unitMove": {
@@ -3407,7 +3392,7 @@
             }
           },
           {
-            "step": 3294,
+            "step": 3270,
             "tick": 3000,
             "input": {
               "unitMove": {
@@ -3422,7 +3407,7 @@
             }
           },
           {
-            "step": 3444,
+            "step": 3420,
             "tick": 3150,
             "input": {
               "unitMove": {
@@ -3671,8 +3656,8 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
@@ -3884,14 +3869,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 1374,
+            "step": 1350,
             "tick": 1080,
             "input": {
               "unitMove": {
@@ -3906,7 +3891,7 @@
             }
           },
           {
-            "step": 1554,
+            "step": 1530,
             "tick": 1260,
             "input": {
               "unitMove": {
@@ -3921,7 +3906,7 @@
             }
           },
           {
-            "step": 1569,
+            "step": 1545,
             "tick": 1275,
             "input": {
               "heroSkill": {
@@ -3932,7 +3917,7 @@
             }
           },
           {
-            "step": 2763,
+            "step": 2739,
             "tick": 2469,
             "input": {
               "heroSkill": {
@@ -3943,7 +3928,7 @@
             }
           },
           {
-            "step": 3174,
+            "step": 3150,
             "tick": 2880,
             "input": {
               "unitMove": {
@@ -3958,7 +3943,7 @@
             }
           },
           {
-            "step": 3201,
+            "step": 3177,
             "tick": 2907,
             "input": {
               "heroSkill": {
@@ -4175,14 +4160,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 594,
+            "step": 570,
             "tick": 300,
             "input": {
               "unitMove": {
@@ -4197,7 +4182,7 @@
             }
           },
           {
-            "step": 1044,
+            "step": 1020,
             "tick": 750,
             "input": {
               "unitMove": {
@@ -4212,7 +4197,7 @@
             }
           },
           {
-            "step": 1494,
+            "step": 1470,
             "tick": 1200,
             "input": {
               "unitMove": {
@@ -4227,7 +4212,7 @@
             }
           },
           {
-            "step": 1644,
+            "step": 1620,
             "tick": 1350,
             "input": {
               "unitMove": {
@@ -4242,7 +4227,7 @@
             }
           },
           {
-            "step": 2094,
+            "step": 2070,
             "tick": 1800,
             "input": {
               "unitMove": {
@@ -4257,7 +4242,7 @@
             }
           },
           {
-            "step": 2844,
+            "step": 2820,
             "tick": 2550,
             "input": {
               "unitMove": {
@@ -4506,8 +4491,8 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
@@ -4719,14 +4704,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 1734,
+            "step": 1710,
             "tick": 1440,
             "input": {
               "unitMove": {
@@ -4741,7 +4726,7 @@
             }
           },
           {
-            "step": 2094,
+            "step": 2070,
             "tick": 1800,
             "input": {
               "unitMove": {
@@ -4756,7 +4741,7 @@
             }
           },
           {
-            "step": 2716,
+            "step": 2692,
             "tick": 2422,
             "input": {
               "heroSkill": {
@@ -4767,7 +4752,7 @@
             }
           },
           {
-            "step": 2994,
+            "step": 2970,
             "tick": 2700,
             "input": {
               "unitMove": {
@@ -4782,7 +4767,7 @@
             }
           },
           {
-            "step": 3137,
+            "step": 3113,
             "tick": 2843,
             "input": {
               "heroSkill": {
@@ -4799,9 +4784,9 @@
         "policy": "random",
         "loadout": "default",
         "status": "won",
-        "ticks": 3074,
-        "seconds": 102.5,
-        "wallHp": 888,
+        "ticks": 3144,
+        "seconds": 104.8,
+        "wallHp": 707,
         "unitsAlive": 25,
         "enemiesKilled": 70,
         "unitsLost": 0,
@@ -4999,14 +4984,14 @@
             }
           },
           {
-            "step": 293,
-            "tick": 293,
+            "step": 269,
+            "tick": 269,
             "input": {
               "startAssault": true
             }
           },
           {
-            "step": 1494,
+            "step": 1470,
             "tick": 1200,
             "input": {
               "unitMove": {
@@ -5021,7 +5006,7 @@
             }
           },
           {
-            "step": 1794,
+            "step": 1770,
             "tick": 1500,
             "input": {
               "unitMove": {
@@ -5036,7 +5021,7 @@
             }
           },
           {
-            "step": 1944,
+            "step": 1920,
             "tick": 1650,
             "input": {
               "unitMove": {
@@ -5051,7 +5036,7 @@
             }
           },
           {
-            "step": 2244,
+            "step": 2220,
             "tick": 1950,
             "input": {
               "unitMove": {
@@ -5066,7 +5051,7 @@
             }
           },
           {
-            "step": 2544,
+            "step": 2520,
             "tick": 2250,
             "input": {
               "unitMove": {
@@ -5081,7 +5066,7 @@
             }
           },
           {
-            "step": 3144,
+            "step": 3120,
             "tick": 2850,
             "input": {
               "unitMove": {

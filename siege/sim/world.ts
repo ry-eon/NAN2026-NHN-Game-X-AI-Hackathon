@@ -165,15 +165,31 @@ export function findPath(from: Vec2, to: Vec2, fromH = 0, toHint = 0): Vec2[] | 
       nearBest = cur
     }
     const curH = nodeH[cur]!
+    // 이 층에서 밟을 수 있는 칸인가 — 대각선 코너컷 방지용 (양 옆 직교 칸 검사)
+    const standable = (xx: number, zz: number): boolean => {
+      if (xx < 0 || zz < 0 || xx >= W || zz >= H) return false
+      const w2 = toWorld(xx, zz)
+      return heightLevels(w2.x, w2.z).some(
+        (h) => Math.abs(h - curH) <= 1.5 && !(h < 1 && blockedGround(w2.x, w2.z)),
+      )
+    }
+    // 8방향 (2026-08-08): 직교만 있으면 경사로·안뜰에서 계단꼴 지그재그로 걷는다 —
+    // "계단 올라가는 게 어색하다"(사용자). 대각선은 양 옆 직교 칸이 모두 밟을 수 있을
+    // 때만 허용 — 벽 모서리·흉벽 띠를 대각선으로 뚫고 지나가지 못하게.
     for (const [dx, dz] of [
       [0, -1],
       [1, 0],
       [0, 1],
       [-1, 0],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+      [-1, -1],
     ] as const) {
       const nx = cx + dx
       const nz = cz + dz
       if (nx < 0 || nz < 0 || nx >= W || nz >= H) continue
+      if (dx !== 0 && dz !== 0 && (!standable(cx + dx, cz) || !standable(cx, cz + dz))) continue
       const nw = toWorld(nx, nz)
       for (const cand of heightLevels(nw.x, nw.z)) {
         if (Math.abs(cand - curH) > 1.5) continue
@@ -1156,6 +1172,39 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
           m.pos.z = nz
           m.h = h
         }
+      }
+    }
+  }
+
+  // 장착 정위치 (2026-08-08 사용자: "장착되면 자리가 딱 지정되면 좋겠다") —
+  // 배정된 수비병은 명령 이동 중이 아니면 조작 위치(mountPoint)로 걸어 들어가 고정되고,
+  // 정위치에선 **포와 같은 방향을 본다** (조준을 돌리면 병사도 함께 돈다 — 포병처럼).
+  // 반경 2.4 안 아무 데나 서성이면 장착이 화면에서 읽히지 않는다.
+  {
+    const map = manningMap(state)
+    for (const [wid, gid] of map) {
+      const w = state.units.find((u) => u.id === wid)!
+      const g = state.units.find((u) => u.id === gid)!
+      if (g.path.length > 0) continue
+      const p = mountPoint(w)
+      const dx = p.x - g.pos.x
+      const dz = p.z - g.pos.z
+      const d = Math.hypot(dx, dz)
+      const step = state.kinds.units[g.kind]!.speed * DT
+      if (d > step) {
+        const nx = g.pos.x + (dx / d) * step
+        const nz = g.pos.z + (dz / d) * step
+        const nh = stepHeight(g.h, nx, nz)
+        if (nh !== null) {
+          g.pos.x = nx
+          g.pos.z = nz
+          g.h = nh
+          g.facing = Math.atan2(dx / d, dz / d)
+        }
+      } else {
+        g.pos.x = p.x
+        g.pos.z = p.z
+        g.facing = w.facing // 정위치 — 포신과 함께 돈다
       }
     }
   }
