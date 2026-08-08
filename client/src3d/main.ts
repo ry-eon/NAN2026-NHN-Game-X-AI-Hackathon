@@ -1745,7 +1745,11 @@ function stairDisplayH(x: number, z: number, h: number): number {
   const x0 = CASTLE.east - CASTLE.wallT / 2 - 2.4
   const x1 = CASTLE.east - CASTLE.wallT / 2 + 0.2
   if (x < x0 || x > x1 || az < 4.5 || az > 15) return h
-  const i = Math.min(STAIR_STEPS - 1, Math.floor(((az - 4.5) / 10.5) * STAIR_STEPS))
+  // 반 단 리드(+0.5): 발바닥을 현재 디딤판에 정확히 맞춰도(실측 7.046 vs 7.071),
+  // 걷는 중에는 몸이 **다음 단의 수직면을 관통하며** 전진해 하반신이 잠겨 보인다
+  // ("조금 더 올려야 해, 여전히 정강이" — 2026-08-08). 반 단 먼저 다음 디딤판에
+  // 올라서게 하면 관통 구간이 절반으로 줄고, 남는 쪽은 잠김이 아니라 살짝 뜸이라 덜 읽힌다.
+  const i = Math.min(STAIR_STEPS - 1, Math.floor(((az - 4.5) / 10.5) * STAIR_STEPS + 0.5))
   return Math.max(h, (CASTLE.wallH * (i + 1)) / STAIR_STEPS)
 }
 
