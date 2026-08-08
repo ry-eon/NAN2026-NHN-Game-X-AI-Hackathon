@@ -16,6 +16,8 @@ import {
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
 import type { FriendlyUnit, SiegeEvent, SiegeInput, SkillDef } from '../../siege/sim/world'
+// 봇의 표준 장착 수순을 B(자동 장착) 매크로가 그대로 쓴다 — 순수 함수라 렌더 계층에서 안전
+import { deployPrep } from '../../siege/bots/policy'
 import { Sfx, type SfxName } from './audio'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
@@ -201,7 +203,9 @@ composer.addPass(grade)
 composer.addPass(new OutputPass())
 
 // 성주 — 절차 조형 풀아머 기사 (금장, 검증 슬라이스 v2)
-const lordRig = makeKnight(0x4a1414, true)
+// 성주 — 흑색 갑주 + 금장 + 지휘봉 (2026-08-08 사용자: "높은 직급으로 보이게").
+// 무기가 아니라 지휘봉을 든 유일한 개체 — 전투원이 아니라 지휘관이라는 실루엣
+const lordRig = makeKnight(0x15151d, true, false, { held: 'baton' })
 const lordMesh = lordRig.root
 lordMesh.add(makeNameplate('성주', '#ff9a7a').translateY(2.5))
 scene.add(lordMesh)
@@ -295,9 +299,12 @@ function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
     rig.root.scale.setScalar(0.94)
     v = { group: rig.root, rig, mats: rig.mats, kind: u.kind }
   } else if (u.kind === 'hero' || u.kind === 'mage') {
-    // 영웅 2종 — 전사(청색+금장) / 마법사(진홍 로브색). 이름표 + 상시 링으로 부감 식별
+    // 영웅 2종 — 전사(청색+금장, 뽑아 든 검) / 마법사(진홍 로브 + 화염 구슬 지팡이).
+    // 이름표 + 상시 링으로 부감 식별 (2026-08-08 직군 소품 확정)
     const isMage = u.kind === 'mage'
-    const rig = makeKnight(isMage ? 0x7a2830 : 0x1d4e8c, true)
+    const rig = isMage
+      ? makeKnight(0x7a2830, true, false, { held: 'staff', robe: true })
+      : makeKnight(0x1d4e8c, true, false, { held: 'sword' })
     rig.root.scale.setScalar(isMage ? 1.08 : 1.15)
     rig.root.add(
       makeNameplate(state.kinds.units[u.kind]!.name, isMage ? '#ff9d5c' : '#ffd870').translateY(2.5),
@@ -434,6 +441,8 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyM') muted = Sfx.toggleMute()
   if (e.code === 'KeyG') toggleCrewSelection()
   if (e.code === 'KeyA') enterAttackMove()
+  if (e.code === 'KeyB') startAutoDeploy()
+  if (e.code === 'KeyV') allMelee()
   // H = 홀드 (SC·LoL 공통 관례). 이 게임은 정지 시에만 사격하므로 홀드와 정지가 동치다
   if (e.code === 'KeyS' || e.code === 'KeyH') stopSelected()
 })
@@ -528,6 +537,34 @@ function cancelAttackMove(): void {
 function stopSelected(): void {
   const ids = selectedMovers()
   if (ids.length > 0) pendingUnitStop = { ids }
+}
+
+// ---- 부대 매크로 (2026-08-08 사용자: "자동 세팅과 전체 백병전 단축키가 필요하다")
+
+/** B — 자동 장착: deploy 봇과 **같은 수순**(deployPrep)을 스텝마다 흘려보낸다.
+ *  봇 검증의 표준 장착과 플레이어의 원클릭 장착이 문자 그대로 동일한 커맨드 시퀀스다. */
+let autoDeploy = false
+function startAutoDeploy(): void {
+  if (state.status === 'prep' || state.status === 'assault') autoDeploy = true
+}
+
+/** V — 총 백병전: 수비병 전원이 병기를 버리고 지상으로 내려가 교전한다(어택땅).
+ *  침입자가 있으면 그쪽으로, 없으면 성문 안쪽 지상 집결. 최후 국면의 전환 스위치 */
+function allMelee(): void {
+  autoDeploy = false
+  const crewKinds = new Set(
+    Object.values(state.kinds.units).filter((d) => d.crew).map((d) => d.crew!),
+  )
+  const guards = state.units.filter((u) => crewKinds.has(u.kind))
+  if (guards.length === 0) return
+  const intruders = state.enemies.filter(
+    (e) => e.mode === 'breach' && e.pos.x < CASTLE.east - CASTLE.wallT / 2,
+  )
+  const to = intruders.length > 0
+    ? { x: intruders[0]!.pos.x, z: intruders[0]!.pos.z, h: 0 }
+    : { x: CASTLE.east - CASTLE.wallT / 2 - 4, z: 0, h: 0 }
+  pendingUnitMove = { ids: guards.map((g) => g.id), to, attack: true }
+  showMoveMarker(to.x, to.z, 0, 0xff5a4a, 2.2)
 }
 window.addEventListener('pointerdown', () => Sfx.unlock())
 
@@ -909,6 +946,14 @@ hud.innerHTML = `
              background:#131b26d8;border:1px solid #3a4a5e;border-radius:4px;padding:4px 0;color:#cfe0f0;
              user-select:none">영웅 <b>F1</b></div>
       </div>
+      <div style="margin-top:5px;display:flex;gap:5px">
+        <div id="btn-deploy" style="flex:1;cursor:pointer;text-align:center;font-size:11px;
+             background:#13261bd8;border:1px solid #3a5e4a;border-radius:4px;padding:4px 0;color:#cff0e0;
+             user-select:none">자동 장착 <b>B</b></div>
+        <div id="btn-melee" style="flex:1;cursor:pointer;text-align:center;font-size:11px;
+             background:#261613d8;border:1px solid #5e3f3a;border-radius:4px;padding:4px 0;color:#f0d5cf;
+             user-select:none">총 백병전 <b>V</b></div>
+      </div>
     </div>
     <div style="width:1px;background:#232f40;margin:4px 16px"></div>
     <div id="herobar" style="display:flex;gap:8px;align-items:flex-end;align-self:flex-end"></div>
@@ -938,7 +983,8 @@ hud.innerHTML = `
   <div style="position:absolute;top:100px;left:16px;font-size:11px;color:#8a8aa0;max-width:430px;line-height:1.7">
     드래그: 선택 — 성주 포함 (Shift 추가/제외 · Ctrl클릭/더블클릭: 같은 병종) · <b>Ctrl/Shift+1~9</b>: 부대 지정/추가 · <b>1~9</b>: 호출 ·
     우클릭: 이동/조준/장착 · <b>A</b>: 어택땅 · <b>S/H</b>: 정지 · <b>Q/W/E</b>: 스킬(영웅·성주) ·
-    <b>F1</b>: 영웅 순환 · <b>F2</b>: 전군 · <b>Space/C</b>: 성주 카메라 · ESC: 해제 · <b>M</b>: 음소거
+    <b>B</b>: 자동 장착 · <b>V</b>: 총 백병전 · <b>F1</b>: 영웅 순환 · <b>F2</b>: 전군 ·
+    <b>Space/C</b>: 성주 카메라 · ESC: 해제 · <b>M</b>: 음소거
   </div>
   <div id="endcard" style="position:absolute;inset:0;display:none;align-items:center;justify-content:center;
        background:radial-gradient(ellipse at center, #0007 0%, #000b 70%)">
@@ -1023,6 +1069,8 @@ const CMD_BUTTONS: Array<{ id: string; label: string; key: string; fn: () => voi
   for (const [id, fn] of [
     ['btn-army', selectAllArmy],
     ['btn-hero', selectHero],
+    ['btn-deploy', startAutoDeploy],
+    ['btn-melee', allMelee],
   ] as const) {
     document.getElementById(id)!.addEventListener('pointerdown', (e) => {
       e.stopPropagation()
@@ -2252,6 +2300,12 @@ function frame(now: number): void {
     if (pendingCast) {
       input.castSkill = pendingCast
       pendingCast = undefined
+    }
+    // B 자동 장착 — deploy 봇과 같은 수순을 스텝마다 한 명령씩. 플레이어 명령이 우선한다
+    if (autoDeploy) {
+      const step = deployPrep(state)
+      if (step === null) autoDeploy = false
+      else if (step.unitMove && !input.unitMove) input.unitMove = step.unitMove
     }
     const before = state.status
     stepSiege(state, spawns, input)

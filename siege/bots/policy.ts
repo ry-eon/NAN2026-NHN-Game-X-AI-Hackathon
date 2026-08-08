@@ -30,13 +30,16 @@ const sec = (n: number): number => Math.round(n * TICKS_PER_SECOND)
  * 준비 단계 표준 장착 — 빈 병기(id 순)마다 가장 가까운 대기 수비병을 조작 위치로 보낸다.
  * 한 틱에 명령 하나(리플레이가 사람 손과 같은 리듬).
  *
+ * export인 이유: 클라이언트의 **B(자동 장착) 매크로가 이 함수를 그대로 쓴다** —
+ * 봇 검증의 표준 장착과 플레이어의 원클릭 장착이 문자 그대로 같은 커맨드 수순이다.
+ *
  * 판정은 **의도 기준**이다: 정지한 병사의 실제 장착 + 걸어가는 병사의 목적지.
  * 순간 위치(manningMap)로 판정하면 걸어 지나가는 병사가 남의 병기를 일시 점유해
  * "다 장착됐다"로 오판하고 개시해버린다 — 실측: 보행 중 5기인 채 개시 → 빈 병기가
  * 판 내내 남아 기준선이 614 → 113으로 무너졌다. 개시는 **전원 정착 후에만** 한다.
  * 반환: null = 전 병기 장착·정착 완료(침공 개시 가능), {} = 보행 대기, 그 외 = 이동 명령.
  */
-function deployPrep(s: SiegeState): SiegeInput | null {
+export function deployPrep(s: SiegeState): SiegeInput | null {
   const crewKinds = new Set(Object.values(s.kinds.units).filter((d) => d.crew).map((d) => d.crew!))
   const guards = s.units.filter((u) => crewKinds.has(u.kind))
   const weapons = s.units.filter((u) => s.kinds.units[u.kind]!.crew)

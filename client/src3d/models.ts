@@ -223,7 +223,14 @@ export interface Rig {
  * 폴드 스커트 / 팔·다리(상완·전완 분절+장갑) / 망토 / 검+칼집.
  * archer = 궁수 변형: 검·크레스트 대신 활 + 화살통 (실루엣으로 병종 구분)
  */
-export function makeKnight(accent = 0x4a1414, gilded = false, archer = false): Rig {
+export function makeKnight(
+  accent = 0x4a1414,
+  gilded = false,
+  archer = false,
+  // 직군 소품 (2026-08-08 사용자: "전사는 검, 마법사는 지팡이, 성주는 지휘봉").
+  // held는 오른손(rArm)에 붙어 팔과 함께 흔들리고, robe는 다리를 덮는 로브 치마.
+  opts: { held?: 'sword' | 'staff' | 'baton'; robe?: boolean } = {},
+): Rig {
   const root = new THREE.Group()
   const cloth = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.95 })
   const trim = gilded ? MATS.gold : MATS.steelDark
@@ -435,6 +442,71 @@ export function makeKnight(accent = 0x4a1414, gilded = false, archer = false): R
     scabbard.position.set(-0.3, 1.02, 0.05)
     scabbard.rotation.z = 0.18
     torso.add(scabbard)
+  }
+
+  // ---- 로브 (마법사) — 허리에서 발목까지 덮는 치마. 다리는 그 안에서 그대로 젓는다
+  if (opts.robe) {
+    const robe = lathe(
+      [
+        [0.27, 1.02],
+        [0.34, 0.55],
+        [0.43, 0.04],
+      ],
+      cloth,
+      16,
+    )
+    torso.add(robe)
+  }
+
+  // ---- 손에 드는 직군 소품 — 오른손(rArm 하단) 부착, 팔 스윙과 함께 움직인다
+  if (opts.held === 'sword') {
+    // 뽑아 든 검 — 칼집(왼 허리)과 별개. 날이 앞아래로 기운 대기 자세
+    const sword = new THREE.Group()
+    const blade = bevelBox(0.07, 0.9, 0.022, MATS.steel, 0.01)
+    blade.position.y = 0.55
+    const guard = bevelBox(0.2, 0.035, 0.05, trim, 0.01)
+    guard.position.y = 0.1
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.16, 8), MATS.leather)
+    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.038, 8, 8), trim)
+    pommel.position.y = -0.09
+    sword.add(blade, guard, grip, pommel)
+    sword.position.set(0, -0.66, 0.1)
+    sword.rotation.x = 0.55 // 앞으로 기울여 — 부감에서 실루엣이 읽히게
+    rArm.add(sword)
+  } else if (opts.held === 'staff') {
+    // 지팡이 — 긴 나무 대 + 끝의 화염 구슬 (자체 발광 — 화염 속성 식별)
+    const staff = new THREE.Group()
+    const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.04, 1.85, 8), MATS.leather)
+    rod.position.y = 0.35
+    const collar = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.018, 6, 12), trim)
+    collar.rotation.x = Math.PI / 2
+    collar.position.y = 1.16
+    const orb = new THREE.Mesh(
+      new THREE.SphereGeometry(0.1, 10, 8),
+      new THREE.MeshStandardMaterial({
+        color: 0xff8a30, emissive: 0xff5a10, emissiveIntensity: 1.4, roughness: 0.4,
+      }),
+    )
+    orb.position.y = 1.3
+    staff.add(rod, collar, orb)
+    staff.position.set(0, -0.63, 0.08)
+    rArm.add(staff)
+  } else if (opts.held === 'baton') {
+    // 지휘봉 — 짧은 흑단 봉 + 금 마감 양단. 무기가 아니라 직급의 표식
+    const baton = new THREE.Group()
+    const rod = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.028, 0.028, 0.5, 8),
+      new THREE.MeshStandardMaterial({ color: 0x1c1a20, roughness: 0.5, metalness: 0.3 }),
+    )
+    for (const [y, h] of [[0.24, 0.07], [-0.24, 0.07]] as const) {
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, h, 8), MATS.gold)
+      cap.position.y = y
+      baton.add(cap)
+    }
+    baton.add(rod)
+    baton.position.set(0, -0.66, 0.12)
+    baton.rotation.x = 0.9 // 앞으로 들어 보이는 각
+    rArm.add(baton)
   }
 
   root.add(lLeg, rLeg, torso, lArm, rArm)
