@@ -1749,7 +1749,8 @@ function stairDisplayH(x: number, z: number, h: number): number {
   // 걷는 중에는 몸이 **다음 단의 수직면을 관통하며** 전진해 하반신이 잠겨 보인다
   // ("조금 더 올려야 해, 여전히 정강이" — 2026-08-08). 반 단 먼저 다음 디딤판에
   // 올라서게 하면 관통 구간이 절반으로 줄고, 남는 쪽은 잠김이 아니라 살짝 뜸이라 덜 읽힌다.
-  const i = Math.min(STAIR_STEPS - 1, Math.floor(((az - 4.5) / 10.5) * STAIR_STEPS + 0.5))
+  // 리드 1.0 = 항상 한 단 위 디딤판 기준 (0.5로는 부족하다는 사용자 확인 → 반 칸 추가)
+  const i = Math.min(STAIR_STEPS - 1, Math.floor(((az - 4.5) / 10.5) * STAIR_STEPS + 1.0))
   return Math.max(h, (CASTLE.wallH * (i + 1)) / STAIR_STEPS)
 }
 
