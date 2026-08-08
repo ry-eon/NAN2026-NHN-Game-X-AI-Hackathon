@@ -737,6 +737,201 @@ export function makeMage(accent = 0x6e2027): Rig {
 }
 
 /**
+ * 성주 — 갑옷 없는 **귀족 예복** (2026-08-09 사용자: "귀족 복장, 갑옷 없는 버전").
+ * 판금 0: 더블릿(금단추 예복)·긴 부츠·장갑·하이칼라·어깨 맨틀·왕관·확장 케이프·지휘봉.
+ * 얼굴은 어둠(기사·마법사와 같은 '얼굴 없음' 문법). Rig 계약 동일 — 같은 보행 애니메이션.
+ */
+export function makeLord(accent = 0x15151d): Rig {
+  const root = new THREE.Group()
+  const cloth = new THREE.MeshStandardMaterial({ color: accent, roughness: 0.9 })
+  const clothSoft = new THREE.MeshStandardMaterial({ color: 0x262630, roughness: 0.95 })
+
+  // ---- 다리 — 천 바지 + 무릎까지 오는 가죽 부츠 (판금 정강이 없음)
+  const mkLeg = (side: number): THREE.Group => {
+    const leg = new THREE.Group()
+    leg.position.set(side * 0.15, 0.95, 0)
+    const trouser = lathe(
+      [
+        [0.1, 0],
+        [0.11, -0.2],
+        [0.085, -0.42],
+      ],
+      clothSoft,
+      10,
+    )
+    const boot = lathe(
+      [
+        [0.09, -0.4],
+        [0.1, -0.5],
+        [0.08, -0.84],
+      ],
+      MATS.leather,
+      10,
+    )
+    const foot = bevelBox(0.18, 0.1, 0.32, MATS.leather, 0.02)
+    foot.position.set(0, -0.9, 0.06)
+    leg.add(trouser, boot, foot)
+    return leg
+  }
+  const lLeg = mkLeg(-1)
+  const rLeg = mkLeg(1)
+
+  // ---- 몸통 — 더블릿 (허리 잘록, 아랫단 살짝 퍼짐) + 금단추 줄 + 벨트 + 하이칼라
+  const torso = new THREE.Group()
+  const doublet = lathe(
+    [
+      [0.24, 0.92],
+      [0.22, 1.06],
+      [0.27, 1.3],
+      [0.26, 1.5],
+      [0.18, 1.58],
+    ],
+    cloth,
+    16,
+  )
+  torso.add(doublet)
+  // 앞섶 금단추 4개
+  for (let i = 0; i < 4; i++) {
+    const btn = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), MATS.gold)
+    btn.position.set(0, 1.12 + i * 0.12, 0.263)
+    torso.add(btn)
+  }
+  const belt = lathe(
+    [
+      [0.235, 1.06],
+      [0.235, 1.0],
+    ],
+    MATS.leather,
+    14,
+  )
+  torso.add(belt)
+  const buckle = bevelBox(0.08, 0.06, 0.02, MATS.gold, 0.008)
+  buckle.position.set(0, 1.03, 0.24)
+  torso.add(buckle)
+  // 하이칼라 — 목을 감싸는 세운 깃
+  const collar = lathe(
+    [
+      [0.15, 1.58],
+      [0.17, 1.7],
+    ],
+    cloth,
+    12,
+  )
+  torso.add(collar)
+
+  // ---- 머리 — 어둠 (투구·후드 없이도 얼굴 없음 문법 유지) + 왕관
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.15, 12, 10),
+    new THREE.MeshBasicMaterial({ color: 0x000000 }),
+  )
+  head.position.y = 1.8
+  torso.add(head)
+  const crownBase = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.026, 8, 18), MATS.gold)
+  crownBase.rotation.x = Math.PI / 2
+  crownBase.position.y = 1.9
+  crownBase.castShadow = true
+  torso.add(crownBase)
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.028, 0.12, 5), MATS.gold)
+    spike.position.set(Math.sin(a) * 0.135, 1.97, Math.cos(a) * 0.135)
+    torso.add(spike)
+  }
+
+  // ---- 어깨 맨틀 — 검은 깃 + 금 테 (예복 위에 드리운 지휘관의 상징)
+  const mantle = lathe(
+    [
+      [0.18, 1.6],
+      [0.38, 1.46],
+      [0.42, 1.36],
+    ],
+    MATS.clothDark,
+    16,
+  )
+  torso.add(mantle)
+  const mantleRim = new THREE.Mesh(new THREE.TorusGeometry(0.41, 0.016, 6, 18), MATS.gold)
+  mantleRim.rotation.x = Math.PI / 2
+  mantleRim.position.y = 1.37
+  torso.add(mantleRim)
+
+  // ---- 팔 — 천 소매 + 가죽 장갑, 오른손에 지휘봉
+  const mkArm = (side: number): THREE.Group => {
+    const arm = new THREE.Group()
+    arm.position.set(side * 0.32, 1.46, 0)
+    const sleeve = lathe(
+      [
+        [0.075, 0],
+        [0.085, -0.3],
+        [0.07, -0.52],
+      ],
+      cloth,
+      10,
+    )
+    const glove = bevelBox(0.1, 0.12, 0.12, MATS.leather, 0.02)
+    glove.position.y = -0.58
+    arm.add(sleeve, glove)
+    return arm
+  }
+  const lArm = mkArm(-1)
+  const rArm = mkArm(1)
+  const baton = new THREE.Group()
+  const rod = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.028, 0.028, 0.5, 8),
+    new THREE.MeshStandardMaterial({ color: 0x1c1a20, roughness: 0.5, metalness: 0.3 }),
+  )
+  baton.add(rod)
+  for (const y of [0.24, -0.24]) {
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.034, 0.07, 8), MATS.gold)
+    cap.position.y = y
+    baton.add(cap)
+  }
+  baton.position.set(0, -0.6, 0.12)
+  baton.rotation.x = 0.9
+  rArm.add(baton)
+
+  // ---- 확장 케이프 (지휘관 — 기사보다 넓고 길게)
+  const cloakGeo = new THREE.PlaneGeometry(0.78, 1.35, 4, 8)
+  cloakGeo.translate(0, -0.52, 0)
+  const cloak = new THREE.Mesh(
+    cloakGeo,
+    new THREE.MeshStandardMaterial({ color: accent, roughness: 0.98, side: THREE.DoubleSide }),
+  )
+  cloak.position.set(0, 1.52, -0.22)
+  cloak.castShadow = true
+  torso.add(cloak)
+
+  root.add(lLeg, rLeg, torso, lArm, rArm)
+  root.traverse((o) => {
+    if (o instanceof THREE.Mesh) {
+      o.geometry.computeBoundingSphere()
+      o.castShadow = (o.geometry.boundingSphere?.radius ?? 1) > 0.16
+    }
+  })
+  mergeStatic(torso, [cloak])
+  mergeStatic(lArm)
+  mergeStatic(rArm)
+  mergeStatic(lLeg)
+  mergeStatic(rLeg)
+  setCast(torso, true)
+  setCast(lLeg, true)
+  setCast(rLeg, true)
+  setCast(lArm, false)
+  setCast(rArm, false)
+  return {
+    root,
+    lArm,
+    rArm,
+    lLeg,
+    rLeg,
+    torso,
+    cloak,
+    mats: ownMaterials(root),
+    atkStyle: 'sword', // 성주는 비전투 — 보행/대기 애니메이션만 실제로 쓴다
+    atkDur: 430,
+  }
+}
+
+/**
  * 보행/대기 + 공격 + 피격 절차 애니메이션.
  * attackMs = unitFired 이벤트로부터 경과 ms, hitMs = 피격(meleeHit)으로부터 경과 ms (없으면 음수).
  * 셋 다 연출 전용 — 피해·명중은 sim이 이미 확정했다.

@@ -35,6 +35,7 @@ import {
   makeCannon,
   makeFire,
   makeKnight,
+  makeLord,
   makeMage,
   makeMonster,
   ownMaterials,
@@ -204,9 +205,9 @@ composer.addPass(grade)
 composer.addPass(new OutputPass())
 
 // 성주 — 절차 조형 풀아머 기사 (금장, 검증 슬라이스 v2)
-// 성주 — 흑색 갑주 + 왕관·어깨 맨틀·확장 케이프(예장) + 지휘봉.
-// "높은 직급으로 보이게"(8/8) + "갑옷이 동일하다" 반려(8/9) — 왕관과 맨틀이 실루엣을 가른다
-const lordRig = makeKnight(0x15151d, true, false, { held: 'baton', regalia: true })
+// 성주 — 갑옷 없는 귀족 예복 별도 조형 (2026-08-09 사용자: "귀족 복장, 갑옷 없는 버전").
+// 더블릿·부츠·하이칼라·맨틀·왕관·확장 케이프·지휘봉 — 전장의 유일한 비무장 실루엣
+const lordRig = makeLord()
 const lordMesh = lordRig.root
 lordMesh.add(makeNameplate('성주', '#ff9a7a').translateY(2.5))
 scene.add(lordMesh)
@@ -1823,6 +1824,10 @@ function stairDisplayH(x: number, z: number, h: number): number {
   const x0 = CASTLE.east - CASTLE.wallT / 2 - 2.4
   const x1 = CASTLE.east - CASTLE.wallT / 2 + 0.2
   if (x < x0 || x > x1 || az < 4.5 || az > 15) return h
+  // 보도 합류 띠 (x −10~−9.8): 렌더 계단은 x=−10에서 끝나고 그 너머는 보도 몸체의 수직
+  // 옆면이다 — 경사 그대로 두면 합류 순간 하체가 보도 돌에 묻힌다("성벽 안쪽으로 들어간다"
+  // 2026-08-09). 꼭대기 부근에서만 이 띠를 지나므로(Δh≤1.5 전이 규칙) 보도 윗면으로 스냅.
+  if (x > CASTLE.east - CASTLE.wallT / 2 && h > CASTLE.wallH - 1.6) return CASTLE.wallH
   // 반 단 리드(+0.5): 발바닥을 현재 디딤판에 정확히 맞춰도(실측 7.046 vs 7.071),
   // 걷는 중에는 몸이 **다음 단의 수직면을 관통하며** 전진해 하반신이 잠겨 보인다
   // ("조금 더 올려야 해, 여전히 정강이" — 2026-08-08). 반 단 먼저 다음 디딤판에
