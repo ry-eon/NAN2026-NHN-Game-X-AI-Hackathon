@@ -1,4 +1,4 @@
-// 봇 검증 — 웨이브 구성(시드)을 봇 3등급으로 플레이시켜 **출고 가능한지 판정**한다.
+// 봇 검증 — 웨이브 구성(시드)을 봇 4등급으로 플레이시켜 **출고 가능한지 판정**한다.
 //
 // v5는 1라운드 고정이라 2D 시절처럼 스테이지를 생성하지 않는다. 대신 검증 대상이
 // "이 시드의 웨이브 구성 + 기본 배치가 게임으로 성립하는가"가 된다.
@@ -7,12 +7,19 @@
 //   pnpm verify            # 리포트 생성 + 출고 시드 판정 (실패 시 종료코드 1)
 //   pnpm verify --seeds 1,2,3
 //
-// 판정 기준(CRITERIA_V0)은 게임 설계 주장 그 자체다:
-//   - 무개입으로도 이겨야 한다        → 기본 배치가 성립한다는 뜻
-//   - 무개입 여유가 과하면 안 된다    → 이기는 게 당연하면 조작할 이유가 없다
-//   - 적극 플레이가 손해면 안 된다    → 플레이어의 개입이 보상돼야 한다
-//   - 아무렇게나 만져도 지면 안 된다  → 심사자가 대충 조작해도 무너지지 않아야 한다
-//   - 판이 45~150초에 끝나야 한다     → 30~60초 플레이 영상에 담긴다
+// 판정 기준(CRITERIA_V1)은 게임 설계 주장 그 자체다 — 기준을 바꾸는 것도 기획 결정이다.
+//
+// V0→V1 (2026-08-08, 장착제 개정): V0은 "무개입으로도 이겨야 한다"였다 — 기본 배치가
+// 성립한다는 주장. 장착제("병기는 빈 채로 시작, 수비병을 장착해야 쏜다") 도입으로 사용자가
+// 이 전제를 뒤집었다: "아무것도 안 하면 지는 게 맞다. 그냥 이기면 게임의 의미가 없다."
+// 그래서 무개입의 역할이 「성립의 증명」에서 「배치가 의미 있다는 증명」으로 바뀌었고,
+// 구 무개입 기준선은 deploy(표준 장착 후 무개입)가 잇는다.
+//   - 정말 아무것도 안 하면 져야 한다  → 장착(배치)이 게임에 실제로 의미 있다는 뜻
+//   - 표준 장착만으로는 이겨야 한다    → 배치가 성립한다 (아슬아슬해도)
+//   - 장착 여유가 과하면 안 된다       → 이기는 게 당연하면 조작할 이유가 없다
+//   - 적극 플레이가 손해면 안 된다     → 플레이어의 개입이 보상돼야 한다
+//   - 장착 뒤 아무렇게나 만져도 버텨야 → 심사자가 대충 조작해도 무너지지 않아야 한다
+//   - 판이 45~150초에 끝나야 한다      → 30~60초 플레이 영상에 담긴다
 
 import { writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
@@ -20,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 import { DEFAULT_LOADOUT, WALL_HP } from '../sim/world'
 import type { Loadout } from '../sim/world'
 import { LOADOUTS, describeLoadout, findLoadout } from '../sim/loadouts'
-import { POLICIES, afk, greedy, random } from './policy'
+import { POLICIES, afk, deploy, greedy, random } from './policy'
 import { playout, replay } from './runner'
 import type { Playout } from './runner'
 
@@ -29,9 +36,9 @@ export const SHIPPING_SEED = 20260725
 
 export const CANDIDATE_SEEDS = [SHIPPING_SEED, 1, 7, 42, 777, 31337]
 
-export const CRITERIA_V0 = {
-  afkWallMin: 150, // 무개입 승리 최소 잔존 (아슬아슬해도 이기긴 해야)
-  afkWallMax: 1400, // 무개입 여유 상한 (너무 쉬우면 조작할 이유가 없다)
+export const CRITERIA_V1 = {
+  deployWallMin: 150, // 표준 장착 승리 최소 잔존 (아슬아슬해도 이기긴 해야)
+  deployWallMax: 1400, // 표준 장착 여유 상한 (너무 쉬우면 조작할 이유가 없다)
   secondsMin: 45,
   secondsMax: 150,
 }
@@ -47,25 +54,30 @@ export function verifySeed(seed: number, loadout: Loadout = DEFAULT_LOADOUT): Se
   const runs: Record<string, Playout> = {}
   for (const p of POLICIES) runs[p.name] = playout(seed, p, loadout)
   const a = runs[afk.name]!
+  const d = runs[deploy.name]!
   const g = runs[greedy.name]!
   const r = runs[random.name]!
   const reasons: string[] = []
 
-  if (a.status !== 'won') reasons.push(`무개입 패배 (성벽 ${a.wallHp}, ${a.seconds}초) — 기본 배치가 성립하지 않는다`)
-  else if (a.wallHp < CRITERIA_V0.afkWallMin)
-    reasons.push(`무개입 여유 부족 (${a.wallHp} < ${CRITERIA_V0.afkWallMin})`)
-  else if (a.wallHp > CRITERIA_V0.afkWallMax)
-    reasons.push(`무개입이 너무 쉽다 (${a.wallHp} > ${CRITERIA_V0.afkWallMax}) — 조작할 이유가 없다`)
+  if (a.status !== 'lost')
+    reasons.push(`무개입인데 성이 버틴다 (${a.status}, 성벽 ${a.wallHp}) — 장착(배치)이 게임에 의미가 없다`)
+
+  if (d.status !== 'won')
+    reasons.push(`표준 장착 패배 (성벽 ${d.wallHp}, ${d.seconds}초) — 배치가 성립하지 않는다`)
+  else if (d.wallHp < CRITERIA_V1.deployWallMin)
+    reasons.push(`표준 장착 여유 부족 (${d.wallHp} < ${CRITERIA_V1.deployWallMin})`)
+  else if (d.wallHp > CRITERIA_V1.deployWallMax)
+    reasons.push(`표준 장착이 너무 쉽다 (${d.wallHp} > ${CRITERIA_V1.deployWallMax}) — 조작할 이유가 없다`)
 
   if (g.status !== 'won') reasons.push(`적극 플레이 패배 (성벽 ${g.wallHp})`)
-  else if (g.wallHp < a.wallHp)
-    reasons.push(`적극 플레이가 손해 (greedy ${g.wallHp} < afk ${a.wallHp}) — 개입이 보상되지 않는다`)
+  else if (g.wallHp < d.wallHp)
+    reasons.push(`적극 플레이가 손해 (greedy ${g.wallHp} < deploy ${d.wallHp}) — 개입이 보상되지 않는다`)
 
   if (r.status !== 'won')
     reasons.push(`무작위 조작에서 패배 (성벽 ${r.wallHp}, ${r.seconds}초) — 대충 만지면 무너진다`)
 
-  if (a.seconds < CRITERIA_V0.secondsMin || a.seconds > CRITERIA_V0.secondsMax)
-    reasons.push(`판 길이 이탈 (${a.seconds}초, 허용 ${CRITERIA_V0.secondsMin}~${CRITERIA_V0.secondsMax})`)
+  if (d.seconds < CRITERIA_V1.secondsMin || d.seconds > CRITERIA_V1.secondsMax)
+    reasons.push(`판 길이 이탈 (${d.seconds}초, 허용 ${CRITERIA_V1.secondsMin}~${CRITERIA_V1.secondsMax})`)
 
   // 리플레이 재현성 — 봇이 남긴 커맨드로 같은 판이 나오지 않으면 검증 자체가 무의미하다
   for (const p of POLICIES) {
@@ -83,15 +95,16 @@ function toMarkdown(verdicts: SeedVerdict[]): string {
   const L: string[] = []
   L.push('# 봇 검증 리포트')
   L.push('')
-  L.push('`pnpm verify` 산출물. 웨이브 구성(시드)마다 봇 3등급을 헤드리스로 플레이시켜 판정한다.')
+  L.push('`pnpm verify` 산출물. 웨이브 구성(시드)마다 봇 4등급을 헤드리스로 플레이시켜 판정한다.')
   L.push('봇이 넣는 입력은 플레이어가 넣는 입력과 같은 타입이고, 남긴 커맨드 시퀀스는 그대로 리플레이된다.')
   L.push('')
-  L.push('## 판정 기준')
+  L.push('## 판정 기준 (CRITERIA_V1 — 장착제 개정 2026-08-08)')
   L.push('')
-  L.push(`- 무개입(afk) 승리 + 잔존 성벽 ${CRITERIA_V0.afkWallMin}~${CRITERIA_V0.afkWallMax} / ${WALL_HP}`)
-  L.push('- 적극 플레이(greedy) 승리 + 무개입보다 잔존이 많을 것 (개입이 보상될 것)')
-  L.push('- 무작위 조작(random) 승리 (대충 만져도 무너지지 않을 것)')
-  L.push(`- 판 길이 ${CRITERIA_V0.secondsMin}~${CRITERIA_V0.secondsMax}초 (플레이 영상 30~60초에 담길 것)`)
+  L.push('- 무개입(afk) **패배** — 장착하지 않으면 져야 배치가 게임에 의미가 있다')
+  L.push(`- 표준 장착(deploy) 승리 + 잔존 성벽 ${CRITERIA_V1.deployWallMin}~${CRITERIA_V1.deployWallMax} / ${WALL_HP}`)
+  L.push('- 적극 플레이(greedy) 승리 + 표준 장착보다 잔존이 많을 것 (개입이 보상될 것)')
+  L.push('- 무작위 조작(random, 장착 후) 승리 (대충 만져도 무너지지 않을 것)')
+  L.push(`- 판 길이 ${CRITERIA_V1.secondsMin}~${CRITERIA_V1.secondsMax}초 (플레이 영상 30~60초에 담길 것)`)
   L.push('- 봇 커맨드 리플레이가 원본과 일치할 것 (결정론)')
   L.push('')
   L.push('## 시드별 결과')
@@ -142,7 +155,7 @@ export function compareLoadouts(seeds: number[]): string {
   const L: string[] = []
   L.push('# 편성 비교')
   L.push('')
-  L.push(`시드 ${seeds.join(', ')} × 봇 3등급. 같은 웨이브에 편성만 바꿔 돌린 결과.`)
+  L.push(`시드 ${seeds.join(', ')} × 봇 4등급. 같은 웨이브에 편성만 바꿔 돌린 결과.`)
   L.push('')
   L.push('| 편성 | 구성 | 봇 | 승률 | 평균 잔존 성벽 | 판정 |')
   L.push('|---|---|---|---|---|---|')

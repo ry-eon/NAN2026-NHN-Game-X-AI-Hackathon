@@ -4,11 +4,11 @@
 // 검증 결과는 주장에 불과하다.
 
 import { describe, expect, it } from 'vitest'
-import { afk, greedy, random } from '../bots/policy'
+import { afk, deploy, greedy, random } from '../bots/policy'
 import { playout, replay } from '../bots/runner'
 import { SHIPPING_SEED, verifySeed } from '../bots/verify'
 
-const POLICIES = [afk, greedy, random]
+const POLICIES = [afk, deploy, greedy, random]
 
 describe('봇 러너', () => {
   it('같은 시드·정책이면 결과가 완전히 같다 (결정론)', () => {
@@ -38,26 +38,40 @@ describe('봇 러너', () => {
     const run = playout(SHIPPING_SEED, random)
     const steps = new Set(run.commands.map((c) => c.step))
     expect(steps.size).toBe(run.commands.length)
-    // 침공 개시 커맨드는 반드시 첫 스텝에 있다
-    expect(run.commands[0]!.step).toBe(0)
-    expect(run.commands[0]!.input.startAssault).toBe(true)
+    // 장착제 이후: 준비 단계의 장착 이동 커맨드들이 앞서고, 침공 개시는 장착이 끝난 뒤다.
+    // 준비 커맨드와 침공 커맨드가 tick 리셋을 사이에 두고 공존한다 — 스텝 키가 필요한 바로 그 상황.
+    expect(run.commands[0]!.input.unitMove).toBeDefined()
+    const assault = run.commands.find((c) => c.input.startAssault)
+    expect(assault).toBeDefined()
+    expect(assault!.step).toBeGreaterThan(0)
   })
 
-  it('출고 시드는 무개입으로도 방어에 성공한다 (기본 배치가 성립한다)', () => {
+  it('출고 시드에서 무개입은 패배한다 — 장착(배치)이 게임에 의미가 있다', () => {
+    // 장착제 개정 (2026-08-08, 사용자: "아무것도 안 하면 지는 게 맞다"). 병기는 빈 채로
+    // 시작하므로 정말 아무것도 안 하면 전 병기 침묵 = 패배가 **정상**이다.
+    // 구 단언(무개입 승리 614)은 수비병이 처음부터 장착된 시절의 것.
     const run = playout(SHIPPING_SEED, afk)
+    expect(run.status).toBe('lost')
+  })
+
+  it('출고 시드는 표준 장착만으로 방어에 성공한다 (배치가 성립한다)', () => {
+    const run = playout(SHIPPING_SEED, deploy)
     expect(run.status).toBe('won')
-    expect(run.wallHp).toBe(614) // 2026-08-06 상주 조작제 개정 후 재고정 (구: 641). 2026-08-04: 유도 → 궁수 폐지 → 조준 → 증원·재조정 (500 → 641)
+    // 614 = 구 상주 조작제의 무개입 수치 그대로 — 걸어가 장착한 판과 처음부터 서 있던 판이
+    // 같은 결과라는 등가 증명. 장착제가 밸런스를 건드리지 않고 "시작 절차"만 바꿨다는 뜻.
+    expect(run.wallHp).toBe(614)
     expect(run.seconds).toBeGreaterThan(60)
   })
 
-  it('적극 플레이는 무개입보다 성벽을 더 지킨다 (개입이 보상된다)', () => {
-    // 2026-08-04 복원. 유도 도입 직후엔 무개입이 1550/2000으로 압승이라 영웅이 손댈
-    // 여지가 없어 둘이 동률이었다. 웨이브를 조정해 여유를 대역 안(640)으로 되돌리자
-    // 개입이 다시 값어치를 갖는다 — 6시드 전부에서 적극 플레이가 무개입을 앞선다.
-    const a = playout(SHIPPING_SEED, afk)
+  it('적극 플레이는 표준 장착보다 성벽을 더 지킨다 (개입이 보상된다)', () => {
+    // 2026-08-04 복원, 2026-08-08 기준선을 afk → deploy로 이관 (장착제).
+    // 유도 도입 직후엔 무개입이 1550/2000으로 압승이라 영웅이 손댈
+    // 여지가 없어 둘이 동률이었다. 웨이브를 조정해 여유를 대역 안으로 되돌리자
+    // 개입이 다시 값어치를 갖는다 — 6시드 전부에서 적극 플레이가 기준선을 앞선다.
+    const d = playout(SHIPPING_SEED, deploy)
     const g = playout(SHIPPING_SEED, greedy)
     expect(g.status).toBe('won')
-    expect(g.wallHp).toBeGreaterThan(a.wallHp)
+    expect(g.wallHp).toBeGreaterThan(d.wallHp)
   })
 })
 

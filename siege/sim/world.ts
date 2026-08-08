@@ -463,10 +463,14 @@ export interface UnitKindDef {
    */
   projectileSpeed?: number
   /**
-   * 조작 병사 — 이 병기를 조작하는 병종. 판 시작부터 병기 곁에 실재하는 유닛으로 서고,
-   * **곁에 있어야만 병기가 쏜다**(CREW_MAN_RADIUS). 빼면 병기가 멈추고, 돌아오면 다시 쏜다.
-   * (2026-08-06 룰 개정 — 구 버전은 dismount 커맨드로 내려보내는 편도였다.
-   *  병사도 대포처럼 선택·이동하는 유닛이어야 한다는 디렉션으로 상주 조작제로 전환)
+   * 조작 병사 — 이 병기를 조작하는 병종. **곁에 있어야만 병기가 쏜다**(CREW_MAN_RADIUS).
+   * 빼면 병기가 멈추고, 돌아오면 다시 쏜다.
+   * (2026-08-08 룰 개정 「장착제」 — 수비병은 판 시작 시 병기 곁이 아니라 **안뜰에 집결**해
+   *  있고, 플레이어가 병기로 보내 장착해야 비로소 쏜다. 병기-병사 고정 짝(crewOf)도 폐지 —
+   *  아무 수비병이나 곁에 오면 조작한다(동적 배정, manningMap). 배치가 곧 플레이라는
+   *  디렉션: "아무것도 안 하면 지는 게 맞다". 그래서 무개입 승리였던 검증 기준도
+   *  CRITERIA_V1로 함께 개정됐다(verify.ts).
+   *  2026-08-06 상주 조작제(고정 짝 상주)→ 그 전은 dismount 편도 커맨드였다.)
    */
   crew?: string
 }
@@ -505,8 +509,6 @@ export interface FriendlyUnit {
   skillCd: number
   /** 고정 병기 전용 — 겨누고 있는 지점. 화망의 실체이자 괴수가 읽는 위협의 출처 */
   aim: Vec2 | null
-  /** 조작 병사 전용 — 담당 병기의 유닛 id. 이 병사가 곁에 있어야 그 병기가 쏜다 */
-  crewOf?: number
   /** 어택땅 이동 중 — 사거리 안에 적이 들어오면 정지·교전 (접적 시 해제) */
   aggro?: boolean
 }
@@ -514,17 +516,46 @@ export interface FriendlyUnit {
 /** 조작 판정 반경 — 겹침 분리의 정지 거리(반경 합 ≈1.45)보다 넉넉해야 곁에 선 병사가 항상 잡힌다 */
 export const CREW_MAN_RADIUS = 2.4
 
-/** 병기가 조작되고 있는가 — 조작 병사가 같은 층·반경 안에 살아 있어야 쏜다.
- *  병사가 죽거나 자리를 비우면 병기는 침묵하고, 병사가 돌아서면 다시 쏜다. */
+/**
+ * 장착 배정 — 병기 id → 조작 중인 수비병 id (장착제, 2026-08-08).
+ *
+ * 고정 짝이 없으므로 매 판정마다 위치로 계산한다: 병기를 id 순으로 돌며 같은 층·반경 안의
+ * **가장 가까운 미배정** 수비병을 배정한다(같은 거리면 낮은 id — 결정론). 수비병 하나가
+ * 병기 두 대를 동시에 조작할 수는 없다 — 두 포좌 사이에 서서 양쪽을 다 살리는 꼼수를 막는다.
+ * 규모가 병기 12 × 병사 12라 매 틱 전량 계산해도 비용은 무시할 수준이다.
+ */
+export function manningMap(state: SiegeState): Map<number, number> {
+  const map = new Map<number, number>()
+  const taken = new Set<number>()
+  for (const w of state.units) {
+    const crewKind = state.kinds.units[w.kind]!.crew
+    if (!crewKind) continue
+    let best: FriendlyUnit | null = null
+    let bestD = Infinity
+    for (const g of state.units) {
+      if (g.kind !== crewKind || taken.has(g.id)) continue
+      if (g.hp <= 0) continue // 전사 처리 후 정리 전 틱에도 조작 중으로 잡히면 안 된다
+      if (Math.abs(g.h - w.h) > 1.5) continue
+      const d = Math.hypot(g.pos.x - w.pos.x, g.pos.z - w.pos.z)
+      if (d > CREW_MAN_RADIUS) continue
+      if (d < bestD || (d === bestD && best !== null && g.id < best.id)) {
+        best = g
+        bestD = d
+      }
+    }
+    if (best) {
+      map.set(w.id, best.id)
+      taken.add(best.id)
+    }
+  }
+  return map
+}
+
+/** 병기가 조작되고 있는가 — 수비병이 같은 층·반경 안에 살아 있어야 쏜다.
+ *  병사가 죽거나 자리를 비우면 병기는 침묵하고, 병사가 (누구든) 돌아서면 다시 쏜다. */
 export function isCrewManned(state: SiegeState, u: FriendlyUnit): boolean {
   if (!state.kinds.units[u.kind]!.crew) return true
-  const g = state.units.find((v) => v.crewOf === u.id)
-  return (
-    !!g &&
-    g.hp > 0 && // 전사 처리 후 정리 전 틱에도 조작 중으로 잡히면 안 된다
-    Math.abs(g.h - u.h) <= 1.5 &&
-    Math.hypot(g.pos.x - u.pos.x, g.pos.z - u.pos.z) <= CREW_MAN_RADIUS
-  )
+  return manningMap(state).has(u.id)
 }
 
 /** 영웅 스킬 「업화」 — 지점 지정 광역 화염. 조준(자동/수동)은 클라이언트 보조,
@@ -719,19 +750,31 @@ export function buildSpawnTable(seed: number, waves: WaveDef[] = DEFAULT_LOADOUT
   return spawns.sort((a, b) => a.tick - b.tick)
 }
 
+/** 병기 곁의 조작 위치 — 성 중심 쪽으로 2.0. 조작 반경(2.4) 안이면서 겹침 분리 정지
+ *  거리(≈1.45) 밖이라 밀리지 않고, 보도 안쪽이라 흉벽 띠(바깥)에 걸리지 않는다.
+ *  (1.5였다가 2.0으로 — "대포랑 수비병이 너무 붙어 있다" 2026-08-08 사용자 지적) */
+export function mountPoint(weapon: { pos: Vec2; h: number }): Vec2 & { h: number } {
+  const cx = (C.east + C.west) / 2
+  const dx = cx - weapon.pos.x
+  const dz = 0 - weapon.pos.z
+  const d = Math.hypot(dx, dz) || 1
+  return { x: weapon.pos.x + (dx / d) * 2.0, z: weapon.pos.z + (dz / d) * 2.0, h: weapon.h }
+}
+
 /** 초기 배치를 실제 유닛으로 — 재배치는 부대 명령으로.
- *  crew가 정의된 병기는 조작 병사를 곁에 함께 세운다 (프리셋은 병기만 적으면 된다) */
+ *
+ *  장착제 (2026-08-08): crew가 정의된 병기 수만큼 수비병을 만들되, 병기 곁이 아니라
+ *  **안뜰에 2열 종대로 집결**시킨다. 병기는 빈 채로 시작하고(전 병기 침묵), 플레이어가
+ *  준비 단계에 수비병을 보내 장착해야 쏜다 — 배치가 곧 플레이의 첫 수다. */
 function initialUnits(loadout: Loadout, nextId: () => number): FriendlyUnit[] {
   const units: FriendlyUnit[] = []
-  const cx = (C.east + C.west) / 2
-  for (const p of loadout.placements) {
-    const def = loadout.unitKinds[p.kind]!
-    const weapon: FriendlyUnit = {
+  const spawn = (kind: string, x: number, z: number, h: number): void => {
+    units.push({
       id: nextId(),
-      kind: p.kind,
-      pos: { x: p.x, z: p.z },
-      h: p.h,
-      hp: def.hp,
+      kind,
+      pos: { x, z },
+      h,
+      hp: loadout.unitKinds[kind]!.hp,
       facing: Math.PI / 2, // 동쪽(적 방향)을 본다
       target: null,
       path: [],
@@ -741,30 +784,21 @@ function initialUnits(loadout: Loadout, nextId: () => number): FriendlyUnit[] {
       // 좁아지고 흐름이 생긴다. 처음부터 좁게 겨눈 상태로 시작하면 손대지 않은 판이
       // 성립하지 않아서(무개입 0/6으로 측정됨) "조준은 선택적 개선"이라는 전제가 깨진다.
       aim: null,
-    }
-    units.push(weapon)
-    const crewKind = def.crew
-    if (crewKind && loadout.unitKinds[crewKind]) {
-      // 성 중심 쪽으로 1.5 — 겹침 분리 정지 거리(≈1.45) 밖이라 밀리지 않고,
-      // 보도 안쪽이라 흉벽 띠(바깥)에 걸리지 않는다
-      const dx = cx - p.x
-      const dz = 0 - p.z
-      const d = Math.hypot(dx, dz) || 1
-      units.push({
-        id: nextId(),
-        kind: crewKind,
-        pos: { x: p.x + (dx / d) * 1.5, z: p.z + (dz / d) * 1.5 },
-        h: p.h,
-        hp: loadout.unitKinds[crewKind]!.hp,
-        facing: Math.PI / 2,
-        target: null,
-        path: [],
-        cooldown: 0,
-        skillCd: 0,
-        aim: null,
-        crewOf: weapon.id,
-      })
-    }
+    })
+  }
+  let crews = 0
+  for (const p of loadout.placements) {
+    spawn(p.kind, p.x, p.z, p.h)
+    const crewKind = loadout.unitKinds[p.kind]!.crew
+    if (crewKind && loadout.unitKinds[crewKind]) crews++
+  }
+  // 안뜰 집결 대형 — 성문 안쪽, 동벽에서 한 발 물러난 2열 종대(열 6명, z 간격 3).
+  // 내성 관통 차단 구간(x < west+10.5)과 영웅 초기 위치(WALL_X-6, 0)를 피한다.
+  const crewKind = Object.values(loadout.unitKinds).find((d) => d.crew)?.crew
+  for (let i = 0; i < crews; i++) {
+    const row = Math.floor(i / 6)
+    const col = i % 6
+    spawn(crewKind!, WALL_X - 7 - row * 2, -7.5 + col * 3, 0)
   }
   return units
 }
@@ -1090,6 +1124,14 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     for (let j = i + 1; j < state.units.length; j++) {
       const a = state.units[i]!
       const b = state.units[j]!
+      // 행군 관통 (장착제 2026-08-08): **이동 중인 유닛은 밀어내지도 밀리지도 않는다** —
+      // 분리는 정지한 유닛 사이에서만. 두 번의 실측이 이 규칙을 요구했다:
+      //  1) 안뜰에서 집결 출발한 수비병들이 폭 2.6짜리 경사로에 동시에 몰리면 서로 밀어내며
+      //     영원히 오르지 못한다 (6기가 입구에서 100초+ 공회전 → 판이 prep에서 안 끝남)
+      //  2) 경로 격자가 포좌 곁 1.0을 지나는데 분리가 1.45로 밀어내 웨이포인트 도달
+      //     판정(0.14)을 영원히 못 넘긴다 (수비병 1기가 대포 옆에서 무한 제자리걸음)
+      // 정지하면 그 자리에서 겹침이 풀린다. RTS 관례(행군 관통)와 같다.
+      if (a.path.length > 0 || b.path.length > 0) continue
       if (Math.abs(a.h - b.h) > 1.5) continue
       const minD = state.kinds.units[a.kind]!.radius + state.kinds.units[b.kind]!.radius + 0.15
       let dx = b.pos.x - a.pos.x

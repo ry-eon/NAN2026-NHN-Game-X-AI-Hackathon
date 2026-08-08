@@ -7,15 +7,17 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_LOADOUT, createSiege } from '../sim/world'
 import { LOADOUTS, describeLoadout, findLoadout } from '../sim/loadouts'
-import { afk } from '../bots/policy'
+import { deploy } from '../bots/policy'
 import { playout } from '../bots/runner'
 import { SHIPPING_SEED } from '../bots/verify'
 
 describe('로드아웃', () => {
   it('기본 로드아웃은 출고 중인 판 그대로다', () => {
     // 2026-08-04 갱신: 위협 회피 유도 → 궁수 폐지 → 대포 고정·조준 → 병기 증원·웨이브 재조정.
+    // 2026-08-08 장착제: 기준선 봇이 afk → deploy(표준 장착 후 무개입)로 바뀌었지만
+    // 장착 완료 상태는 구 상주 배치와 등가라 수치(614/104.6)는 그대로다 — 등가 증명이기도 하다.
     // 이 수치는 "지금 출고 중인 판"을 고정하는 단언이라, 밸런스를 손대면 여기가 먼저 깨진다.
-    const run = playout(SHIPPING_SEED, afk, DEFAULT_LOADOUT)
+    const run = playout(SHIPPING_SEED, deploy, DEFAULT_LOADOUT)
     expect(run.status).toBe('won')
     expect(run.wallHp).toBe(614)
     expect(run.seconds).toBe(104.6)
@@ -28,8 +30,8 @@ describe('로드아웃', () => {
     expect(state.loadout).toBe('cannon-heavy')
     expect(state.units.filter((u) => u.kind === 'cannon')).toHaveLength(4)
 
-    const base = playout(SHIPPING_SEED, afk, DEFAULT_LOADOUT)
-    const run = playout(SHIPPING_SEED, afk, heavy)
+    const base = playout(SHIPPING_SEED, deploy, DEFAULT_LOADOUT)
+    const run = playout(SHIPPING_SEED, deploy, heavy)
     expect(run.wallHp).not.toBe(base.wallHp) // 편성이 판정에 영향을 준다
   })
 

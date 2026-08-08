@@ -5,13 +5,16 @@
 // 봇이 남긴 커맨드 시퀀스는 그대로 리플레이가 된다 — 이 프로젝트의 논지("생성이 아니라 보증")가
 // 성립하는 지점이 여기다.
 //
-// 등급을 셋 두는 이유: 하나로는 "이 판이 성립한다"를 말할 수 없다.
-//   afk    = 손 안 댄 하한 → 기본 배치만으로 성립하는가
-//   greedy = 적극 플레이   → 플레이어의 개입이 보상되는가
-//   random = 아무렇게나 만짐 → 심사자가 대충 조작해도 무너지지 않는가
+// 등급을 넷 두는 이유: 하나로는 "이 판이 성립한다"를 말할 수 없다. (장착제 개정 2026-08-08 —
+// 병기는 빈 채로 시작하고 수비병을 장착해야 쏜다. "아무것도 안 하면 지는 게 맞다"는 디렉션으로
+// 무개입의 역할이 「성립의 증명」에서 「배치가 의미 있다는 증명」으로 바뀌었다)
+//   afk    = 정말 아무것도 안 함 → **져야 한다** — 장착(배치)이 게임에 실제로 의미 있는가
+//   deploy = 표준 장착 후 무개입 → 배치만으로 성립하는가 (구 afk의 역할을 잇는 기준선)
+//   greedy = 적극 플레이        → 플레이어의 개입이 보상되는가
+//   random = 장착 후 아무렇게나 → 심사자가 대충 조작해도 무너지지 않는가
 
-import { CASTLE, CREW_MAN_RADIUS, FIELD, HERO_SKILL, TICKS_PER_SECOND, WALL_X } from '../sim/world'
-import type { FriendlyUnit, SiegeInput, SiegeState, Vec2 } from '../sim/world'
+import { CASTLE, CREW_MAN_RADIUS, FIELD, HERO_SKILL, TICKS_PER_SECOND, WALL_X, manningMap, mountPoint } from '../sim/world'
+import type { SiegeInput, SiegeState, Vec2 } from '../sim/world'
 
 export interface BotPolicy {
   name: string
@@ -23,10 +26,62 @@ export interface BotPolicy {
 const dist = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.z - b.z)
 const sec = (n: number): number => Math.round(n * TICKS_PER_SECOND)
 
-/** 조작 병사가 담당 병기 곁에 있는가 (조작 판정과 같은 반경) */
-function nearOwnWeapon(s: SiegeState, g: FriendlyUnit): boolean {
-  const w = s.units.find((u) => u.id === g.crewOf)
-  return !!w && dist(g.pos, w.pos) <= CREW_MAN_RADIUS
+/**
+ * 준비 단계 표준 장착 — 빈 병기(id 순)마다 가장 가까운 대기 수비병을 조작 위치로 보낸다.
+ * 한 틱에 명령 하나(리플레이가 사람 손과 같은 리듬).
+ *
+ * 판정은 **의도 기준**이다: 정지한 병사의 실제 장착 + 걸어가는 병사의 목적지.
+ * 순간 위치(manningMap)로 판정하면 걸어 지나가는 병사가 남의 병기를 일시 점유해
+ * "다 장착됐다"로 오판하고 개시해버린다 — 실측: 보행 중 5기인 채 개시 → 빈 병기가
+ * 판 내내 남아 기준선이 614 → 113으로 무너졌다. 개시는 **전원 정착 후에만** 한다.
+ * 반환: null = 전 병기 장착·정착 완료(침공 개시 가능), {} = 보행 대기, 그 외 = 이동 명령.
+ */
+function deployPrep(s: SiegeState): SiegeInput | null {
+  const crewKinds = new Set(Object.values(s.kinds.units).filter((d) => d.crew).map((d) => d.crew!))
+  const guards = s.units.filter((u) => crewKinds.has(u.kind))
+  const weapons = s.units.filter((u) => s.kinds.units[u.kind]!.crew)
+  // 1) 정지 병사만으로 잰 실제 장착 (병기 id 순 최근접 배정 — manningMap과 같은 규칙)
+  const claimed = new Set<number>()
+  const covered = new Set<number>()
+  for (const w of weapons) {
+    let best: (typeof guards)[number] | null = null
+    let bestD = Infinity
+    for (const g of guards) {
+      if (claimed.has(g.id) || g.path.length > 0) continue
+      if (Math.abs(g.h - w.h) > 1.5) continue
+      const d = dist(g.pos, w.pos)
+      if (d <= CREW_MAN_RADIUS && (d < bestD || (d === bestD && best !== null && g.id < best.id))) {
+        best = g
+        bestD = d
+      }
+    }
+    if (best) {
+      claimed.add(best.id)
+      covered.add(w.id)
+    }
+  }
+  // 2) 걸어가는 병사는 목적지로 배정을 친다 — 같은 병기에 두 번 파병하지 않기 위함
+  for (const g of guards) {
+    if (g.path.length === 0) continue
+    const last = g.path[g.path.length - 1]!
+    for (const w of weapons) {
+      if (covered.has(w.id)) continue
+      if (dist(last, w.pos) <= CREW_MAN_RADIUS + 1) {
+        covered.add(w.id)
+        break
+      }
+    }
+  }
+  const walking = guards.some((g) => g.path.length > 0)
+  const uncovered = weapons.filter((w) => !covered.has(w.id))
+  if (uncovered.length === 0) return walking ? {} : null
+  const idle = guards.filter((g) => !claimed.has(g.id) && g.path.length === 0)
+  for (const w of uncovered) {
+    const g = idle.sort((a, b) => dist(a.pos, w.pos) - dist(b.pos, w.pos) || a.id - b.id)[0]
+    if (!g) return {} // 보낼 병사가 없다 — 걷는 병사들이 정착한 뒤 다시 판단
+    return { unitMove: { ids: [g.id], to: mountPoint(w) } }
+  }
+  return {}
 }
 
 /** 적 위치를 후보로 삼아 반경 안에 가장 많이 걸리는 지점 (스킬 조준 — 클라이언트 자동조준과 같은 방식) */
@@ -56,8 +111,14 @@ function threatZ(state: SiegeState): number | null {
 
 export const afk: BotPolicy = {
   name: 'afk',
-  desc: '침공만 개시하고 손대지 않는다 — 기본 배치만으로 성립하는지의 기준선',
+  desc: '침공만 개시하고 정말 아무것도 안 한다 — 장착 없이는 성이 무너짐을 증명하는 하한 (패배가 정상)',
   act: (s) => (s.status === 'prep' ? { startAssault: true } : undefined),
+}
+
+export const deploy: BotPolicy = {
+  name: 'deploy',
+  desc: '표준 장착만 하고 침공 후엔 손대지 않는다 — 배치만으로 성립하는지의 기준선',
+  act: (s) => (s.status === 'prep' ? (deployPrep(s) ?? { startAssault: true }) : undefined),
 }
 
 // 이 게임의 핵심 제약: **유닛은 정지 상태에서만 사격한다**(sim 규칙).
@@ -73,9 +134,9 @@ const clampWallZ = (z: number): number => Math.max(CASTLE.north + 2, Math.min(CA
 
 export const greedy: BotPolicy = {
   name: 'greedy',
-  desc: '전선 쪽으로 병기를 겨누고, 흐름이 몰리는 구간으로 영웅을 옮겨 업화로 끊는다 — 적극 플레이',
+  desc: '표준 장착 뒤, 전선 쪽으로 병기를 겨누고 흐름이 몰리는 구간으로 영웅을 옮겨 업화로 끊는다 — 적극 플레이',
   act(s) {
-    if (s.status === 'prep') return { startAssault: true }
+    if (s.status === 'prep') return deployPrep(s) ?? { startAssault: true }
     if (s.status !== 'assault') return undefined
 
     const hero = s.units.find((u) => u.kind === 'hero')
@@ -109,14 +170,16 @@ export const greedy: BotPolicy = {
     //    성벽 위 화력은 터널·안뜰에 닿지 않으므로, 여기서만은 지상 전력이 유일한 답이다.
     const intruders = s.enemies.filter((e) => e.mode === 'breach' && e.pos.x < CASTLE.east - CASTLE.wallT / 2)
     if (intruders.length > 0) {
-      // "대응 중"인 병사 = 이동 명령을 받았거나 이미 자리를 비운 조작 병사
-      const responding = s.units.filter(
-        (u) => u.crewOf !== undefined && (u.path.length > 0 || u.target !== null || !nearOwnWeapon(s, u)),
-      ).length
+      const map = manningMap(s)
+      const manning = new Set(map.values())
+      const crewKinds = new Set(Object.values(s.kinds.units).filter((d) => d.crew).map((d) => d.crew!))
+      const guards = s.units.filter((u) => crewKinds.has(u.kind))
+      // "대응 중"인 병사 = 이동 명령을 받았거나 이미 병기 곁을 비운 수비병
+      const responding = guards.filter((u) => u.path.length > 0 || u.target !== null || !manning.has(u.id)).length
       if (responding < intruders.length) {
         // 전선에서 가장 먼 병기의 병사부터 뗀다 — 화력 손실이 가장 적은 문
-        const spare = s.units
-          .filter((u) => u.crewOf !== undefined && u.path.length === 0 && nearOwnWeapon(s, u))
+        const spare = guards
+          .filter((u) => u.path.length === 0 && manning.has(u.id))
           .sort((a, b) => Math.abs(b.pos.z - intruders[0]!.pos.z) - Math.abs(a.pos.z - intruders[0]!.pos.z))[0]
         if (spare) {
           return { unitMove: { ids: [spare.id], to: { x: intruders[0]!.pos.x, z: intruders[0]!.pos.z, h: 0 } } }
@@ -148,9 +211,12 @@ export const greedy: BotPolicy = {
 
 export const random: BotPolicy = {
   name: 'random',
-  desc: '5초마다 30% 확률로 아무 병기나 엉뚱한 곳에 겨누고 영웅을 아무 데로 보낸다 — 심사자가 대충 만지는 경우',
+  // 장착은 하고 시작한다 — 장착제 이후 "정말 아무것도 안 한 판"은 즉시 지는 게 정상이라
+  // 장착 없는 random은 afk와 같은 판정이 되고 검증이 시늉이 된다. 이 봇이 재는 것은
+  // "게임에 들어온 사람이 엉뚱하게 만졌을 때"지 "게임을 시작 안 했을 때"가 아니다.
+  desc: '표준 장착 뒤, 5초마다 30% 확률로 아무 병기나 엉뚱한 곳에 겨누고 영웅을 아무 데로 보낸다 — 심사자가 대충 만지는 경우',
   act(s, rand) {
-    if (s.status === 'prep') return { startAssault: true }
+    if (s.status === 'prep') return deployPrep(s) ?? { startAssault: true }
     if (s.status !== 'assault') return undefined
     if (s.tick % sec(5) !== 0) return undefined
     if (rand() > 0.3) return undefined // 계속 만지작대지는 않는다
@@ -169,4 +235,4 @@ export const random: BotPolicy = {
   },
 }
 
-export const POLICIES: BotPolicy[] = [afk, greedy, random]
+export const POLICIES: BotPolicy[] = [afk, deploy, greedy, random]

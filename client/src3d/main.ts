@@ -9,6 +9,8 @@ import {
   SEGMENTS,
   createSiege,
   isCrewManned,
+  manningMap,
+  mountPoint,
   stepSiege,
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
@@ -242,7 +244,7 @@ const unitAttackT = new Map<number, number>() // unitFired 시각 — 활 놓기
 // 아군 유닛 비주얼 풀 — 병종별 절차 모델. 그룹→유닛 id 역참조는 피킹에 사용
 interface UnitVisual {
   group: THREE.Group
-  rig?: Rig // 사람(궁수·영웅·병기 조작병)
+  rig?: Rig // 사람(궁수·수비병·영웅)
   weapon?: WeaponRig // 병기 본체 — 발사 반동
   mats: THREE.Material[] // 개체 전용 머티리얼 — 피격 플래시·소멸 페이드
   kind: string
@@ -274,16 +276,6 @@ function makeNameplate(text: string, color: string): THREE.Sprite {
   return s
 }
 
-/** 공성 병기 옆 조작 병사 (사용자 피드백: 병기는 병사가 조작하는 형태) —
- *  병기 그룹의 자식이라 함께 이동·회전, 이동 시 미는 걸음 애니메이션 */
-function attachCrew(weapon: THREE.Group, offsetX: number, offsetZ: number): Rig {
-  const crew = makeKnight(0x28303e)
-  crew.root.scale.setScalar(0.8)
-  crew.root.position.set(offsetX, 0, offsetZ)
-  weapon.add(crew.root)
-  return crew
-}
-
 function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
   let v = unitVisuals.get(u.id)
   if (v) return v
@@ -312,11 +304,12 @@ function ensureUnitVisual(u: FriendlyUnit): UnitVisual {
     rig.root.add(ring)
     v = { group: rig.root, rig, mats: rig.mats, kind: u.kind }
   } else {
-    // 병기: 본체 머티리얼도 개체 사본으로 (조작병과 함께 페이드·플래시되게)
+    // 병기: 본체 머티리얼은 개체 사본 (피격 플래시·소멸 페이드가 개체 단위로 걸리게).
+    // 구 장식 조작병(attachCrew)은 장착제(2026-08-08)로 제거 — 조작하는 병사는 이제
+    // sim의 실제 수비병 유닛이고, 붙어 있는 가짜 병사는 "움직이지도 쏘지도 않는 잔재"였다.
     const weapon = u.kind === 'cannon' ? makeCannon() : makeBallista()
     const weaponMats = ownMaterials(weapon.group)
-    const crew = attachCrew(weapon.group, u.kind === 'cannon' ? 0.55 : 0, u.kind === 'cannon' ? -1.05 : -1.15)
-    v = { group: weapon.group, weapon, rig: crew, mats: [...weaponMats, ...crew.mats], kind: u.kind }
+    v = { group: weapon.group, weapon, mats: weaponMats, kind: u.kind }
   }
   unitVisuals.set(u.id, v)
   groupToUnitId.set(v.group.uuid, u.id)
@@ -423,18 +416,18 @@ window.addEventListener('keydown', (e) => {
 
 // ---- 조작 액션 (키보드·커맨드 카드 버튼 공용 — 규칙이 두 벌 되지 않게 함수를 공유)
 
-/** G — 선택한 병기의 조작 병사를 선택으로 전환 (그다음 우클릭으로 빼거나 되돌린다).
- *  병사가 선택돼 있으면 반대로 담당 병기를 선택 — 쌍을 오가는 토글. */
+/** G — 선택한 병기의 조작 중인 수비병을 선택으로 전환 (그다음 우클릭으로 빼거나 되돌린다).
+ *  병사가 선택돼 있으면 반대로 지금 조작 중인 병기를 선택 — 쌍을 오가는 토글.
+ *  장착제(2026-08-08): 고정 짝이 없으므로 "쌍"은 지금 이 순간의 동적 배정(manningMap)이다. */
 function toggleCrewSelection(): void {
   if (selected.size === 0) return
+  const map = manningMap(state) // 병기 id → 조작 중 수비병 id
   const crews: number[] = []
   const weapons: number[] = []
   for (const id of selected) {
-    const u = state.units.find((v) => v.id === id)
-    if (!u) continue
-    if (u.crewOf !== undefined) weapons.push(u.crewOf)
-    const crew = state.units.find((v) => v.crewOf === u.id)
-    if (crew) crews.push(crew.id)
+    const g = map.get(id)
+    if (g !== undefined) crews.push(g)
+    for (const [w, gid] of map) if (gid === id) weapons.push(w)
   }
   const next = crews.length > 0 ? crews : weapons
   if (next.length > 0) {
@@ -537,6 +530,25 @@ function pickPoint(clientX: number, clientY: number): { x: number; z: number; h:
   return null
 }
 
+/** 화면 좌표에서 병기(조작 병사가 필요한 병종) 픽킹 — 우클릭 장착 스냅용.
+ *  병기 모델은 지형 픽킹(occluders)에 없어서, 이 스냅이 없으면 대포를 클릭해도
+ *  "그 뒤 바닥"이 찍혀 수비병이 애매한 곳에 선다. */
+function pickWeapon(clientX: number, clientY: number): FriendlyUnit | null {
+  const ndc = new THREE.Vector2(
+    (clientX / window.innerWidth) * 2 - 1,
+    -(clientY / window.innerHeight) * 2 + 1,
+  )
+  raycaster.setFromCamera(ndc, camera)
+  const groups = [...unitVisuals.values()].filter((v) => v.weapon).map((v) => v.group)
+  const hits = raycaster.intersectObjects(groups, true)
+  if (hits.length === 0) return null
+  let obj: THREE.Object3D | null = hits[0]!.object
+  while (obj && !groupToUnitId.has(obj.uuid)) obj = obj.parent
+  if (!obj) return null
+  const u = state.units.find((x) => x.id === groupToUnitId.get(obj!.uuid))
+  return u && state.kinds.units[u.kind]?.crew ? u : null
+}
+
 // ---- 스타크래프트식 부대 선택 (좌클릭 드래그) + 명령 (우클릭)
 let pendingMove: { x: number; z: number; h?: number } | undefined
 let pendingUnitMove: { ids: number[]; to: { x: number; z: number; h?: number }; attack?: boolean } | undefined
@@ -588,8 +600,10 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     return
   }
   if (e.button !== 2) return
-  // 우클릭: 선택 부대가 있으면 부대 명령, 없으면 성주 이동
-  const p = pickPoint(e.clientX, e.clientY)
+  // 우클릭: 선택 부대가 있으면 부대 명령. 병기를 직접 우클릭하면 명령 지점을
+  // 그 병기의 **조작 위치**로 스냅한다 — 수비병 장착이 "병사 선택 → 병기 우클릭"이 되게.
+  const w = pickWeapon(e.clientX, e.clientY)
+  const p = w ? mountPoint(w) : pickPoint(e.clientX, e.clientY)
   if (!p) return
   issueCommand(p)
 })
@@ -1840,10 +1854,11 @@ function syncScene(now: number): void {
   // 커맨드 카드 = f(선택): 해당 없는 명령은 흐려지고, 올릴 명령이 없으면 카드 자체가 사라진다
   const hasMovers = selectedMovers().length > 0
   const hasHero = state.units.some((u) => u.kind === 'hero' && selected.has(u.id))
+  // 장착제: 쌍은 동적 배정 — 선택이 조작 중인 병기이거나 조작 중인 수비병일 때만 G가 산다
+  const manning = manningMap(state)
   let hasCrewPair = false
   for (const id of selected) {
-    const u = state.units.find((v) => v.id === id)
-    if (u && (u.crewOf !== undefined || state.units.some((v) => v.crewOf === u.id))) {
+    if (manning.has(id) || [...manning.values()].includes(id)) {
       hasCrewPair = true
       break
     }
@@ -1927,14 +1942,24 @@ function syncScene(now: number): void {
     (document.getElementById('p-hpbar') as HTMLDivElement).style.background = '#62c462'
   panel.style.display = shown ? 'block' : 'none'
   const phase = document.getElementById('phase')!
-  phase.textContent =
-    state.status === 'prep'
-      ? '준비 단계 — 성을 둘러보고, Space로 침공 개시'
-      : state.status === 'assault'
+  // 준비 단계의 핵심 안내 — 장착제(2026-08-08): 병기는 빈 채로 시작하므로,
+  // 장착을 모르는 채 Space를 누르면 반드시 진다. 미장착 수를 문구로 세워 배치를 유도한다.
+  if (state.status === 'prep') {
+    const unmannedN = state.units.filter(
+      (u) => state.kinds.units[u.kind]?.crew && !manning.has(u.id),
+    ).length
+    phase.textContent =
+      unmannedN > 0
+        ? `준비 — 병기 ${unmannedN}기 미장착! 수비병 선택 → 병기 우클릭으로 장착 · Space 침공 개시`
+        : '준비 완료 — 전 병기 장착. Space로 침공 개시'
+  } else {
+    phase.textContent =
+      state.status === 'assault'
         ? `침공 진행 중 — 괴수 ${state.enemies.length}`
         : state.status === 'won'
           ? '성을 지켜냈다!'
           : '성이 함락됐다'
+  }
 
   // 종료 카드 — 결과 요약 + 재시작. 없으면 심사자가 새로고침 말고는 두 번째 판을 못 본다
   const endcard = document.getElementById('endcard') as HTMLDivElement
@@ -2150,10 +2175,9 @@ function frame(now: number): void {
     const atkMs = atk === undefined ? -1 : now - atk
     const hit = unitHit.get(u.id)
     const hitMs = hit ? now - hit.t0 : -1
-    // 병기는 본체가 반동하고, 사람(궁수·영웅·조작병)은 팔이 움직인다
+    // 병기는 본체가 반동하고, 사람(궁수·수비병·영웅)은 팔이 움직인다
     if (v.weapon) {
       animateWeapon(v.weapon, atkMs)
-      if (v.rig) animateRig(v.rig, t + u.id * 0.7, u.path.length > 0, -1, hitMs)
     } else if (v.rig) {
       animateRig(v.rig, t + u.id * 0.7, u.path.length > 0, atkMs, hitMs)
     }

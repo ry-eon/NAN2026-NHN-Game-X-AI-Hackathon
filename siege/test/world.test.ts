@@ -1,5 +1,5 @@
 // M2b 전투 sim 검증 — 렌더 없이 판이 성립함을 단언한다 ("생성이 아니라 보증").
-// 결정론 · 무방비 패배 · 기본 배치 승리(시드 검증) · 부대 이동 · 지상 접전.
+// 결정론 · 무장착 패배 · 표준 장착 승리(시드 검증) · 부대 이동 · 지상 접전.
 
 import { describe, expect, it } from 'vitest'
 import {
@@ -9,13 +9,17 @@ import {
   HERO_SKILL,
   stepHeight,
   WALL_HP,
+  WALL_X,
   createSiege,
   isCrewManned,
+  manningMap,
+  mountPoint,
   stepSiege,
   UNIT_KINDS,
   SEGMENTS,
   DEFAULT_LOADOUT,
   type ActiveEnemy,
+  type FriendlyUnit,
   type Loadout,
   type SiegeInput,
   type SiegeState,
@@ -43,6 +47,23 @@ function placeEnemy(state: SiegeState, kind: string, x: number, z: number, hp: n
   }
   state.enemies.push(e)
   return e
+}
+
+/** 테스트용 장착 — 아직 배정 안 된 수비병 하나를 병기의 조작 위치로 순간이동
+ *  (준비 단계의 보행을 생략한다. 보행 자체는 '부대 명령' 테스트와 deploy 봇이 검증) */
+function mountGuard(state: SiegeState, weapon: FriendlyUnit): FriendlyUnit {
+  const manned = new Set(manningMap(state).values())
+  const g = state.units.find((u) => u.kind === 'guard' && !manned.has(u.id))!
+  const p = mountPoint(weapon)
+  g.pos.x = p.x
+  g.pos.z = p.z
+  g.h = p.h
+  return g
+}
+
+/** 테스트용 표준 장착 — 전 병기에 수비병을 세운다 (deploy 봇의 결과와 같은 상태) */
+function mountAll(state: SiegeState): void {
+  for (const w of state.units.filter((u) => DEFAULT_LOADOUT.unitKinds[u.kind]?.crew)) mountGuard(state, w)
 }
 
 /** 스크립트 입력으로 판 전체 실행. 종료 틱·최종 상태 반환 */
@@ -90,8 +111,15 @@ describe('M2b 전투', () => {
     expect(end.wallHp).toBe(0)
   })
 
-  it('기본 배치는 시드 판을 막아낸다 — 봇 검증의 원형', () => {
+  it('장착 없이 침공하면 진다 — 배치가 게임의 첫 수다 (장착제 2026-08-08)', () => {
+    // 병기는 빈 채로 시작한다. 아무것도 안 하면 전 병기 침묵 = 패배가 **정상**이다.
+    // (사용자: "아무것도 안 하면 지는 게 맞다. 그냥 이기면 게임의 의미가 없다")
     const end = runSiege(SEED, (tick) => (tick === 0 ? { startAssault: true } : {}))
+    expect(end.status).toBe('lost')
+  })
+
+  it('표준 장착 후 무개입은 시드 판을 막아낸다 — 봇 검증(deploy)의 원형', () => {
+    const end = runSiege(SEED, (tick) => (tick === 0 ? { startAssault: true } : {}), mountAll)
     expect(end.status).toBe('won')
     expect(end.wallHp).toBeGreaterThan(0)
     expect(end.enemies).toHaveLength(0)
@@ -252,27 +280,51 @@ describe('M2b 전투', () => {
     }
   })
 
-  describe('조작 병사 (상주 조작제 — 2026-08-06 룰 개정)', () => {
-    it('병기마다 조작 병사가 처음부터 곁에 선다 — 전부 조작 중 상태로 시작한다', () => {
+  describe('수비병 장착제 (2026-08-08 룰 개정 — 구 상주 조작제 2026-08-06 대체)', () => {
+    it('수비병은 안뜰에 집결해 시작하고, 병기는 전부 침묵 상태다', () => {
       const { state } = createSiege(SEED)
       const weapons = state.units.filter((u) => DEFAULT_LOADOUT.unitKinds[u.kind]?.crew)
+      const guards = state.units.filter((u) => u.kind === 'guard')
       expect(weapons.length).toBeGreaterThan(0)
-      for (const w of weapons) {
-        const crew = state.units.find((u) => u.crewOf === w.id)
-        expect(crew).toBeDefined()
-        expect(crew!.kind).toBe('guard')
-        expect(crew!.h).toBe(w.h) // 같은 층 — 보도 위 병기면 보도 위에 선다
-        expect(isCrewManned(state, w)).toBe(true)
+      expect(guards.length).toBe(weapons.length) // 병기 수만큼 집결해 있다 — 전부 채울 수는 있다
+      for (const g of guards) {
+        expect(g.h).toBe(0) // 지상 — 성벽 위가 아니다
+        expect(g.pos.x).toBeLessThan(CASTLE.east - CASTLE.wallT / 2) // 성벽 안쪽(안뜰)
       }
+      for (const w of weapons) expect(isCrewManned(state, w)).toBe(false)
+    })
+
+    it('수비병 하나가 병기 두 대를 동시에 조작할 수는 없다', () => {
+      // 두 포좌 사이(양쪽 다 반경 2.4 안)에 서도 한 대만 산다 — id 낮은 병기 우선(결정론).
+      // 이 규칙이 없으면 병사 하나로 포대 전체를 살리는 꼼수가 성립한다.
+      const twin: Loadout = {
+        ...DEFAULT_LOADOUT,
+        name: 'test-twin',
+        placements: [
+          { kind: 'cannon', x: WALL_X, z: -1.0, h: CASTLE.wallH },
+          { kind: 'cannon', x: WALL_X, z: 1.0, h: CASTLE.wallH },
+        ],
+      }
+      const { state } = createSiege(SEED, twin)
+      const [a, b] = state.units.filter((u) => u.kind === 'cannon')
+      const g = state.units.find((u) => u.kind === 'guard')!
+      state.units = [a!, b!, g] // 수비병 하나만 남긴다
+      g.pos.x = WALL_X
+      g.pos.z = 0 // 두 포좌 정중앙
+      g.h = CASTLE.wallH
+      expect(manningMap(state).get(a!.id)).toBe(g.id)
+      expect(isCrewManned(state, a!)).toBe(true)
+      expect(isCrewManned(state, b!)).toBe(false)
     })
 
     it('병사를 빼면 병기가 침묵하고, 돌아오면 다시 쏜다 (편도 아님)', () => {
       const { state, spawns } = createSiege(SEED)
       stepSiege(state, spawns, { startAssault: true })
       const gun = state.units.find((u) => u.kind === 'cannon')!
-      const crew = state.units.find((u) => u.crewOf === gun.id)!
+      const crew = mountGuard(state, gun)
       state.units = [gun, crew] // 다른 병기의 사격이 판정을 흐리지 않게
       const home = { x: crew.pos.x, z: crew.pos.z, h: crew.h }
+      expect(isCrewManned(state, gun)).toBe(true) // 장착 완료 상태에서 출발
       placeEnemy(state, 'grunt', gun.pos.x + 10, gun.pos.z, 660).atWall = true
 
       // 1) 안뜰로 내려보낸다 → 조작 해제, 침묵
@@ -304,7 +356,7 @@ describe('M2b 전투', () => {
       const { state, spawns } = createSiege(SEED)
       stepSiege(state, spawns, { startAssault: true })
       const gun = state.units.find((u) => u.kind === 'cannon')!
-      const crew = state.units.find((u) => u.crewOf === gun.id)!
+      const crew = mountGuard(state, gun)
       state.units = [gun, crew]
       placeEnemy(state, 'grunt', gun.pos.x + 10, gun.pos.z, 660).atWall = true
       crew.hp = 0 // 전사 처리
@@ -352,7 +404,7 @@ describe('M2b 전투', () => {
       const { state, spawns } = createSiege(SEED)
       stepSiege(state, spawns, { startAssault: true })
       const gun = state.units.find((u) => u.kind === 'cannon')!
-      state.units = [gun, state.units.find((u) => u.crewOf === gun.id)!] // 조작 병사 없인 못 쏜다
+      state.units = [gun, mountGuard(state, gun)] // 수비병을 장착하지 않으면 못 쏜다
       // 정지한 표적 — 예측이 개입하지 않게
       const tgt = placeEnemy(state, 'grunt', gun.pos.x + 14, gun.pos.z, 660)
       tgt.atWall = true
@@ -375,7 +427,7 @@ describe('M2b 전투', () => {
       const { state, spawns } = createSiege(SEED)
       stepSiege(state, spawns, { startAssault: true })
       const gun = state.units.find((u) => u.kind === 'ballista')!
-      state.units = [gun, state.units.find((u) => u.crewOf === gun.id)!] // 조작 병사 없인 못 쏜다
+      state.units = [gun, mountGuard(state, gun)] // 수비병을 장착하지 않으면 못 쏜다
       const tgt = placeEnemy(state, 'grunt', gun.pos.x + 12, gun.pos.z, 660)
       tgt.atWall = true
       gun.cooldown = 0
@@ -393,6 +445,7 @@ describe('M2b 전투', () => {
     /** 성벽 위 병기를 전부 한쪽 끝으로 겨눠 성문 화망을 비운다 */
     const run = (emptyGate: boolean) => {
       const { state, spawns } = createSiege(SEED)
+      mountAll(state) // 장착 없이는 화망 자체가 없다 — 돌파 규칙은 사격 중인 판에서 잰다
       stepSiege(state, spawns, { startAssault: true })
       if (emptyGate) {
         const ids = state.units.filter((u) => u.h >= 1).map((u) => u.id)
@@ -425,8 +478,8 @@ describe('M2b 전투', () => {
         e.aim = { ...e.pos }
         e.atWall = true
       }
-      // 지상 유닛(영웅)을 빼고 성벽 위 병기 하나만 남긴다 (+조작 병사 — 없으면 침묵)
-      state.units = [gunner, state.units.find((u) => u.crewOf === gunner.id)!]
+      // 지상 유닛(영웅)을 빼고 성벽 위 병기 하나만 남긴다 (+장착 수비병 — 없으면 침묵)
+      state.units = [gunner, mountGuard(state, gunner)]
       gunner.cooldown = 0
       for (let i = 0; i < 30 * 8; i++) stepSiege(state, spawns, {})
       expect(inTunnel.hp).toBe(300) // 터널 안은 못 맞힌다
