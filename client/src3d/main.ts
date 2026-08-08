@@ -420,6 +420,17 @@ function updateAimLines(): void {
   pos.needsUpdate = true
   aimLineGeo.setDrawRange(0, n * 4)
   aimLines.visible = n > 0
+  // 시전 사거리 원 — 조준 중에만, 시전자를 따라다닌다 (시전자가 걷는 중일 수도 있다)
+  if (aiming && aimingCast) {
+    const c = state.units.find((u) => u.id === aimingCast!.casterId)
+    if (c) {
+      rangeRing.position.set(c.pos.x, c.h + 0.06, c.pos.z)
+      rangeRing.scale.setScalar(aimingCast.def.range)
+      rangeRing.visible = true
+    }
+  } else {
+    rangeRing.visible = false
+  }
 }
 // 스킬 조준 상태 (QWE 개편 2026-08-08) — 지점 스킬만 레티클 조준, 자기 중심·버프는 즉발
 // ---- 스킬 전용 이펙트 헬퍼 (2026-08-09 "이펙트가 다 같다" 반려 — 스킬마다 고유 형태)
@@ -516,6 +527,32 @@ function spawnDashTrail(x0: number, z0: number, x1: number, z1: number, y: numbe
 let aiming = false
 let aimingCast: { casterId: number; slot: number; def: SkillDef } | null = null
 let pendingCast: { casterId?: number; slot: number; x?: number; z?: number } | undefined
+
+// 시전 사거리 원 — 조준 중 시전자 둘레에 그린다. "어디까지 닿는지"가 안 보이면
+// 사거리 제한이 버그처럼 느껴진다 (2026-08-09 "시전되는 곳이 정해져 있는 것 같다")
+const rangeRing = new THREE.Mesh(
+  new THREE.RingGeometry(0.985, 1.0, 64),
+  new THREE.MeshBasicMaterial({
+    color: 0x9fc2ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false,
+  }),
+)
+rangeRing.rotation.x = -Math.PI / 2
+rangeRing.visible = false
+scene.add(rangeRing)
+
+/** 클릭 지점을 시전 사거리 안으로 클램프 (LoL 관례) — 사거리 밖 클릭도 무시하지 않고
+ *  최대 사거리 지점에 시전한다. sim 검증은 그대로 통과하므로 리플레이 안전 */
+function clampToRange(p: { x: number; z: number; h?: number }): { x: number; z: number; h?: number } {
+  if (!aimingCast) return p
+  const caster = state.units.find((u) => u.id === aimingCast!.casterId)
+  if (!caster) return p
+  const dx = p.x - caster.pos.x
+  const dz = p.z - caster.pos.z
+  const d = Math.hypot(dx, dz)
+  const r = aimingCast.def.range - 0.05 // 경계 부동소수 오차 여유
+  if (d <= r) return p
+  return { x: caster.pos.x + (dx / d) * r, z: caster.pos.z + (dz / d) * r, h: p.h }
+}
 
 // ---------------------------------------------------------------- 입력 (LoL식)
 let spaceLatch = false
@@ -748,12 +785,16 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   // 스킬 조준 중: 좌클릭 = 시전, 우클릭 = 취소 (드래그 선택·이동 명령은 봉인)
   if (aiming) {
     if (e.button === 0 && aimingCast) {
-      const p = pickPoint(e.clientX, e.clientY)
-      if (p) pendingCast = { casterId: aimingCast.casterId, slot: aimingCast.slot, x: p.x, z: p.z }
+      const raw = pickPoint(e.clientX, e.clientY)
+      if (raw) {
+        const p = clampToRange(raw) // 사거리 밖 클릭 → 최대 사거리 지점 시전
+        pendingCast = { casterId: aimingCast.casterId, slot: aimingCast.slot, x: p.x, z: p.z }
+      }
     }
     aiming = false
     aimingCast = null
     aimReticle.visible = false
+    rangeRing.visible = false
     return
   }
   // 어택땅 모드: 좌클릭 = 접적 이동 명령, 우클릭 = 취소 (SC 관례)
@@ -813,14 +854,13 @@ window.addEventListener('pointermove', (e) => {
   mouseY = e.clientY
   mouseIn = true
   if (aiming) {
-    const p = pickPoint(e.clientX, e.clientY)
-    if (p && aimingCast) {
-      aimReticle.position.set(p.x, p.h + 0.08, p.z)
-      // 사거리 밖이면 흐리게 — 시전해도 sim이 무시한다는 시각 피드백
-      const caster = state.units.find((u) => u.id === aimingCast!.casterId)
-      const inRange = caster && Math.hypot(p.x - caster.pos.x, p.z - caster.pos.z) <= aimingCast.def.range
+    const raw = pickPoint(e.clientX, e.clientY)
+    if (raw && aimingCast) {
+      // 레티클도 클램프된 실제 시전 지점을 보여준다 — 커서가 밖이어도 "여기에 떨어진다"
+      const p = clampToRange(raw)
+      aimReticle.position.set(p.x, (p.h ?? raw.h) + 0.08, p.z)
       for (const c of aimReticle.children)
-        ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(inRange ? 0xff7a3a : 0x5a5a66)
+        ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(0xff7a3a)
     }
     return
   }
@@ -915,6 +955,7 @@ window.addEventListener('keydown', (e) => {
     aiming = false
     aimingCast = null
     aimReticle.visible = false
+    rangeRing.visible = false
     cancelAttackMove()
   }
 })
