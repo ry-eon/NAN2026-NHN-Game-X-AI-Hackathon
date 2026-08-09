@@ -773,6 +773,27 @@ function pickPoint(clientX: number, clientY: number): { x: number; z: number; h:
   return null
 }
 
+/**
+ * 스킬 조준 전용 픽킹 — **지면(y=0)만** 집는다.
+ *
+ * 일반 pickPoint는 구조물 윗면을 우선하는데(보도 위 이동 명령을 위해 필요하다), 스킬
+ * 조준에 쓰면 성 안쪽 시점에서 **들판이 있어야 할 화면 영역을 성벽·성가퀴 윗면이 가로채**
+ * 레티클이 벽 위로 튀어오른다 — 커서 격자 실측에서 절반 가까이가 '보도'로 찍혔다
+ * ("1~3시 방향에 못 쓴다"의 나머지 절반, 2026-08-09).
+ * 괴수는 항상 지면에 있으므로 스킬의 표적면은 지면 하나로 충분하고, 그래야 레티클이
+ * 커서를 따라 **끊김 없이** 움직인다.
+ */
+function pickGround(clientX: number, clientY: number): { x: number; z: number; h: number } | null {
+  const ndc = new THREE.Vector2(
+    (clientX / window.innerWidth) * 2 - 1,
+    -(clientY / window.innerHeight) * 2 + 1,
+  )
+  raycaster.setFromCamera(ndc, camera)
+  const hit = new THREE.Vector3()
+  if (raycaster.ray.intersectPlane(groundPlane, hit)) return { x: hit.x, z: hit.z, h: 0 }
+  return null
+}
+
 /** 화면 좌표에서 병기(조작 병사가 필요한 병종) 픽킹 — 우클릭 장착 스냅용.
  *  병기 모델은 지형 픽킹(occluders)에 없어서, 이 스냅이 없으면 대포를 클릭해도
  *  "그 뒤 바닥"이 찍혀 수비병이 애매한 곳에 선다. */
@@ -817,7 +838,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
   // 스킬 조준 중: 좌클릭 = 시전, 우클릭 = 취소 (드래그 선택·이동 명령은 봉인)
   if (aiming) {
     if (e.button === 0 && aimingCast) {
-      const raw = pickPoint(e.clientX, e.clientY)
+      const raw = pickGround(e.clientX, e.clientY) // 조준은 지면만 — 성벽 윗면에 스냅되지 않게
       if (raw) {
         const p = clampToRange(raw) // 사거리 밖 클릭 → 최대 사거리 지점 시전
         pendingCast = { casterId: aimingCast.casterId, slot: aimingCast.slot, x: p.x, z: p.z }
@@ -886,14 +907,14 @@ window.addEventListener('pointermove', (e) => {
   mouseY = e.clientY
   mouseIn = true
   if (aiming) {
-    const raw = pickPoint(e.clientX, e.clientY)
+    const raw = pickGround(e.clientX, e.clientY) // 조준은 지면만 (성벽 윗면 스냅 방지)
     if (raw && aimingCast) {
       // 레티클도 클램프된 실제 시전 지점을 보여준다 — 커서가 밖이어도 "여기에 떨어진다".
       // 높이는 **클램프된 xz의 지형**으로 재계산 — 클릭 지점 높이를 그대로 쓰면 성벽 위를
       // 겨눴다 클램프될 때 레티클이 공중에 뜬다 ("위쪽은 마우스 이동이 안 된다" 2026-08-09)
       const p = clampToRange(raw)
       const clamped = p !== raw // 커서가 사거리 밖 → 레티클이 경계에 물려 더 안 나간다
-      const y = clamped ? heightNear(p.x, p.z, 0) : raw.h
+      const y = heightNear(p.x, p.z, 0) // 지면 픽킹이므로 표시 높이는 그 자리 지형으로
       aimReticle.position.set(p.x, y + 0.08, p.z)
       // 경계에 물리면 색이 바뀐다 — 사거리 원 없이 한계를 알리는 유일한 신호라 분명해야 한다
       for (const c of aimReticle.children)
@@ -1524,13 +1545,15 @@ function handleEvents(events: SiegeEvent[]): void {
   for (const ev of events) {
     if (ev.type === 'unitFired') {
       const from = new THREE.Vector3(ev.from.x, ev.from.h + (MUZZLE_H[ev.unitKind] ?? 1), ev.from.z)
-      // 전사는 근접이다 — 투사체를 날리지 않고 **표적 자리에서 베는 궤적**을 그린다
-      // (구 검기 투사체는 "칼이 아니라 뭘 던진다"로 읽혔다 — 2026-08-09 반려)
-      if (ev.unitKind === 'hero') {
-        spawnSlashArc(ev.to.x, ev.to.z, ev.from.h + 0.9, 1.3)
-        spawnFlash(new THREE.Vector3(ev.to.x, ev.from.h + 0.9, ev.to.z), 0.9, 0xdfe8ff, 160)
+      // 근접 병종(전사·수비병)은 투사체를 날리지 않고 **표적 자리에서 베는 궤적**을 그린다.
+      // 수비병은 화살 투사체 + 화살음으로 그려지고 있었다 — 칼을 든 병사인데 활을 쏘는 셈
+      // (구 전사 검기 투사체와 같은 계열의 잔재, 2026-08-09 정리)
+      if (ev.unitKind === 'hero' || ev.unitKind === 'guard') {
+        const big = ev.unitKind === 'hero'
+        spawnSlashArc(ev.to.x, ev.to.z, ev.from.h + 0.9, big ? 1.3 : 0.85)
+        spawnFlash(new THREE.Vector3(ev.to.x, ev.from.h + 0.9, ev.to.z), big ? 0.9 : 0.6, 0xdfe8ff, 160)
         unitAttackT.set(ev.unitId, performance.now())
-        Sfx.at('heroSwing', ev.from.x, ev.from.z)
+        Sfx.at(big ? 'heroSwing' : 'melee', ev.from.x, ev.from.z)
         continue
       }
       spawnProjectile(ev.unitKind, ev.targetId, from, new THREE.Vector3(ev.to.x, 0.7, ev.to.z), (ev.flight / TICKS_PER_SECOND) * 1000)
@@ -1949,13 +1972,91 @@ function buildHeroCard(heroId: number, kind: string): HeroCard {
   return card
 }
 
+/** 성주 카드 — 영웅 카드와 같은 틀. HP 대신 '지휘', 궁극은 총력전(E) */
+function buildLordCard(): HeroCard {
+  const ult = LORD_SKILLS[2]!
+  const root = document.createElement('div')
+  root.style.cssText =
+    'pointer-events:auto;width:172px;background:#000d;border:1px solid #345;border-radius:6px;' +
+    'padding:8px 10px;cursor:pointer;font-family:monospace;color:#e8e8f0;user-select:none'
+  root.innerHTML = `
+    <div style="display:flex;gap:8px;align-items:center">
+      <div style="width:38px;height:38px;border-radius:5px;border:1px solid #a86;flex:none;
+           display:flex;align-items:center;justify-content:center;font-size:20px;
+           background:radial-gradient(circle at 35% 30%, #3a3550, #15151d)">👑</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b style="color:#ff9a7a;font-size:13px">성주</b>
+          <span class="hp-t" style="font-size:10px;color:#8898a8">지휘</span>
+        </div>
+        <div style="width:100%;height:7px;background:#0009;margin-top:4px;border-radius:2px">
+          <div class="hp-b" style="height:100%;width:100%;background:#b08d3e;border-radius:2px"></div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:7px;align-items:center;margin-top:7px">
+      <div class="sk" style="position:relative;width:36px;height:36px;border:1px solid #764;border-radius:5px;
+           overflow:hidden;flex:none;cursor:pointer;
+           background:radial-gradient(circle at 50% 65%, #ffd870, #6a4c0a)">
+        <span style="position:absolute;top:1px;left:4px;font-size:10px;font-weight:bold;color:#fff4d0;text-shadow:0 1px 2px #000">E</span>
+        <div class="sk-ov" style="position:absolute;left:0;bottom:0;width:100%;height:0;background:#000b"></div>
+        <span class="sk-cd" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+              font-size:12px;font-weight:bold;text-shadow:0 1px 2px #000"></span>
+      </div>
+      <div style="font-size:11px;color:#c8b890;line-height:1.35">${ult.name} (궁극)<br>
+        <span class="sk-mode" style="color:#8898a8">Q·W·E는 커맨드 카드</span></div>
+    </div>`
+  root.addEventListener('pointerdown', (e) => {
+    e.stopPropagation()
+    selected.clear()
+    selected.add(LORD_ID)
+  })
+  const skillBtn = root.querySelector('.sk') as HTMLDivElement
+  skillBtn.addEventListener('pointerdown', (e) => {
+    e.stopPropagation()
+    selected.clear()
+    selected.add(LORD_ID)
+    castSlot(2)
+  })
+  const card: HeroCard = {
+    root,
+    hpText: root.querySelector('.hp-t') as HTMLSpanElement,
+    hpBar: root.querySelector('.hp-b') as HTMLDivElement,
+    skillBtn,
+    skillOv: root.querySelector('.sk-ov') as HTMLDivElement,
+    skillCd: root.querySelector('.sk-cd') as HTMLSpanElement,
+    mode: root.querySelector('.sk-mode') as HTMLSpanElement,
+  }
+  document.getElementById('herobar')!.appendChild(card.root)
+  return card
+}
+
 function updateHeroBar(): void {
   const heroes = state.units.filter((u) => state.kinds.units[u.kind]?.skills)
-  // 전사한 영웅 카드 제거
+  // 전사한 영웅 카드 제거 (성주 카드는 전사 개념이 없으므로 유지)
   for (const [id, card] of heroCards) {
-    if (!heroes.some((h) => h.id === id)) {
+    if (id !== LORD_ID && !heroes.some((h) => h.id === id)) {
       card.root.remove()
       heroCards.delete(id)
+    }
+  }
+  // 성주 카드 — 영웅과 같은 줄에 (2026-08-08 사용자: "성주도 하단 프로필에 포함되면 좋겠다").
+  // 성주는 sim의 units가 아니라 lord 상태라 HP가 없다 — 그 자리에 '지휘' 표기를 쓴다
+  {
+    let card = heroCards.get(LORD_ID)
+    if (!card) {
+      card = buildLordCard()
+      heroCards.set(LORD_ID, card)
+    }
+    const ult = LORD_SKILLS[2]!
+    const cd = state.lord.cds[2] ?? 0
+    card.root.style.borderColor = selected.has(LORD_ID) ? '#ffd870' : '#345'
+    if (cd > 0) {
+      card.skillOv.style.height = `${(cd / (ult.cooldown * TICKS_PER_SECOND)) * 100}%`
+      card.skillCd.textContent = `${Math.ceil(cd / TICKS_PER_SECOND)}`
+    } else {
+      card.skillOv.style.height = '0'
+      card.skillCd.textContent = ''
     }
   }
   for (const h of heroes) {

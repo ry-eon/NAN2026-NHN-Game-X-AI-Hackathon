@@ -1024,7 +1024,12 @@ function acquireTarget(u: FriendlyUnit, enemies: ActiveEnemy[], def: UnitKindDef
     let bestD = Infinity
     for (const e of enemies) {
       if (u.h >= 1 && inGateTunnel(e.pos.x, e.pos.z)) continue // 발 밑 터널은 못 쏜다
-      if (Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z) > def.range) continue // 사거리는 절대 조건
+      // 사거리는 절대 조건. **적의 반경까지 포함**해서 잰다 — 공격은 중심이 아니라 몸통에 닿는다.
+      // 이게 없으면 근접이 일방적으로 맞는다: 괴수의 접전 거리는 (자기 반경 + 아군 반경 + 0.9)라
+      // 야귀는 1.9, 갑주귀는 2.3에서 때리는데 수비병 사거리는 1.6이었다 — 반격 불가
+      // ("병사들이 검으로 공격을 안 한다" 사용자 실측 반려 2026-08-09).
+      const reach = def.range + (ENEMY_KINDS[e.kind]?.radius ?? 0)
+      if (Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z) > reach) continue
       const d = Math.hypot(e.pos.x - near.x, e.pos.z - near.z)
       if (d <= limit && (d < bestD || (d === bestD && best !== null && e.id < best.id))) {
         best = e
