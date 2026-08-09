@@ -525,10 +525,13 @@ export const WARRIOR_SKILLS: SkillDef[] = [
   { key: 'W', name: '회전베기', cooldown: 8, targeted: false, range: 0, radius: 3.2, dmg: 260 },
   { key: 'E', name: '대지파쇄', cooldown: 22, targeted: false, range: 0, radius: 5, dmg: 450, stunSec: 1.5 },
 ]
+// 사거리 14/12 [기획 확정 2026-08-09]. 18이던 시절 마법사는 안뜰에 선 채로 성벽 36 중
+// 30을 덮어 **움직일 이유가 없었다**(측정). 14로 줄이면 커버가 20으로 내려가 전선을 따라
+// 재배치해야 한다 — "어디에 세우느냐가 곧 개입"이라는 축(봇 판정 '개입이 보상되는가')을 지킨다.
 export const MAGE_SKILLS: SkillDef[] = [
-  { key: 'Q', name: '화염구', cooldown: 6, targeted: true, range: 18, radius: 2.5, dmg: 220 },
-  { key: 'W', name: '불의 장막', cooldown: 14, targeted: true, range: 16, radius: 3.5, zone: { sec: 10, dps: 90 } },
-  { key: 'E', name: '업화', cooldown: 24, targeted: true, range: 18, radius: 5.5, dmg: 650 },
+  { key: 'Q', name: '화염구', cooldown: 6, targeted: true, range: 14, radius: 2.5, dmg: 220 },
+  { key: 'W', name: '불의 장막', cooldown: 14, targeted: true, range: 12, radius: 3.5, zone: { sec: 10, dps: 90 } },
+  { key: 'E', name: '업화', cooldown: 24, targeted: true, range: 14, radius: 5.5, dmg: 650 },
 ]
 export const LORD_SKILLS: SkillDef[] = [
   { key: 'Q', name: '군기', cooldown: 20, targeted: false, range: 0, radius: 12, buff: { sec: 8, stat: 'reload' } },

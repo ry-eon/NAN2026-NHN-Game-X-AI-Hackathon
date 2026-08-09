@@ -211,11 +211,14 @@ export const greedy: BotPolicy = {
       }
     }
 
-    // 5) 마법사 — 성벽 안쪽 지상을 따라 움직여 궁극 사거리(18) 안에 전선을 넣는다.
-    //    문턱 10: 이동 중엔 못 쏘므로 재배치는 참을수록 이득 (6시드 스윕으로 확정)
-    if (!mage || s.tick % sec(6) !== 0) return undefined
+    // 5) 마법사 — 성벽 안쪽 지상을 따라 움직여 궁극 사거리(14) 안에 전선을 넣는다.
+    //    사거리 18→14 개정(2026-08-09) 후 6시드×18구성 스윕으로 재조정. 결정적 노브는
+    //    문턱이 아니라 **주기**였다: 6초→4초로 줄이자 기준선 상회가 5/6 → 6/6이 됐다
+    //    (사거리가 짧으면 전선을 늦게 따라가는 대가가 곧 '못 쏘는 시간'이다).
+    //    서는 자리도 벽에 한 칸 붙였다(-12 → -11): 벽 너머 도달이 그만큼 늘어난다.
+    if (!mage || s.tick % sec(4) !== 0) return undefined
     if (Math.abs(mage.pos.z - tz) <= 10) return undefined
-    return { unitMove: { ids: [mage.id], to: { x: WALL_X - 6, z: clampWallZ(tz) } } }
+    return { unitMove: { ids: [mage.id], to: { x: WALL_X - 5, z: clampWallZ(tz) } } }
   },
 }
 
