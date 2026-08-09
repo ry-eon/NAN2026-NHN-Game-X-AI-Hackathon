@@ -2377,6 +2377,41 @@ function syncScene(now: number): void {
     camPos.x = lx
     camPos.z = lz
   }
+  // 시연 모드 카메라 연출 — 판의 국면을 따라 시점을 옮긴다 (영상 촬영용).
+  // 봇이 조작을 하는 동안 카메라는 "지금 무슨 일이 일어나는가"를 따라간다.
+  if (demoBot) {
+    const boss = state.enemies.find((e) => state.kinds.enemies[e.kind]?.raise)
+    const front = state.enemies.filter((e) => e.pos.x < 12)
+    let tx = CASTLE.east - 10
+    let tz = 0
+    let td = 40
+    if (state.status === 'prep') {
+      // 준비: 성 전체를 넓게 — 병사들이 성벽으로 흩어지는 게 보이게
+      tx = CASTLE.east - 12
+      td = 46
+    } else if (boss && state.enemies.length <= 6) {
+      // 피날레 판정은 시나리오 봇과 같은 조건 — 카메라와 조작이 같은 국면을 본다
+      // 피날레: 성문 밖 보스와 출격 부대를 함께 — 조금 당겨서 교전이 보이게
+      tx = boss ? (boss.pos.x + CASTLE.east) / 2 : CASTLE.east + 4
+      tz = boss ? boss.pos.z : 0
+      td = 30
+    } else if (front.length > 0) {
+      // 교전 중: 전선의 무게중심 (성벽 앞) — 가장 많이 몰린 z를 따라간다
+      let sx = 0
+      let sz = 0
+      for (const e of front) {
+        sx += e.pos.x
+        sz += e.pos.z
+      }
+      tx = (sx / front.length + CASTLE.east) / 2
+      tz = sz / front.length
+      td = 36
+    }
+    camFollow = false
+    camPos.x += (tx - camPos.x) * Math.min(1, camDt * 1.2) // 느리게 따라간다 — 화면이 덜 흔들리게
+    camPos.z += (tz - camPos.z) * Math.min(1, camDt * 1.2)
+    camDist += (td - camDist) * Math.min(1, camDt * 0.9)
+  }
   // 시점 높이: 추적 중엔 성주의 층(성벽 위 11), 자유 모드는 지면 — 전환 시 보간으로 튐 방지
   camY += ((camFollow ? ly : 0) - camY) * Math.min(1, camDt * 8)
   // 비스듬한 앵글(약 43°) — 성벽·인물·바위의 수직면이 화면에 실린다
