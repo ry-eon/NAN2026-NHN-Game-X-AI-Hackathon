@@ -733,7 +733,10 @@ window.addEventListener('pointerdown', () => Sfx.unlock())
 // 부감 카메라: 남쪽에서 북쪽을 내려다봄 (서=성벽=왼쪽, 동=적=오른쪽). 휠 줌.
 // 2026-08-06 사용자 지시로 자유 이동 추가 — "멀리서 오는 것도 스타/롤처럼 움직여서 보고 싶다".
 // 기본은 성주 추적(camFollow), 가장자리 스크롤·화살표·미니맵 좌클릭이 추적을 풀고 C로 복귀.
-let camDist = 26
+// 초기 줌 26 → 36 [2026-08-09 사용자: "처음 화면이 너무 가깝다"]. 성벽 길이가 36이라
+// 26에서는 벽의 3분의 1도 안 들어와 배치 판단(어느 구간이 비었나)을 시작할 수가 없다.
+// 상한도 42 → 52로 올려 전황을 한 번에 볼 수 있게 한다.
+let camDist = 36
 let camFollow = true
 const camPos = { x: -15, z: 2 } // 자유 모드의 시점 (지면 기준). follow 중엔 매 프레임 성주로 덮인다
 let camY = 0 // 시점 높이 (성주가 성벽 위면 11) — 모드 전환 시 튀지 않게 보간
@@ -754,7 +757,7 @@ document.documentElement.addEventListener('mouseleave', (e) => {
 window.addEventListener('blur', () => (mouseIn = false))
 window.addEventListener('contextmenu', (e) => e.preventDefault())
 window.addEventListener('wheel', (e) => {
-  camDist = Math.max(9, Math.min(42, camDist + e.deltaY * 0.02))
+  camDist = Math.max(9, Math.min(52, camDist + e.deltaY * 0.02))
 })
 
 // 피킹 공통: 화면 좌표 → 월드 지점 (구조물 상면 우선, 없으면 지면)

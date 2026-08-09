@@ -262,6 +262,9 @@ export interface EnemyKindDef {
   flankBias: number
   /** 벽에 붙지 않고 이만큼 떨어져 멈춘다 (보스처럼 뒤에서 지휘하는 개체) */
   standoff?: number
+  /** 정문 고정 접근 — 위협 회피·측면 회절을 무시하고 **성문 정면 구간**으로만 온다.
+   *  보스는 무리에 섞여 옆구리로 도는 게 아니라 정문으로 걸어와야 한다(2026-08-09 사용자) */
+  gateApproach?: boolean
   /** 부활술 — 지정 시 쿨마다 반경 안의 시체를 되살린다 (네크로맨서) */
   raise?: { cooldown: number /* 초 */; radius: number; count: number; hpRatio: number }
   /**
@@ -300,7 +303,7 @@ export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
     // "보스는 마지막 웨이브와 **같이** 성벽으로 와야 한다"(사용자) — 1.5면 등장 55초에서
     // 약 79초 도착, 갑주귀(85초)와 같은 창에 성벽 앞에 선다.
     kind: 'necromancer', name: '네크로맨서', hp: 2000, dmg: 30, atkInterval: 3.0, speed: 1.5,
-    radius: 0.9, wallDamage: 12, threatAvoidance: 2.2, flankBias: 0.15,
+    radius: 0.9, wallDamage: 12, threatAvoidance: 2.2, flankBias: 0.15, gateApproach: true,
     standoff: 6, // 벽에 붙지 않되 성벽 화력 안에는 들어온다 — 무개입으로도 끊을 수 있어야 한다
     raise: { cooldown: 8, radius: 13, count: 2, hpRatio: 0.4 },
   },
@@ -442,6 +445,15 @@ function hashRand(seed: number, id: number): number {
  * 화력을 고르게 펴면 모든 구간이 평균이라 유도가 안 생기고, 한쪽에 몰아야 비로소 흐름이 생긴다.
  */
 function pickSegment(state: SiegeState, def: EnemyKindDef, id: number): ApproachSegment {
+  // 정문 고정 — 동벽 구간 중 성문(z=0)에 가장 가까운 쪽. 화망을 어디에 몰든 바뀌지 않는다
+  if (def.gateApproach) {
+    let best = SEGMENTS[0]!
+    for (const s of SEGMENTS) {
+      if (s.face !== 'east') continue
+      if (Math.abs(s.probe.z) < Math.abs(best.probe.z) || best.face !== 'east') best = s
+    }
+    return best
+  }
   const threats = SEGMENTS.map((s) => segmentThreat(state, s))
   const mean = threats.reduce((a, b) => a + b, 0) / threats.length
   const weights = SEGMENTS.map((s, i) => {
@@ -603,6 +615,8 @@ export interface FriendlyUnit {
   /** 홀드(S·H) — 스스로 적에게 다가가지 않는다. 이동 명령을 받으면 풀린다.
    *  자동 교전이 생기면서 "가만히 있으라"를 표현할 수단이 필요해졌다 (2026-08-09) */
   holding?: boolean
+  /** 정체 틱 — 경로가 남았는데 제자리인 시간. 재경로·포기 판단용 (2026-08-09 끼임 방지) */
+  stallT?: number
 }
 
 /** 조작 판정 반경 — 겹침 분리의 정지 거리(반경 합 ≈1.45)보다 넉넉해야 곁에 선 병사가 항상 잡힌다 */
@@ -611,6 +625,10 @@ export const CREW_MAN_RADIUS = 2.4
 /** 자동 교전 반경 — 근접 지상 유닛이 스스로 다가가는 거리. 7이면 "코앞"은 반응하고
  *  멀리 지나가는 무리는 쫓지 않는다(성문을 비우고 들판으로 끌려나가지 않게) */
 export const AUTO_ENGAGE_RADIUS = 7
+
+/** 끼임 방지 — 제자리 정체가 이만큼 이어지면 재경로(1.5초), 그래도 안 되면 포기(3초) */
+const STALL_REPATH_TICKS = 45
+const STALL_GIVEUP_TICKS = 90
 
 /**
  * 장착 배정 — 병기 id → 조작 중인 수비병 id (장착제, 2026-08-08).
@@ -1248,7 +1266,26 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
         }
       }
     }
+    // 정체 감지 → 재경로 → 포기 [2026-08-09]. 경로가 남았는데 제자리인 상태가 이어지면
+    // 유닛이 영영 끼어 있는다("종종 캐릭터가 낀다" 사용자). 실측된 지점은 계단 꼭대기
+    // 가장자리(x=-12.4, |z|=14, h≈10) — 벽·계단·보도 경계에서 슬라이드가 서로를 상쇄한다.
+    // 원인 지점을 하나씩 막는 대신, **어디서 끼든 스스로 풀리게** 한다:
+    // 1.5초 정체면 현재 위치에서 목적지로 다시 길을 찾고, 그래도 안 되면 명령을 버린다.
+    const px = u.pos.x
+    const pz = u.pos.z
     stepMover(u, state.kinds.units[u.kind]!.speed * moveMult(u.pos))
+    if (u.path.length > 0 && Math.hypot(u.pos.x - px, u.pos.z - pz) < 0.02) {
+      u.stallT = (u.stallT ?? 0) + 1
+      if (u.stallT === STALL_REPATH_TICKS) {
+        const goal = u.path[u.path.length - 1]!
+        commandMove(u, { x: goal.x, z: goal.z }, u.h) // 현재 위치 기준으로 다시 길을 찾는다
+      } else if (u.stallT >= STALL_GIVEUP_TICKS) {
+        u.path = []
+        u.target = null
+        u.aggro = false
+        u.stallT = 0
+      }
+    } else if (u.stallT) u.stallT = 0
   }
 
   // 스킬 시전 Q/W/E (2026-08-08 개편) — 성주는 버프, 전사는 공격기, 마법사는 화염.

@@ -58,8 +58,8 @@ describe('봇 러너', () => {
     const run = playout(SHIPPING_SEED, deploy)
     expect(run.status).toBe('won')
     // 595 = 2026-08-09 보스가 본대와 함께 오도록 속도 1.1→1.5·등장 57→55초로 바꾼 뒤 고정.
-    // 이력: 614(장착제) → 522(스킬 개편) → 1244(전사 근접화) → 922(도달 반경) → 595(보스 합류)
-    expect(run.wallHp).toBe(595)
+    // 이력: 614(장착제) → 522(스킬 개편) → 1244(전사 근접화) → 922(도달 반경) → 581(보스 정문 접근·끼임 방지)
+    expect(run.wallHp).toBe(581)
     expect(run.seconds).toBeGreaterThan(60)
   })
 

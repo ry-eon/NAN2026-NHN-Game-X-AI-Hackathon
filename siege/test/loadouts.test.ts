@@ -19,11 +19,11 @@ describe('로드아웃', () => {
     // 이 수치는 "지금 출고 중인 판"을 고정하는 단언이라, 밸런스를 손대면 여기가 먼저 깨진다.
     // 2026-08-09 재고정. 전사 근접화(공짜 화력 소멸)에 이어 "공격은 적 몸통에 닿는다"로
     // 근접 반격이 가능해지자 난이도가 다시 내려가 대포를 200→192로 재보정했다(6시드 스윕).
-    // 이력: 614(장착제) → 522(스킬 개편) → 1244(전사 근접화) → 922(도달 반경) → 595(보스 합류)
+    // 이력: 614(장착제) → 522(스킬 개편) → 1244(전사 근접화) → 922(도달 반경) → 581(보스 정문 접근·끼임 방지)
     const run = playout(SHIPPING_SEED, deploy, DEFAULT_LOADOUT)
     expect(run.status).toBe('won')
-    expect(run.wallHp).toBe(595)
-    expect(run.seconds).toBe(101.4)
+    expect(run.wallHp).toBe(581)
+    expect(run.seconds).toBe(101.5)
     expect(describeLoadout(DEFAULT_LOADOUT)).toBe('대포 8 · 발리스타 4 · 전사 1 · 마법사 1')
   })
 
