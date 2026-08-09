@@ -711,7 +711,9 @@ function startAutoDeploy(): void {
 }
 
 /** V — 총 백병전: 수비병 전원이 병기를 버리고 지상으로 내려가 교전한다(어택땅).
- *  침입자가 있으면 그쪽으로, 없으면 성문 안쪽 지상 집결. 최후 국면의 전환 스위치 */
+ *  침입자가 있으면 그쪽으로, 없으면 **성문 밖으로 출격**한다 (2026-08-09 사용자:
+ *  "성문 앞에 모이는 게 아니라 성문 밖으로 나가야 한다") — 농성을 접고 나가 싸우는
+ *  전환이라 집결지가 성 안이면 스위치의 의미가 없다. 성문 터널을 지나 바깥 4에 선다. */
 function allMelee(): void {
   autoDeploy = false
   const crewKinds = new Set(
@@ -723,8 +725,8 @@ function allMelee(): void {
     (e) => e.mode === 'breach' && e.pos.x < CASTLE.east - CASTLE.wallT / 2,
   )
   const to = intruders.length > 0
-    ? { x: intruders[0]!.pos.x, z: intruders[0]!.pos.z, h: 0 }
-    : { x: CASTLE.east - CASTLE.wallT / 2 - 4, z: 0, h: 0 }
+    ? { x: intruders[0]!.pos.x, z: intruders[0]!.pos.z, h: 0 } // 안뜰이 뚫렸으면 그쪽이 먼저다
+    : { x: CASTLE.east + CASTLE.wallT / 2 + 4, z: 0, h: 0 } // 성문 밖 출격
   pendingUnitMove = { ids: guards.map((g) => g.id), to, attack: true }
   showMoveMarker(to.x, to.z, 0, 0xff5a4a, 2.2)
 }
