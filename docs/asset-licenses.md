@@ -7,7 +7,7 @@
 ### 외부 에셋 (전부 CC0 — 저작자 표기 불요, 상업 이용 가능. 출처는 성실 기록)
 | 에셋 | 용도 | 출처 | 라이선스 |
 |---|---|---|---|
-| Kloppenheim 02 (Puresky) HDRI 1K | 하늘·환경광 | Poly Haven (polyhaven.com/a/kloppenheim_02_puresky) | CC0 |
+| Kloppenheim 02 (Puresky) HDRI 1K | PBR 간접광·반사 (하늘 자체는 절차 생성 돔) | Poly Haven (polyhaven.com/a/kloppenheim_02_puresky) | CC0 |
 | Bricks075A 1K | 성벽 석재 PBR | ambientCG (ambientcg.com/view?id=Bricks075A) | CC0 |
 | Grass004 1K | 들판 PBR | ambientCG (ambientcg.com/view?id=Grass004) | CC0 |
 | Ground048 1K | 흙길 PBR | ambientCG (ambientcg.com/view?id=Ground048) | CC0 |
@@ -17,6 +17,10 @@
 | Wooden Crate 01 (GLTF 1K) | 안뜰 궤짝 | Poly Haven (polyhaven.com/a/wooden_crate_01) | CC0 |
 
 ### 코드 생성 (v5 3D)
+> **파일명 주의**: 저장소의 `client/public/assets/hdr/dusk_1k.hdr`는 위 Kloppenheim 02 Puresky를
+> 받아 **로컬에서 이름만 바꾼 것**이다(원본 `kloppenheim_02_puresky_1k.hdr`).
+> 2026-08-10 원본과 MD5 대조로 동일 파일임을 확인했다 (`283ef04d…`, 1,393,622 bytes).
+
 - 성채·소품 지오메트리: three.js 절차 조합 (client/src3d/environment.ts)
 - 캐릭터·괴수·보스 모델 전량: 절차 지오메트리 (client/src3d/models.ts)
 - **사운드 전량: WebAudio 실시간 합성** (client/src3d/audio.ts) — **오디오 파일 0개**.
