@@ -295,7 +295,11 @@ export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
   // 수치는 후보 13종을 봇으로 돌려 고른 것. 더 세게(hp3200·쿨7×3기·0.55) 두면 무개입이
   // 무너진다 — 자동 조준은 가까운 적부터 치므로 뒤에 선 술사를 영영 못 끊기 때문이다.
   necromancer: {
-    kind: 'necromancer', name: '네크로맨서', hp: 2000, dmg: 30, atkInterval: 3.0, speed: 1.1,
+    // 속도 1.1 → 1.5 [2026-08-09]: 1.1은 전 병종 최저라 늘 꼴찌로 도착해, 본대가 전멸한
+    // **뒤에** 혼자 걸어와 맞아 죽었다(실측: 판 종료 시각 = 보스 사망 시각, 남은 적 0).
+    // "보스는 마지막 웨이브와 **같이** 성벽으로 와야 한다"(사용자) — 1.5면 등장 55초에서
+    // 약 79초 도착, 갑주귀(85초)와 같은 창에 성벽 앞에 선다.
+    kind: 'necromancer', name: '네크로맨서', hp: 2000, dmg: 30, atkInterval: 3.0, speed: 1.5,
     radius: 0.9, wallDamage: 12, threatAvoidance: 2.2, flankBias: 0.15,
     standoff: 6, // 벽에 붙지 않되 성벽 화력 안에는 들어온다 — 무개입으로도 끊을 수 있어야 한다
     raise: { cooldown: 8, radius: 13, count: 2, hpRatio: 0.4 },
@@ -837,7 +841,8 @@ export const DEFAULT_LOADOUT: Loadout = {
     { wave: 2, kind: 'runner', count: 18, at: 26, every: 0.8, label: '짐승 무리' }, // 회절 레인으로 크게 돈다
     { wave: 3, kind: 'tank', count: 5, at: 50, every: 2.5, label: '본대 — 빈 갑옷을 앞세워' },
     { wave: 3, kind: 'grunt', altKind: 'runner', count: 25, at: 52, every: 0.6 },
-    { wave: 4, kind: 'necromancer', count: 1, at: 57, z: 0, label: '술사 — 이 군세를 일으킨 자' },
+    // 등장 57 → 55초: 본대(50·52초)와 한 덩어리로 몰려오게 (2026-08-09)
+    { wave: 4, kind: 'necromancer', count: 1, at: 55, z: 0, label: '술사 — 이 군세를 일으킨 자' },
   ],
 }
 
