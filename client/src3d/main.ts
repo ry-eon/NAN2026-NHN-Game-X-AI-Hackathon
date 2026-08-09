@@ -445,7 +445,12 @@ function updateAimLines(): void {
         prevY = heightNear(x, z, prevY)
         px.push(x)
         pz.push(z)
-        py.push(prevY + 0.12)
+        // **시전자 높이와 지형 중 높은 쪽**에 그린다. sim은 사거리를 XZ 평면 거리로만
+        // 재므로(높이 무시) 시전자 평면의 원이 곧 정확한 경계다. 성벽 위 시전자면
+        // 원 전체가 그 높이에 평평하게 놓여 시전자를 중심으로 읽히고("사거리가 이상하다"
+        // — 성벽 위 마법사 기준 지면에 그리면 원근상 중심이 어긋나 보였다, 2026-08-09),
+        // 지상 시전자면 성벽 구간에서 보도 위로 올라타 벽에 파묻히지 않는다.
+        py.push(Math.max(c.h, prevY) + 0.12)
       }
       for (let i = 0; i < RANGE_SEGS; i++) {
         const j = (i + 1) % RANGE_SEGS
