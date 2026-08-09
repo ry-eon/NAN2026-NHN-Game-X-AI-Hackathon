@@ -426,52 +426,23 @@ function updateAimLines(): void {
   pos.needsUpdate = true
   aimLineGeo.setDrawRange(0, n * 4)
   aimLines.visible = n > 0
-  // 시전 사거리 원 — 조준 중에만. 96점마다 지형 높이를 찍어 벽·계단을 타고 넘는다.
-  // (직전 점의 높이를 기준으로 삼아 흉벽 띠 같은 '설 수 없는 지점'에서 뚝 떨어지지 않게)
+  // 시전자 → 착탄점 연결선 (조준 중에만). **사거리 원은 폐지** [2026-08-09 확정]:
+  // 반경 14짜리 얇은 원이 높이 11 성벽을 가로지르면 어느 높이에 그리든 화면에서는
+  // 조각난 호로만 보인다(시전자 평면=공중에 뜸 / 지면=시전자와 끊김 — 5회 반복 실패).
+  // 사거리 정보는 **레티클이 경계에서 멈추는 것**으로 전달하고(clampToRange), 여기서는
+  // "누가 어디에 쏘는가"만 한 줄로 잇는다 — 원기둥을 2D로 그리려던 시도 자체를 접었다.
   if (aiming && aimingCast) {
     const c = state.units.find((u) => u.id === aimingCast!.casterId)
     if (c) {
-      const pos = rangeGeo.getAttribute('position') as THREE.BufferAttribute
-      const r = aimingCast.def.range
-      // 96점의 (x, y, z)를 먼저 구한 뒤, 인접 점의 높이 차가 작을 때만 선분을 그린다
-      const px: number[] = []
-      const pz: number[] = []
-      const py: number[] = []
-      let prevY = c.h
-      for (let i = 0; i < RANGE_SEGS; i++) {
-        const a = (i / RANGE_SEGS) * Math.PI * 2
-        const x = c.pos.x + Math.sin(a) * r
-        const z = c.pos.z + Math.cos(a) * r
-        prevY = heightNear(x, z, prevY)
-        px.push(x)
-        pz.push(z)
-        // **지면(지형) 투영** [2026-08-09 확정]. sim은 사거리를 XZ 거리로만 재므로 어느
-        // 높이의 단면을 그려도 수학적으로는 맞다 — 그래서 "어느 쪽이 더 쓸모 있나"로 정했다.
-        // 괴수는 항상 지면에 있어 마법은 사실상 100% 지면에 떨어진다. 시전자 평면에 그리면
-        // "내 발밑 높이에서 14 안"이라는 묻지 않는 질문에 답하게 된다. 대신 성벽 위 시전자와
-        // 원이 시각적으로 끊기는 문제는 아래 **다림줄**로 잇는다.
-        py.push(prevY + 0.12)
-      }
-      for (let i = 0; i < RANGE_SEGS; i++) {
-        const j = (i + 1) % RANGE_SEGS
-        // 높이 점프(벽 오르내림) 구간은 퇴화 선분으로 만들어 보이지 않게 한다
-        const jump = Math.abs(py[j]! - py[i]!) > 1.5
-        pos.setXYZ(i * 2, px[i]!, py[i]!, pz[i]!)
-        if (jump) pos.setXYZ(i * 2 + 1, px[i]!, py[i]!, pz[i]!)
-        else pos.setXYZ(i * 2 + 1, px[j]!, py[j]!, pz[j]!)
-      }
-      // 다림줄 — 시전자 발밑에서 원 중심(지면)까지. 성벽 위에서 쏠 때 원의 주인이 읽힌다.
-      // 원의 최저 높이를 지면으로 삼는다(중심 바로 아래는 성벽 속이라 지형값이 11이다)
-      const groundY = Math.min(...py) - 0.12
-      const v = RANGE_SEGS * 2
-      pos.setXYZ(v, c.pos.x, c.h + 0.9, c.pos.z)
-      pos.setXYZ(v + 1, c.pos.x, groundY + 0.05, c.pos.z)
+      const pos = castLineGeo.getAttribute('position') as THREE.BufferAttribute
+      pos.setXYZ(0, c.pos.x, c.h + 1.3, c.pos.z)
+      pos.setXYZ(1, aimReticle.position.x, aimReticle.position.y + 0.1, aimReticle.position.z)
       pos.needsUpdate = true
-      rangeGeo.computeBoundingSphere()
-      rangeRing.visible = true
+      castLineGeo.computeBoundingSphere()
+      castLine.visible = true
     }
   } else {
-    rangeRing.visible = false
+    castLine.visible = false
   }
 }
 // 스킬 조준 상태 (QWE 개편 2026-08-08) — 지점 스킬만 레티클 조준, 자기 중심·버프는 즉발
@@ -586,24 +557,20 @@ let pendingCast: { casterId?: number; slot: number; x?: number; z?: number } | u
 // LineSegments인 이유: 원이 성벽을 넘는 지점에서 지형 높이가 0↔11로 뛰는데, 이어진
 // 선(LineStrip)이면 그 두 점을 잇는 **수직선**이 화면을 가로질러 "가끔 선이 이상해진다"가
 // 된다 (2026-08-09 사용자 실측). 구간별로 끊어 그리고 높이 점프 구간은 아예 생략한다.
-const RANGE_SEGS = 96
-// +1 선분 = 시전자에서 지면 중심으로 내리는 **다림줄**. 지면 투영 원은 정보가 정확한
-// 대신 성벽 위 시전자와 시각적으로 끊겨 "중심이 어긋났다"로 읽힌다 — 이 한 줄이 그 연결이다.
-const rangeGeo = new THREE.BufferGeometry()
-rangeGeo.setAttribute(
-  'position',
-  new THREE.BufferAttribute(new Float32Array((RANGE_SEGS + 1) * 2 * 3), 3),
-)
-const rangeRing = new THREE.LineSegments(
-  rangeGeo,
+// 시전 연결선 — 시전자 가슴에서 착탄점까지 한 줄. 사거리 원을 대신하는 표시로,
+// "이 스킬은 저 사람이 저기에 쏜다"만 말한다 (원기둥을 2D로 그리려는 시도는 폐지)
+const castLineGeo = new THREE.BufferGeometry()
+castLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(2 * 3), 3))
+const castLine = new THREE.Line(
+  castLineGeo,
   new THREE.LineBasicMaterial({
-    color: 0x9fc2ff, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false,
+    color: 0xffb060, transparent: true, opacity: 0.55, depthWrite: false, depthTest: false,
   }),
 )
-rangeRing.renderOrder = 998
-rangeRing.frustumCulled = false
-rangeRing.visible = false
-scene.add(rangeRing)
+castLine.renderOrder = 998
+castLine.frustumCulled = false
+castLine.visible = false
+scene.add(castLine)
 
 /** 클릭 지점을 시전 사거리 안으로 클램프 (LoL 관례) — 사거리 밖 클릭도 무시하지 않고
  *  최대 사거리 지점에 시전한다. sim 검증은 그대로 통과하므로 리플레이 안전 */
@@ -859,7 +826,7 @@ renderer.domElement.addEventListener('pointerdown', (e) => {
     aiming = false
     aimingCast = null
     aimReticle.visible = false
-    rangeRing.visible = false
+    castLine.visible = false
     return
   }
   // 어택땅 모드: 좌클릭 = 접적 이동 명령, 우클릭 = 취소 (SC 관례)
@@ -925,10 +892,12 @@ window.addEventListener('pointermove', (e) => {
       // 높이는 **클램프된 xz의 지형**으로 재계산 — 클릭 지점 높이를 그대로 쓰면 성벽 위를
       // 겨눴다 클램프될 때 레티클이 공중에 뜬다 ("위쪽은 마우스 이동이 안 된다" 2026-08-09)
       const p = clampToRange(raw)
-      const y = p === raw ? raw.h : heightNear(p.x, p.z, 0)
+      const clamped = p !== raw // 커서가 사거리 밖 → 레티클이 경계에 물려 더 안 나간다
+      const y = clamped ? heightNear(p.x, p.z, 0) : raw.h
       aimReticle.position.set(p.x, y + 0.08, p.z)
+      // 경계에 물리면 색이 바뀐다 — 사거리 원 없이 한계를 알리는 유일한 신호라 분명해야 한다
       for (const c of aimReticle.children)
-        ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(0xff7a3a)
+        ((c as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(clamped ? 0xffd050 : 0xff7a3a)
     }
     return
   }
@@ -1023,7 +992,7 @@ window.addEventListener('keydown', (e) => {
     aiming = false
     aimingCast = null
     aimReticle.visible = false
-    rangeRing.visible = false
+    castLine.visible = false
     cancelAttackMove()
   }
 })
