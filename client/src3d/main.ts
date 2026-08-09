@@ -433,13 +433,27 @@ function updateAimLines(): void {
     if (c) {
       const pos = rangeGeo.getAttribute('position') as THREE.BufferAttribute
       const r = aimingCast.def.range
+      // 96점의 (x, y, z)를 먼저 구한 뒤, 인접 점의 높이 차가 작을 때만 선분을 그린다
+      const px: number[] = []
+      const pz: number[] = []
+      const py: number[] = []
       let prevY = c.h
-      for (let i = 0; i <= RANGE_SEGS; i++) {
+      for (let i = 0; i < RANGE_SEGS; i++) {
         const a = (i / RANGE_SEGS) * Math.PI * 2
         const x = c.pos.x + Math.sin(a) * r
         const z = c.pos.z + Math.cos(a) * r
         prevY = heightNear(x, z, prevY)
-        pos.setXYZ(i, x, prevY + 0.12, z)
+        px.push(x)
+        pz.push(z)
+        py.push(prevY + 0.12)
+      }
+      for (let i = 0; i < RANGE_SEGS; i++) {
+        const j = (i + 1) % RANGE_SEGS
+        // 높이 점프(벽 오르내림) 구간은 퇴화 선분으로 만들어 보이지 않게 한다
+        const jump = Math.abs(py[j]! - py[i]!) > 1.5
+        pos.setXYZ(i * 2, px[i]!, py[i]!, pz[i]!)
+        if (jump) pos.setXYZ(i * 2 + 1, px[i]!, py[i]!, pz[i]!)
+        else pos.setXYZ(i * 2 + 1, px[j]!, py[j]!, pz[j]!)
       }
       pos.needsUpdate = true
       rangeGeo.computeBoundingSphere()
@@ -558,13 +572,16 @@ let pendingCast: { casterId?: number; slot: number; x?: number; z?: number } | u
  * 실제 범위가 다르다"). 이제 96점마다 그 지점의 지형 높이를 찍어 벽 위로는 올라타고
  * 안뜰·평지에서는 바닥에 붙는다 — 원이 지면에 그려진 것으로 읽힌다.
  */
+// LineSegments인 이유: 원이 성벽을 넘는 지점에서 지형 높이가 0↔11로 뛰는데, 이어진
+// 선(LineStrip)이면 그 두 점을 잇는 **수직선**이 화면을 가로질러 "가끔 선이 이상해진다"가
+// 된다 (2026-08-09 사용자 실측). 구간별로 끊어 그리고 높이 점프 구간은 아예 생략한다.
 const RANGE_SEGS = 96
 const rangeGeo = new THREE.BufferGeometry()
 rangeGeo.setAttribute(
   'position',
-  new THREE.BufferAttribute(new Float32Array((RANGE_SEGS + 1) * 3), 3),
+  new THREE.BufferAttribute(new Float32Array(RANGE_SEGS * 2 * 3), 3),
 )
-const rangeRing = new THREE.Line(
+const rangeRing = new THREE.LineSegments(
   rangeGeo,
   new THREE.LineBasicMaterial({
     color: 0x9fc2ff, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false,
@@ -1525,6 +1542,15 @@ function handleEvents(events: SiegeEvent[]): void {
   for (const ev of events) {
     if (ev.type === 'unitFired') {
       const from = new THREE.Vector3(ev.from.x, ev.from.h + (MUZZLE_H[ev.unitKind] ?? 1), ev.from.z)
+      // 전사는 근접이다 — 투사체를 날리지 않고 **표적 자리에서 베는 궤적**을 그린다
+      // (구 검기 투사체는 "칼이 아니라 뭘 던진다"로 읽혔다 — 2026-08-09 반려)
+      if (ev.unitKind === 'hero') {
+        spawnSlashArc(ev.to.x, ev.to.z, ev.from.h + 0.9, 1.3)
+        spawnFlash(new THREE.Vector3(ev.to.x, ev.from.h + 0.9, ev.to.z), 0.9, 0xdfe8ff, 160)
+        unitAttackT.set(ev.unitId, performance.now())
+        Sfx.at('heroSwing', ev.from.x, ev.from.z)
+        continue
+      }
       spawnProjectile(ev.unitKind, ev.targetId, from, new THREE.Vector3(ev.to.x, 0.7, ev.to.z), (ev.flight / TICKS_PER_SECOND) * 1000)
       // 발사 섬광 — 어디서 쏘는지 읽히게 (대포는 크게)
       spawnFlash(from.clone(), ev.unitKind === 'cannon' ? 2.4 : 0.8, 0xffdf9a, 200)

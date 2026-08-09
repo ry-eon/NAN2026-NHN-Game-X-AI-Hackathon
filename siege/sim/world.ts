@@ -547,7 +547,9 @@ export const UNIT_KINDS: Record<string, UnitKindDef> = {
     projectileSpeed: 46, // 볼트 — 빠르지만 즉시는 아니다
   },
   cannon: {
-    kind: 'cannon', name: '대포', hp: 500, dmg: 182, atkInterval: 3.8, range: 24, speed: 1.0,
+    // 182 → 200 [2026-08-09]: 전사 근접화로 사라진 지상 화력 보정 (6시드 스윕 — 200에서
+    // 표준 장착 잔존 675~1244로 대역 한가운데. 220 이상은 상한 1400을 넘어 반려)
+    kind: 'cannon', name: '대포', hp: 500, dmg: 200, atkInterval: 3.8, range: 24, speed: 1.0,
     radius: 0.9, aoe: 2.8, emplaced: true, aimRadius: 9, crew: 'guard',
     projectileSpeed: 22, // 포탄 — 느리다. 최대 사거리에서 1초 넘게 난다
   },
@@ -556,7 +558,11 @@ export const UNIT_KINDS: Record<string, UnitKindDef> = {
   // 대포 140 → 182, 발리스타 200 → 260.
   // 영웅 2종 (2026-08-08 확정: "기존 영웅은 전사, 마법사 추가"). kind 'hero'를 유지하는 이유:
   // 프리셋·봇·테스트가 참조하는 식별자라 개명은 name(표시)만.
-  hero: { kind: 'hero', name: '전사', hp: 900, dmg: 110, atkInterval: 0.9, range: 13, speed: HERO_SPEED, radius: 0.5, skills: WARRIOR_SKILLS },
+  // 전사는 **근접**이다 [2026-08-09 확정]. 구 사거리 13은 검기를 날리는 원거리였고,
+  // 화면에서 "칼이 아니라 뭘 던진다"로 읽혔다(사용자). 더 큰 문제는 성벽 뒤에 선 채
+  // 벽 너머를 계속 때려 **무개입 화력의 17%를 공짜로 주고 있었다**는 것 — 근접화로
+  // 그 화력이 사라진 만큼 대포를 182→200으로 올려 보정했다(6시드 스윕).
+  hero: { kind: 'hero', name: '전사', hp: 900, dmg: 300, atkInterval: 0.85, range: 2.4, speed: HERO_SPEED, radius: 0.5, skills: WARRIOR_SKILLS },
   mage: { kind: 'mage', name: '마법사', hp: 700, dmg: 70, atkInterval: 1.1, range: 16, speed: 3.4, radius: 0.5, skills: MAGE_SKILLS },
   // 병기에서 내려온 조작 병사 — 사거리 1.6은 사실상 백병전이다. 배치가 아니라 병기에서 나온다
   guard: { kind: 'guard', name: '수비병', hp: 320, dmg: 62, atkInterval: 0.8, range: 1.6, speed: 3.4, radius: 0.4 },

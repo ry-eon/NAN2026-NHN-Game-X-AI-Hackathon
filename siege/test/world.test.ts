@@ -378,9 +378,10 @@ describe('M2b 전투', () => {
       stepSiege(state, spawns, { startAssault: true })
       const hero = state.units.find((u) => u.kind === 'hero')!
       state.units = [hero]
-      placeEnemy(state, 'grunt', hero.pos.x, hero.pos.z + 6, 660).atWall = true
+      // 전사 근접화(2026-08-09) 후 사거리 2.4 — 접적 판정을 보려면 그 안에 세워야 한다
+      placeEnemy(state, 'grunt', hero.pos.x, hero.pos.z + 2, 660).atWall = true
       const to = { x: hero.pos.x, z: hero.pos.z + 12, h: 0 }
-      // 어택땅: 명령 틱에 이미 사거리(13) 안 — 같은 틱 접적 판정에서 경로를 버린다
+      // 어택땅: 명령 틱에 이미 사거리 안 — 같은 틱 접적 판정에서 경로를 버린다
       stepSiege(state, spawns, { unitMove: { ids: [hero.id], to, attack: true } })
       expect(hero.path).toHaveLength(0)
       expect(hero.aggro).toBe(false)
