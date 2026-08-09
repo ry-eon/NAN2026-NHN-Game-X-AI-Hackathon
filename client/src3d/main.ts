@@ -249,6 +249,7 @@ const enemyHit = new Map<number, HitReact>()
 const unitHit = new Map<number, HitReact>() // 아군 피격 (meleeHit)
 const unitAttackT = new Map<number, number>() // unitFired 시각 — 활 놓기/검 스윙/병기 반동
 const mountedPrev = new Map<number, boolean>() // 병기별 직전 장착 상태 — 장착 성사 펄스 트리거용
+let bossBannerT = -1e9 // 보스 등장 배너 표시 시각
 
 // 아군 유닛 비주얼 풀 — 병종별 절차 모델. 그룹→유닛 id 역참조는 피킹에 사용
 interface UnitVisual {
@@ -1117,6 +1118,9 @@ hud.innerHTML = `
     성벽 <span id="wall"></span><div style="width:280px;height:10px;background:#000a;margin-top:3px"><div id="wallbar" style="height:100%;width:100%;background:#62c462"></div></div>
   </div>
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
+  <div id="boss-banner" style="position:absolute;top:44%;left:50%;transform:translateX(-50%);display:none;
+       font-size:26px;font-weight:bold;color:#d9a8ff;text-shadow:0 2px 12px #000,0 0 24px #7a34c0;
+       letter-spacing:2px;pointer-events:none"></div>
   <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
   <div id="fps" style="position:absolute;top:14px;right:16px;font-size:12px;color:#88a088"></div>
   <!-- SC식 하단 컨트롤 바 — 전폭 통합 패널: 미니맵 ‖ 영웅 ‖ 선택/상세 ‖ 커맨드 카드 -->
@@ -1296,6 +1300,14 @@ function drawMinimap(): void {
     c.fillStyle = boss ? '#c07df5' : '#e05545'
     const s = boss ? 5 : 3
     c.fillRect(miniX(en.pos.x) - s / 2, miniZ(en.pos.z) - s / 2, s, s)
+    // 보스는 맥동하는 링을 덧그린다 — 미니맵에서 "저기 있다"가 즉시 읽히게
+    if (boss) {
+      c.strokeStyle = '#e0b0ff'
+      c.lineWidth = 1.5
+      c.beginPath()
+      c.arc(miniX(en.pos.x), miniZ(en.pos.z), 5 + 3 * (0.5 + 0.5 * Math.sin(performance.now() * 0.006)), 0, Math.PI * 2)
+      c.stroke()
+    }
   }
   // 아군 — 녹색(조작 병사가 비운 병기는 회색), 영웅 금색, 선택은 흰 테두리
   for (const u of state.units) {
@@ -1543,7 +1555,14 @@ let wallHitT = -1e9 // 마지막 성벽 피격 시각 — HUD 게이지 반응�
 
 function handleEvents(events: SiegeEvent[]): void {
   for (const ev of events) {
-    if (ev.type === 'unitFired') {
+    if (ev.type === 'spawned' && ev.kind === 'necromancer') {
+      // 보스 등장 고지 — 들판 저편에서 걸어오므로 알려주지 않으면 존재를 모른 채 판이 끝난다
+      const b = document.getElementById('boss-banner')!
+      b.textContent = '네크로맨서 등장 — 쓰러진 것을 되살린다'
+      b.style.display = 'block'
+      bossBannerT = performance.now()
+      Sfx.global('raise')
+    } else if (ev.type === 'unitFired') {
       const from = new THREE.Vector3(ev.from.x, ev.from.h + (MUZZLE_H[ev.unitKind] ?? 1), ev.from.z)
       // 근접 병종(전사·수비병)은 투사체를 날리지 않고 **표적 자리에서 베는 궤적**을 그린다.
       // 수비병은 화살 투사체 + 화살음으로 그려지고 있었다 — 칼을 든 병사인데 활을 쏘는 셈
@@ -2197,6 +2216,24 @@ function syncScene(now: number): void {
     let v = enemyVisuals.get(e.id)
     if (!v) {
       const rig = makeMonster(e.kind)
+      // 보스는 이름표 + 성벽 너머로도 보이는 표식 — 속도 1.1이라 판 끝까지 들판 저편에
+      // 머무는데(실측: 등장 57초 → 성벽 도달 90초), 어디 있는지 모르면 "술사를 먼저
+      // 끊는다"는 판단 자체가 성립하지 않는다 ("보스가 안 보인다" 2026-08-09)
+      if (e.kind === 'necromancer') {
+        const plate = makeNameplate('네크로맨서', '#c07df5')
+        plate.translateY(3.4)
+        plate.material.depthTest = false
+        plate.renderOrder = 997
+        rig.root.add(plate)
+        const beacon = new THREE.Mesh(
+          new THREE.ConeGeometry(0.5, 1.3, 4),
+          new THREE.MeshBasicMaterial({ color: 0xc07df5, transparent: true, opacity: 0.85, depthTest: false }),
+        )
+        beacon.position.y = 4.6
+        beacon.rotation.x = Math.PI // 아래를 가리키는 표식
+        beacon.renderOrder = 997
+        rig.root.add(beacon)
+      }
       v = { group: rig.root, rig }
       enemyVisuals.set(e.id, v)
       enemyGroupToId.set(rig.root.uuid, e.id)
@@ -2318,6 +2355,16 @@ function syncScene(now: number): void {
     camera.position.y += Math.sin(now * 0.053 + 1.7) * s * 0.55
     camera.position.z += Math.sin(now * 0.037 + 3.1) * s * 0.6
     camera.rotation.z += Math.sin(now * 0.047 + 0.8) * s * 0.02
+  }
+
+  // 보스 배너 — 4초 표시 후 사라진다
+  {
+    const el = document.getElementById('boss-banner')!
+    const age = now - bossBannerT
+    if (el.style.display !== 'none') {
+      if (age > 4000) el.style.display = 'none'
+      else el.style.opacity = age > 3000 ? `${1 - (age - 3000) / 1000}` : '1'
+    }
   }
 
   // HUD
@@ -2515,6 +2562,8 @@ function resetGame(): void {
   unitAttackT.clear()
   unitHit.clear()
   mountedPrev.clear()
+  bossBannerT = -1e9
+  document.getElementById('boss-banner')!.style.display = 'none'
   for (const d of dying) {
     scene.remove(d.obj)
     disposeTree(d.obj)
