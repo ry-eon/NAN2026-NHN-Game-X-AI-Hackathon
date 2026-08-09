@@ -426,12 +426,23 @@ function updateAimLines(): void {
   pos.needsUpdate = true
   aimLineGeo.setDrawRange(0, n * 4)
   aimLines.visible = n > 0
-  // 시전 사거리 원 — 조준 중에만, 시전자를 따라다닌다 (시전자가 걷는 중일 수도 있다)
+  // 시전 사거리 원 — 조준 중에만. 96점마다 지형 높이를 찍어 벽·계단을 타고 넘는다.
+  // (직전 점의 높이를 기준으로 삼아 흉벽 띠 같은 '설 수 없는 지점'에서 뚝 떨어지지 않게)
   if (aiming && aimingCast) {
     const c = state.units.find((u) => u.id === aimingCast!.casterId)
     if (c) {
-      rangeRing.position.set(c.pos.x, c.h + 0.06, c.pos.z)
-      rangeRing.scale.setScalar(aimingCast.def.range)
+      const pos = rangeGeo.getAttribute('position') as THREE.BufferAttribute
+      const r = aimingCast.def.range
+      let prevY = c.h
+      for (let i = 0; i <= RANGE_SEGS; i++) {
+        const a = (i / RANGE_SEGS) * Math.PI * 2
+        const x = c.pos.x + Math.sin(a) * r
+        const z = c.pos.z + Math.cos(a) * r
+        prevY = heightNear(x, z, prevY)
+        pos.setXYZ(i, x, prevY + 0.12, z)
+      }
+      pos.needsUpdate = true
+      rangeGeo.computeBoundingSphere()
       rangeRing.visible = true
     }
   } else {
@@ -541,17 +552,26 @@ let pendingCast: { casterId?: number; slot: number; x?: number; z?: number } | u
 
 // 시전 사거리 원 — 조준 중 시전자 둘레에 그린다. "어디까지 닿는지"가 안 보이면
 // 사거리 제한이 버그처럼 느껴진다 (2026-08-09 "시전되는 곳이 정해져 있는 것 같다")
-// depthTest를 끈다 — 지휘 오버레이(조준선과 같은 규칙). 켜두면 성벽이 원의 위쪽(먼 쪽)을
-// 삼켜 "표시 범위와 실제 시전 범위가 다르다"로 읽힌다 (2026-08-09 실측 반려)
-const rangeRing = new THREE.Mesh(
-  new THREE.RingGeometry(0.985, 1.0, 64),
-  new THREE.MeshBasicMaterial({
-    color: 0x9fc2ff, transparent: true, opacity: 0.5, side: THREE.DoubleSide,
-    depthWrite: false, depthTest: false,
+/**
+ * 시전 사거리 원 — **지형을 타고 도는** 폴리라인 (2026-08-09 재수정).
+ * 평면 링을 depthTest off로 그렸더니 성벽을 뚫고 공중에 뜬 띠로 보였다("범위 표시와
+ * 실제 범위가 다르다"). 이제 96점마다 그 지점의 지형 높이를 찍어 벽 위로는 올라타고
+ * 안뜰·평지에서는 바닥에 붙는다 — 원이 지면에 그려진 것으로 읽힌다.
+ */
+const RANGE_SEGS = 96
+const rangeGeo = new THREE.BufferGeometry()
+rangeGeo.setAttribute(
+  'position',
+  new THREE.BufferAttribute(new Float32Array((RANGE_SEGS + 1) * 3), 3),
+)
+const rangeRing = new THREE.Line(
+  rangeGeo,
+  new THREE.LineBasicMaterial({
+    color: 0x9fc2ff, transparent: true, opacity: 0.8, depthWrite: false, depthTest: false,
   }),
 )
 rangeRing.renderOrder = 998
-rangeRing.rotation.x = -Math.PI / 2
+rangeRing.frustumCulled = false
 rangeRing.visible = false
 scene.add(rangeRing)
 
