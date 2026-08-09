@@ -445,12 +445,12 @@ function updateAimLines(): void {
         prevY = heightNear(x, z, prevY)
         px.push(x)
         pz.push(z)
-        // **시전자 높이와 지형 중 높은 쪽**에 그린다. sim은 사거리를 XZ 평면 거리로만
-        // 재므로(높이 무시) 시전자 평면의 원이 곧 정확한 경계다. 성벽 위 시전자면
-        // 원 전체가 그 높이에 평평하게 놓여 시전자를 중심으로 읽히고("사거리가 이상하다"
-        // — 성벽 위 마법사 기준 지면에 그리면 원근상 중심이 어긋나 보였다, 2026-08-09),
-        // 지상 시전자면 성벽 구간에서 보도 위로 올라타 벽에 파묻히지 않는다.
-        py.push(Math.max(c.h, prevY) + 0.12)
+        // **지면(지형) 투영** [2026-08-09 확정]. sim은 사거리를 XZ 거리로만 재므로 어느
+        // 높이의 단면을 그려도 수학적으로는 맞다 — 그래서 "어느 쪽이 더 쓸모 있나"로 정했다.
+        // 괴수는 항상 지면에 있어 마법은 사실상 100% 지면에 떨어진다. 시전자 평면에 그리면
+        // "내 발밑 높이에서 14 안"이라는 묻지 않는 질문에 답하게 된다. 대신 성벽 위 시전자와
+        // 원이 시각적으로 끊기는 문제는 아래 **다림줄**로 잇는다.
+        py.push(prevY + 0.12)
       }
       for (let i = 0; i < RANGE_SEGS; i++) {
         const j = (i + 1) % RANGE_SEGS
@@ -460,6 +460,12 @@ function updateAimLines(): void {
         if (jump) pos.setXYZ(i * 2 + 1, px[i]!, py[i]!, pz[i]!)
         else pos.setXYZ(i * 2 + 1, px[j]!, py[j]!, pz[j]!)
       }
+      // 다림줄 — 시전자 발밑에서 원 중심(지면)까지. 성벽 위에서 쏠 때 원의 주인이 읽힌다.
+      // 원의 최저 높이를 지면으로 삼는다(중심 바로 아래는 성벽 속이라 지형값이 11이다)
+      const groundY = Math.min(...py) - 0.12
+      const v = RANGE_SEGS * 2
+      pos.setXYZ(v, c.pos.x, c.h + 0.9, c.pos.z)
+      pos.setXYZ(v + 1, c.pos.x, groundY + 0.05, c.pos.z)
       pos.needsUpdate = true
       rangeGeo.computeBoundingSphere()
       rangeRing.visible = true
@@ -581,10 +587,12 @@ let pendingCast: { casterId?: number; slot: number; x?: number; z?: number } | u
 // 선(LineStrip)이면 그 두 점을 잇는 **수직선**이 화면을 가로질러 "가끔 선이 이상해진다"가
 // 된다 (2026-08-09 사용자 실측). 구간별로 끊어 그리고 높이 점프 구간은 아예 생략한다.
 const RANGE_SEGS = 96
+// +1 선분 = 시전자에서 지면 중심으로 내리는 **다림줄**. 지면 투영 원은 정보가 정확한
+// 대신 성벽 위 시전자와 시각적으로 끊겨 "중심이 어긋났다"로 읽힌다 — 이 한 줄이 그 연결이다.
 const rangeGeo = new THREE.BufferGeometry()
 rangeGeo.setAttribute(
   'position',
-  new THREE.BufferAttribute(new Float32Array(RANGE_SEGS * 2 * 3), 3),
+  new THREE.BufferAttribute(new Float32Array((RANGE_SEGS + 1) * 2 * 3), 3),
 )
 const rangeRing = new THREE.LineSegments(
   rangeGeo,
