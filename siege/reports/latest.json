@@ -2818,11 +2818,11 @@
         "policy": "afk",
         "loadout": "default",
         "status": "lost",
-        "ticks": 1296,
-        "seconds": 43.2,
+        "ticks": 1299,
+        "seconds": 43.3,
         "wallHp": 0,
         "unitsAlive": 26,
-        "enemiesKilled": 2,
+        "enemiesKilled": 3,
         "unitsLost": 0,
         "commands": [
           {

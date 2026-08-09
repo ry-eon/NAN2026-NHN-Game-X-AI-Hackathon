@@ -1172,7 +1172,7 @@ hud.innerHTML = `
   </div>
   <div style="position:absolute;top:100px;left:16px;font-size:11px;color:#8a8aa0;max-width:430px;line-height:1.7">
     드래그: 선택 — 성주 포함 (Shift 추가/제외 · Ctrl클릭/더블클릭: 같은 병종) · <b>Ctrl/Shift+1~9</b>: 부대 지정/추가 · <b>1~9</b>: 호출 ·
-    우클릭: 이동/조준/장착 · <b>A</b>: 어택땅 · <b>S/H</b>: 정지 · <b>Q/W/E</b>: 스킬(영웅·성주) ·
+    우클릭: 이동/조준/장착 · <b>A</b>: 어택땅 · <b>S/H</b>: 정지·홀드 · <b>Q/W/E</b>: 스킬(영웅·성주) ·
     <b>B</b>: 자동 장착 · <b>V</b>: 총 백병전 · <b>F1</b>: 영웅 순환 · <b>F2</b>: 전군 ·
     <b>Space/C</b>: 성주 카메라 · ESC: 해제 · <b>M</b>: 음소거
   </div>
@@ -1232,7 +1232,7 @@ window.addEventListener('pointerup', () => (miniCamDrag = false))
 // 키보드와 같은 함수를 호출한다 — 버튼과 단축키의 동작이 갈라질 수 없다.
 const CMD_BUTTONS: Array<{ id: string; label: string; key: string; fn: () => void }> = [
   { id: 'cmd-a', label: '어택', key: 'A', fn: enterAttackMove },
-  { id: 'cmd-s', label: '정지', key: 'S·H', fn: stopSelected },
+  { id: 'cmd-s', label: '홀드', key: 'S·H', fn: stopSelected },
   { id: 'cmd-g', label: '병사', key: 'G', fn: toggleCrewSelection },
   // Q/W/E — 스킬 3슬롯 (2026-08-08 개편). 라벨은 선택된 시전자의 스킬 이름으로 매 프레임 갱신
   { id: 'cmd-q', label: 'Q', key: 'Q', fn: () => castSlot(0) },

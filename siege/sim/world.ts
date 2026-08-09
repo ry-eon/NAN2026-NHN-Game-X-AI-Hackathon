@@ -594,10 +594,17 @@ export interface FriendlyUnit {
   aim: Vec2 | null
   /** 어택땅 이동 중 — 사거리 안에 적이 들어오면 정지·교전 (접적 시 해제) */
   aggro?: boolean
+  /** 홀드(S·H) — 스스로 적에게 다가가지 않는다. 이동 명령을 받으면 풀린다.
+   *  자동 교전이 생기면서 "가만히 있으라"를 표현할 수단이 필요해졌다 (2026-08-09) */
+  holding?: boolean
 }
 
 /** 조작 판정 반경 — 겹침 분리의 정지 거리(반경 합 ≈1.45)보다 넉넉해야 곁에 선 병사가 항상 잡힌다 */
 export const CREW_MAN_RADIUS = 2.4
+
+/** 자동 교전 반경 — 근접 지상 유닛이 스스로 다가가는 거리. 7이면 "코앞"은 반응하고
+ *  멀리 지나가는 무리는 쫓지 않는다(성문을 비우고 들판으로 끌려나가지 않게) */
+export const AUTO_ENGAGE_RADIUS = 7
 
 /**
  * 장착 배정 — 병기 id → 조작 중인 수비병 id (장착제, 2026-08-08).
@@ -1188,6 +1195,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       const off = FORMATION[Math.min(slot, FORMATION.length - 1)]!
       commandMove(u, { x: to.x + off[0], z: to.z + off[1] }, to.h ?? 0)
       u.aggro = input.unitMove.attack === true // 일반 이동은 어택땅을 해제한다
+      u.holding = false // 이동 명령은 홀드를 푼다
       slot++
     }
   }
@@ -1200,6 +1208,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
       u.path = []
       u.target = null
       u.aggro = false
+      u.holding = true // 홀드 — 자동 교전으로도 자리를 뜨지 않는다
     }
   }
 
@@ -1346,6 +1355,38 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
           m.pos.z = nz
           m.h = h
         }
+      }
+    }
+  }
+
+  // 자동 교전 [2026-08-09] — 근접 지상 유닛은 코앞의 적에게 **스스로 다가가 싸운다**.
+  // 없을 때의 그림: 병사 무리와 괴수가 3~6 거리에서 서로 지나치며 아무 일도 안 일어난다
+  // (괴수는 접전 거리 1.9 안에서만 때리고, 병사는 도달 2.2라 서로 안 닿는다 — 사용자 실측).
+  // 규칙은 셋으로 좁혔다: ①근접(사거리 ≤3)만 ②지상만(성벽 위는 내려가면 안 된다)
+  // ③**병기를 조작 중이면 제외**(자리를 뜨면 성벽 화력이 통째로 멈춘다 — 장착제의 뿌리).
+  // 홀드(H) 중이거나 이미 명령을 수행 중이면 건드리지 않는다.
+  {
+    const manned = new Set(manningMap(state).values())
+    for (const u of state.units) {
+      const def = state.kinds.units[u.kind]!
+      if (def.emplaced || def.range > 3) continue
+      if (u.h >= 1 || u.holding || u.path.length > 0 || u.target) continue
+      if (manned.has(u.id)) continue
+      let best: ActiveEnemy | null = null
+      let bestD = Infinity
+      for (const e of state.enemies) {
+        if (e.pos.x > FIELD.maxX - 2) continue // 이제 막 스폰된 개체까지 쫓아가진 않는다
+        const d = Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z)
+        if (d > AUTO_ENGAGE_RADIUS) continue
+        if (d < bestD || (d === bestD && best !== null && e.id < best.id)) {
+          best = e
+          bestD = d
+        }
+      }
+      // 이미 닿는 거리면 그 자리에서 때린다(사격 루프가 처리) — 굳이 다가가지 않는다
+      if (best && bestD > def.range + (state.kinds.enemies[best.kind]?.radius ?? 0)) {
+        commandMove(u, { x: best.pos.x, z: best.pos.z }, 0)
+        u.aggro = true // 접적하면 그 자리에 선다 (어택땅과 같은 규칙)
       }
     }
   }
