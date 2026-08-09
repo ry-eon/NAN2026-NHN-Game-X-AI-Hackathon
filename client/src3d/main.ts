@@ -17,8 +17,10 @@ import {
   TICKS_PER_SECOND,
 } from '../../siege/sim/world'
 import type { FriendlyUnit, SiegeEvent, SiegeInput, SkillDef } from '../../siege/sim/world'
-// 봇의 표준 장착 수순을 B(자동 장착) 매크로가 그대로 쓴다 — 순수 함수라 렌더 계층에서 안전
-import { deployPrep } from '../../siege/bots/policy'
+// 봇의 표준 장착 수순을 B(자동 장착) 매크로가 그대로 쓴다 — 순수 함수라 렌더 계층에서 안전.
+// makeScenario는 영상 촬영용 시연 모드(F9 / ?demo=1)가 쓴다.
+import { deployPrep, makeScenario } from '../../siege/bots/policy'
+import type { BotPolicy } from '../../siege/bots/policy'
 import { Sfx, type SfxName } from './audio'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
@@ -605,6 +607,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyA') enterAttackMove()
   if (e.code === 'KeyB') startAutoDeploy()
   if (e.code === 'KeyV') allMelee()
+  if (e.code === 'F9') {
+    toggleDemo()
+    e.preventDefault()
+  }
   // H = 홀드 (SC·LoL 공통 관례). 이 게임은 정지 시에만 사격하므로 홀드와 정지가 동치다
   if (e.code === 'KeyS' || e.code === 'KeyH') stopSelected()
 })
@@ -705,6 +711,15 @@ function stopSelected(): void {
 
 /** B — 자동 장착: deploy 봇과 **같은 수순**(deployPrep)을 스텝마다 흘려보낸다.
  *  봇 검증의 표준 장착과 플레이어의 원클릭 장착이 문자 그대로 동일한 커맨드 시퀀스다. */
+/** 시연(데모) 모드 — 영상 촬영용. `?demo=1`로 시작하거나 F9로 켜고 끈다 */
+let demoBot: BotPolicy | null = null
+function toggleDemo(): void {
+  demoBot = demoBot ? null : makeScenario()
+  const el = document.getElementById('demo-badge')!
+  el.style.display = demoBot ? 'block' : 'none'
+  if (demoBot) camFollow = false // 시연 중엔 카메라를 성주에 묶지 않는다(전황을 보여준다)
+}
+
 let autoDeploy = false
 function startAutoDeploy(): void {
   if (state.status === 'prep' || state.status === 'assault') autoDeploy = true
@@ -1124,6 +1139,9 @@ hud.innerHTML = `
     성벽 <span id="wall"></span><div style="width:280px;height:10px;background:#000a;margin-top:3px"><div id="wallbar" style="height:100%;width:100%;background:#62c462"></div></div>
   </div>
   <div id="phase" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:15px;color:#ffd870"></div>
+  <div id="demo-badge" style="position:absolute;top:14px;right:18px;display:none;font-family:monospace;
+       font-size:11px;color:#8fd3b0;background:#0b1a14cc;border:1px solid #2f6b50;border-radius:4px;
+       padding:3px 8px;pointer-events:none">시연 모드 (F9)</div>
   <div id="boss-banner" style="position:absolute;top:44%;left:50%;transform:translateX(-50%);display:none;
        font-size:26px;font-weight:bold;color:#d9a8ff;text-shadow:0 2px 12px #000,0 0 24px #7a34c0;
        letter-spacing:2px;pointer-events:none"></div>
@@ -2632,6 +2650,9 @@ function resetGame(): void {
 }
 document.getElementById('end-btn')!.addEventListener('click', resetGame)
 
+// `?demo=1`로 열면 시연 모드로 시작한다 — 영상 촬영 시 키 조작 없이 바로 녹화할 수 있게
+if (new URLSearchParams(location.search).has('demo')) toggleDemo()
+
 let fpsFrames = 0
 let fpsT0 = performance.now()
 
@@ -2722,6 +2743,20 @@ function frame(now: number): void {
     if (pendingCast) {
       input.castSkill = pendingCast
       pendingCast = undefined
+    }
+    // 시연 모드 — 시나리오 봇이 판을 스스로 진행한다(영상 촬영용, `?demo=1` 또는 F9).
+    // 봇이 내는 것도 SiegeInput뿐이라 플레이어가 손으로 하는 것과 같은 조작이고,
+    // 플레이어가 그 스텝에 낸 명령이 있으면 그쪽이 우선한다(중간에 끼어들 수 있다).
+    if (demoBot) {
+      const b = demoBot.act(state, () => 0.5)
+      if (b) {
+        if (b.startAssault && !input.startAssault) input.startAssault = true
+        if (b.moveTo && !input.moveTo) input.moveTo = b.moveTo
+        if (b.unitMove && !input.unitMove) input.unitMove = b.unitMove
+        if (b.unitAim && !input.unitAim) input.unitAim = b.unitAim
+        if (b.unitStop && !input.unitStop) input.unitStop = b.unitStop
+        if (b.castSkill && !input.castSkill) input.castSkill = b.castSkill
+      }
     }
     // B 자동 장착 — deploy 봇과 같은 수순을 스텝마다 한 명령씩. 플레이어 명령이 우선한다
     if (autoDeploy) {

@@ -251,3 +251,129 @@ export const random: BotPolicy = {
 }
 
 export const POLICIES: BotPolicy[] = [afk, deploy, greedy, random]
+
+/**
+ * 시연 시나리오 봇 [2026-08-09] — 플레이 영상용 자동 진행.
+ *
+ * 판정용 봇이 아니라 **연출용**이라 POLICIES에 넣지 않는다(검증 결과에 영향 없음).
+ * 다만 다른 봇과 똑같이 `SiegeInput`만 낸다 — 사람이 손으로 할 수 있는 조작만 한다는
+ * 뜻이고, 그래서 이 영상은 "실제 플레이 화면"이다. 시드가 같으면 매번 같은 판이 나온다.
+ *
+ * 사용자가 정한 시나리오:
+ *   ① 자동 시작 ② 수비병→대포 장착 · 성주/마법사→성벽 위 · 전사→성문 밖
+ *   ③ 스킬을 쓰며 웨이브 대응 ④ 마지막에 전군 백병전으로 보스 처치
+ */
+export function makeScenario(): BotPolicy {
+  const WALL_LANE = CASTLE.east - 3 // 보도 안쪽 차선 (병기 사이에 끼지 않는 자리)
+  const SORTIE = { x: CASTLE.east + CASTLE.wallT / 2 + 4, z: 0, h: 0 } // 성문 밖 출격 지점
+  let staged = 0 // 배치 단계 진행도 (마법사 → 성주 → 전사)
+  let finale = false
+
+  return {
+    name: 'scenario',
+    desc: '영상용 시나리오 — 장착 → 배치 → 웨이브 대응 → 전군 백병전으로 보스 처치',
+    act(s) {
+      const mage = s.units.find((u) => u.kind === 'mage')
+      const warrior = s.units.find((u) => u.kind === 'hero')
+      const boss = s.enemies.find((e) => s.kinds.enemies[e.kind]?.raise)
+
+      // ---- ① 준비: 장착 → 배치 → 개시
+      if (s.status === 'prep') {
+        const mount = deployPrep(s)
+        if (mount) return mount // 장착이 끝날 때까지 (한 틱에 한 명령)
+        if (staged === 0 && mage) {
+          staged++
+          return { unitMove: { ids: [mage.id], to: { x: WALL_LANE, z: 6, h: CASTLE.wallH } } }
+        }
+        if (staged === 1) {
+          staged++
+          return { moveTo: { x: WALL_LANE, z: -6, h: CASTLE.wallH } } // 성주도 성벽 위로
+        }
+        if (staged === 2 && warrior) {
+          staged++
+          return { unitMove: { ids: [warrior.id], to: SORTIE, attack: true } } // 전사는 성문 밖
+        }
+        // 배치가 자리를 잡을 때까지 몇 초 두고 나서 개시 (화면에 배치가 보이게)
+        if (staged >= 3 && s.units.every((u) => u.path.length === 0)) return { startAssault: true }
+        return {}
+      }
+      if (s.status !== 'assault') return undefined
+
+      const tz = threatZ(s)
+
+      // ---- ④ 피날레: 잡몹이 정리되면 전군이 성문 밖으로 나가 보스를 친다
+      if (!finale && boss && s.enemies.length <= 6) finale = true
+      // 보스가 죽으면 피날레는 끝 — 남은 잡몹은 일반 대응으로 돌아간다
+      if (finale && !boss) finale = false
+      if (finale && boss) {
+        // 총력전(성주 E) — 판을 뒤집는 한 방을 여기서 쓴다
+        if ((s.lord.cds[2] ?? 1) <= 0) return { castSkill: { slot: 2 } }
+        const crewKinds = new Set(Object.values(s.kinds.units).filter((d) => d.crew).map((d) => d.crew!))
+        const idle = s.units.filter((u) => crewKinds.has(u.kind) && u.path.length === 0 && u.h > 1)
+        if (idle.length > 0) {
+          // 성벽 위 수비병을 성문 밖 보스 쪽으로 (한 번에 전원)
+          return { unitMove: { ids: idle.map((u) => u.id), to: { x: boss.pos.x, z: boss.pos.z, h: 0 }, attack: true } }
+        }
+        // 마법사·전사 스킬을 보스에게 몰아준다
+        if (mage && (mage.cds[2] ?? 1) <= 0 && dist(mage.pos, boss.pos) <= MAGE_SKILLS[2]!.range) {
+          return { castSkill: { casterId: mage.id, slot: 2, x: boss.pos.x, z: boss.pos.z } }
+        }
+        if (mage && (mage.cds[0] ?? 1) <= 0 && dist(mage.pos, boss.pos) <= MAGE_SKILLS[0]!.range) {
+          return { castSkill: { casterId: mage.id, slot: 0, x: boss.pos.x, z: boss.pos.z } }
+        }
+        if (warrior && (warrior.cds[1] ?? 1) <= 0 && dist(warrior.pos, boss.pos) <= 3.5) {
+          return { castSkill: { casterId: warrior.id, slot: 1 } }
+        }
+        // 전 병기 조준을 보스로
+        if (s.tick % sec(2) === 0) {
+          const guns = s.units.filter((u) => u.aim !== null)
+          if (guns.length > 0) return { unitAim: { ids: guns.map((u) => u.id), to: { x: boss.pos.x, z: boss.pos.z } } }
+        }
+        return {}
+      }
+
+      // ---- ③ 웨이브 대응: 스킬 → 조준 → 마법사 재배치
+      if (mage && (mage.cds[2] ?? 1) <= 0 && s.enemies.length > 0) {
+        const spot = densestPoint(s, MAGE_SKILLS[2]!.radius)
+        if (spot && spot.n >= 3 && dist(mage.pos, spot) <= MAGE_SKILLS[2]!.range) {
+          return { castSkill: { casterId: mage.id, slot: 2, x: spot.x, z: spot.z } } // 업화
+        }
+      }
+      if (mage && (mage.cds[1] ?? 1) <= 0 && s.enemies.length >= 4) {
+        const spot = densestPoint(s, MAGE_SKILLS[1]!.radius)
+        if (spot && dist(mage.pos, spot) <= MAGE_SKILLS[1]!.range) {
+          return { castSkill: { casterId: mage.id, slot: 1, x: spot.x, z: spot.z } } // 불의 장막
+        }
+      }
+      if (mage && (mage.cds[0] ?? 1) <= 0 && s.enemies.length > 0) {
+        const spot = densestPoint(s, MAGE_SKILLS[0]!.radius)
+        if (spot && dist(mage.pos, spot) <= MAGE_SKILLS[0]!.range) {
+          return { castSkill: { casterId: mage.id, slot: 0, x: spot.x, z: spot.z } } // 화염구
+        }
+      }
+      // 전사 — 성문 밖에서 접적하면 회전베기·대지파쇄
+      if (warrior) {
+        const near = s.enemies.filter((e) => dist(e.pos, warrior.pos) <= 5).length
+        if (near >= 3 && (warrior.cds[2] ?? 1) <= 0) return { castSkill: { casterId: warrior.id, slot: 2 } }
+        if (near >= 2 && (warrior.cds[1] ?? 1) <= 0) return { castSkill: { casterId: warrior.id, slot: 1 } }
+      }
+      // 성주 — 군기(재장전)와 진군 나팔을 번갈아 (성벽 위에 있으니 병기가 버프 반경 안이다)
+      if ((s.lord.cds[0] ?? 1) <= 0 && s.enemies.length >= 6) return { castSkill: { slot: 0 } }
+      if ((s.lord.cds[1] ?? 1) <= 0 && s.enemies.length >= 10) return { castSkill: { slot: 1 } }
+      // 조준 — 전선 쪽으로 화망을 다시 그린다
+      if (tz !== null && s.tick % sec(4) === 0) {
+        const aimAt = clampWallZ(tz)
+        const stale = s.units.filter((u) => u.aim !== null && Math.abs(u.aim.z - aimAt) > 8)
+        if (stale.length > 0) {
+          const send = stale.slice(0, Math.max(1, Math.ceil(stale.length * 0.6)))
+          return { unitAim: { ids: send.map((u) => u.id), to: { x: WALL_X + 8, z: aimAt } } }
+        }
+      }
+      // 마법사 재배치 — 보도를 따라 전선으로
+      if (mage && tz !== null && s.tick % sec(4) === 0 && Math.abs(mage.pos.z - tz) > 10) {
+        return { unitMove: { ids: [mage.id], to: { x: WALL_LANE, z: clampWallZ(tz), h: CASTLE.wallH } } }
+      }
+      return undefined
+    },
+  }
+}

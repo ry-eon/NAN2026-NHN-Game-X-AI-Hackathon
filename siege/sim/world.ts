@@ -302,7 +302,11 @@ export const ENEMY_KINDS: Record<string, EnemyKindDef> = {
     // **뒤에** 혼자 걸어와 맞아 죽었다(실측: 판 종료 시각 = 보스 사망 시각, 남은 적 0).
     // "보스는 마지막 웨이브와 **같이** 성벽으로 와야 한다"(사용자) — 1.5면 등장 55초에서
     // 약 79초 도착, 갑주귀(85초)와 같은 창에 성벽 앞에 선다.
-    kind: 'necromancer', name: '네크로맨서', hp: 2000, dmg: 30, atkInterval: 3.0, speed: 1.5,
+    // HP 2000 → 9000 [2026-08-09]. 2000은 병기 화력에 순식간에 녹아 **보스전이 존재하지
+    // 않았다**(실측: 잡몹이 정리되기도 전에 죽어 마무리 국면 자체가 안 만들어진다).
+    // 9000이면 잡몹 정리 후 전군이 성문 밖으로 나가 때리는 국면이 8초가량 생긴다.
+    // 6시드 스윕에서 표준 장착 대역·판 길이·개입 보상 모두 유지됨을 확인.
+    kind: 'necromancer', name: '네크로맨서', hp: 9000, dmg: 30, atkInterval: 3.0, speed: 1.5,
     radius: 0.9, wallDamage: 12, threatAvoidance: 2.2, flankBias: 0.15, gateApproach: true,
     standoff: 6, // 벽에 붙지 않되 성벽 화력 안에는 들어온다 — 무개입으로도 끊을 수 있어야 한다
     raise: { cooldown: 8, radius: 13, count: 2, hpRatio: 0.4 },
