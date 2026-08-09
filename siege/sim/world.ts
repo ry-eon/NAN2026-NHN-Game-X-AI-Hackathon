@@ -243,6 +243,8 @@ export interface EnemySpawn {
   kind: string
   z: number // 스폰 z (동쪽 가장자리에서 출발)
   wave: number
+  /** 웨이브 이름 (HUD 표시용) — 그 웨이브 첫 항목에만 실린다 */
+  label?: string
 }
 
 export interface EnemyKindDef {
@@ -782,6 +784,8 @@ export interface WaveDef {
   kind: string
   count: number
   at: number // 초
+  /** 웨이브 이름 — HUD 표시용(같은 wave 번호의 첫 항목 것을 쓴다). 콘텐츠 데이터다 */
+  label?: string
   every?: number // 초 간격 (기본 0 = 동시)
   /** z 배치: 숫자면 고정, 생략하면 시드 기반 산개 */
   z?: number
@@ -829,11 +833,11 @@ export const DEFAULT_LOADOUT: Loadout = {
   // 봇 스윕으로 후보 11종을 돌려 고른 구성 — 무개입 6/6·여유 대역 6/6·개입 보상 6/6, 평균 93초.
   // 웨이브 성격도 언데드 서사에 맞췄다: 짐승 무리가 먼저 밀려오고, 그 뒤에 갑옷과 병사가 온다.
   waves: [
-    { wave: 1, kind: 'grunt', count: 14, at: 4, every: 1.8 }, // 정찰 — 되살아난 병사들
-    { wave: 2, kind: 'runner', count: 18, at: 26, every: 0.8 }, // 짐승 무리 (회절 레인으로 크게 돈다)
-    { wave: 3, kind: 'tank', count: 5, at: 50, every: 2.5 }, // 중장 — 빈 갑옷
-    { wave: 3, kind: 'grunt', altKind: 'runner', count: 25, at: 52, every: 0.6 }, // 본대
-    { wave: 4, kind: 'necromancer', count: 1, at: 57, z: 0 }, // 이 군세를 일으킨 자
+    { wave: 1, kind: 'grunt', count: 14, at: 4, every: 1.8, label: '정찰 — 되살아난 병사들' },
+    { wave: 2, kind: 'runner', count: 18, at: 26, every: 0.8, label: '짐승 무리' }, // 회절 레인으로 크게 돈다
+    { wave: 3, kind: 'tank', count: 5, at: 50, every: 2.5, label: '본대 — 빈 갑옷을 앞세워' },
+    { wave: 3, kind: 'grunt', altKind: 'runner', count: 25, at: 52, every: 0.6 },
+    { wave: 4, kind: 'necromancer', count: 1, at: 57, z: 0, label: '술사 — 이 군세를 일으킨 자' },
   ],
 }
 
@@ -851,6 +855,7 @@ export function buildSpawnTable(seed: number, waves: WaveDef[] = DEFAULT_LOADOUT
         kind,
         z: w.z ?? zSpread(),
         wave: w.wave,
+        label: w.label,
       })
     }
   }

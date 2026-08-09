@@ -1643,6 +1643,29 @@ export function makeMonster(kind: string): MonsterRig {
 
   torso.add(head, lArm, rArm)
   root.add(lLeg, rLeg, torso)
+  // ---- 보스 격상 [2026-08-09 사용자: "크기나 디자인이 달라야 할 것 같다"].
+  // 네크로맨서는 갑주귀(hipH 1.32)보다도 작아서 부감에서 '보스'로 안 읽혔다.
+  // 크기를 키우고, 발밑 암흑 원반 + 떠 있는 뼈 고리 3개로 다른 계급임을 만든다.
+  // sim 반경(0.9)은 그대로 — 판정은 건드리지 않고 실루엣만 격상한다.
+  if (kind === 'necromancer') {
+    root.scale.setScalar(1.75)
+    const shroud = new THREE.Mesh(
+      new THREE.CircleGeometry(1.15, 28),
+      new THREE.MeshBasicMaterial({ color: 0x1a0a2e, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false }),
+    )
+    shroud.rotation.x = -Math.PI / 2
+    shroud.position.y = 0.04
+    root.add(shroud)
+    for (let i = 0; i < 3; i++) {
+      const halo = new THREE.Mesh(
+        new THREE.TorusGeometry(0.55 + i * 0.16, 0.025, 6, 20),
+        new THREE.MeshBasicMaterial({ color: 0xa060e0, transparent: true, opacity: 0.5 - i * 0.1, depthWrite: false }),
+      )
+      halo.rotation.x = -Math.PI / 2 + (i - 1) * 0.22
+      halo.position.y = 1.5 + i * 0.3
+      root.add(halo)
+    }
+  }
   // 그림자는 실루엣 부품만 — 병합 전에 판정 (병합 후엔 부품 크기를 알 수 없다)
   root.traverse((o) => {
     if (o instanceof THREE.Mesh) {

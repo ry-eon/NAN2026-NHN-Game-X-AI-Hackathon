@@ -249,7 +249,8 @@ const enemyHit = new Map<number, HitReact>()
 const unitHit = new Map<number, HitReact>() // 아군 피격 (meleeHit)
 const unitAttackT = new Map<number, number>() // unitFired 시각 — 활 놓기/검 스윙/병기 반동
 const mountedPrev = new Map<number, boolean>() // 병기별 직전 장착 상태 — 장착 성사 펄스 트리거용
-let bossBannerT = -1e9 // 보스 등장 배너 표시 시각
+let bossBannerT = -1e9 // 웨이브·보스 배너 표시 시각
+let shownWave = 0 // 이미 고지한 웨이브 번호 (중복 배너 방지)
 
 // 아군 유닛 비주얼 풀 — 병종별 절차 모델. 그룹→유닛 id 역참조는 피킹에 사용
 interface UnitVisual {
@@ -1339,6 +1340,8 @@ function drawMinimap(): void {
 // 재시작 때 새 판으로 갈아끼우므로 let (모듈 스코프라 아래 클로저들이 새 참조를 그대로 본다)
 const SEED = 20260725
 let { state, spawns } = createSiege(SEED)
+/** 총 웨이브 수 — 스폰 표에서 뽑는다 (편성이 바뀌어도 따라간다) */
+const totalWaves = spawns.reduce((m, s) => Math.max(m, s.wave), 0)
 let acc = 0
 let last = performance.now()
 
@@ -1555,14 +1558,22 @@ let wallHitT = -1e9 // 마지막 성벽 피격 시각 — HUD 게이지 반응�
 
 function handleEvents(events: SiegeEvent[]): void {
   for (const ev of events) {
-    if (ev.type === 'spawned' && ev.kind === 'necromancer') {
-      // 보스 등장 고지 — 들판 저편에서 걸어오므로 알려주지 않으면 존재를 모른 채 판이 끝난다
-      const b = document.getElementById('boss-banner')!
-      b.textContent = '네크로맨서 등장 — 쓰러진 것을 되살린다'
-      b.style.display = 'block'
-      bossBannerT = performance.now()
-      Sfx.global('raise')
-    } else if (ev.type === 'unitFired') {
+    if (ev.type === 'spawned') {
+      // 웨이브 전환 고지 — 언제 다음 물결이 오는지 모르면 배치를 고칠 타이밍을 못 잡는다
+      if (ev.wave > shownWave) {
+        shownWave = ev.wave
+        const label = spawns.find((s) => s.wave === ev.wave && s.label)?.label ?? ''
+        const b = document.getElementById('boss-banner')!
+        const boss = ev.kind === 'necromancer'
+        b.innerHTML = `<span style="font-size:16px;color:#9fb4cc">웨이브 ${ev.wave}/${totalWaves}</span><br>${label}`
+        b.style.color = boss ? '#d9a8ff' : '#ffd870'
+        b.style.display = 'block'
+        bossBannerT = performance.now()
+        Sfx.global(boss ? 'raise' : 'horn')
+      }
+      continue
+    }
+    if (ev.type === 'unitFired') {
       const from = new THREE.Vector3(ev.from.x, ev.from.h + (MUZZLE_H[ev.unitKind] ?? 1), ev.from.z)
       // 근접 병종(전사·수비병)은 투사체를 날리지 않고 **표적 자리에서 베는 궤적**을 그린다.
       // 수비병은 화살 투사체 + 화살음으로 그려지고 있었다 — 칼을 든 병사인데 활을 쏘는 셈
@@ -2497,12 +2508,17 @@ function syncScene(now: number): void {
         ? `준비 — 병기 ${unmannedN}기 미장착! 수비병 선택 → 병기 우클릭으로 장착 · Space 침공 개시`
         : '준비 완료 — 전 병기 장착. Space로 침공 개시'
   } else {
-    phase.textContent =
-      state.status === 'assault'
-        ? `침공 진행 중 — 괴수 ${state.enemies.length}`
-        : state.status === 'won'
-          ? '성을 지켜냈다!'
-          : '성이 함락됐다'
+    // 침공 중에는 **웨이브 진행**을 상시 표시 — 몇 번째 물결인지, 다음이 언제인지가
+    // 배치를 고칠 타이밍을 만든다 (2026-08-09 사용자 요청)
+    if (state.status === 'assault') {
+      const next = spawns.find((s) => s.tick > state.tick && s.wave > shownWave)
+      const eta = next ? Math.ceil((next.tick - state.tick) / TICKS_PER_SECOND) : -1
+      phase.textContent =
+        `웨이브 ${Math.max(1, shownWave)}/${totalWaves} · 괴수 ${state.enemies.length}` +
+        (eta > 0 ? ` · 다음 웨이브 ${eta}초` : shownWave >= totalWaves ? ' · 마지막 물결' : '')
+    } else {
+      phase.textContent = state.status === 'won' ? '성을 지켜냈다!' : '성이 함락됐다'
+    }
   }
 
   // 종료 카드 — 결과 요약 + 재시작. 없으면 심사자가 새로고침 말고는 두 번째 판을 못 본다
@@ -2563,6 +2579,7 @@ function resetGame(): void {
   unitHit.clear()
   mountedPrev.clear()
   bossBannerT = -1e9
+  shownWave = 0
   document.getElementById('boss-banner')!.style.display = 'none'
   for (const d of dying) {
     scene.remove(d.obj)
