@@ -57,9 +57,9 @@ describe('봇 러너', () => {
   it('출고 시드는 표준 장착만으로 방어에 성공한다 (배치가 성립한다)', () => {
     const run = playout(SHIPPING_SEED, deploy)
     expect(run.status).toBe('won')
-    // 1244 = 2026-08-09 전사 근접화 + 대포 보정(182→200) 후 재고정.
-    // 이력: 614(장착제) → 522(스킬 개편·마법사 편입) → 1244(전사 근접화·대포 보정)
-    expect(run.wallHp).toBe(1244)
+    // 922 = 2026-08-09 "공격은 적 몸통에 닿는다"(근접 반격 가능) + 대포 192 재보정 후 고정.
+    // 이력: 614(장착제) → 522(스킬 개편) → 1244(전사 근접화) → 922(도달 반경 포함)
+    expect(run.wallHp).toBe(922)
     expect(run.seconds).toBeGreaterThan(60)
   })
 

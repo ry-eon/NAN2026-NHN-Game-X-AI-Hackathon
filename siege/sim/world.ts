@@ -555,9 +555,11 @@ export const UNIT_KINDS: Record<string, UnitKindDef> = {
     projectileSpeed: 46, // 볼트 — 빠르지만 즉시는 아니다
   },
   cannon: {
-    // 182 → 200 [2026-08-09]: 전사 근접화로 사라진 지상 화력 보정 (6시드 스윕 — 200에서
-    // 표준 장착 잔존 675~1244로 대역 한가운데. 220 이상은 상한 1400을 넘어 반려)
-    kind: 'cannon', name: '대포', hp: 500, dmg: 200, atkInterval: 3.8, range: 24, speed: 1.0,
+    // 182 → 200 → 192 [2026-08-09]. 200은 전사 근접화로 사라진 지상 화력 보정값이었는데,
+    // 그 뒤 "공격은 적 몸통에 닿는다"(acquireTarget 반경 포함)로 전 병종 도달이 늘자
+    // 시드 1이 상한을 넘었다(1450 > 1400 "너무 쉽다"). 6시드 스윕으로 192 재확정
+    // — 표준 장착 잔존 592~1244로 대역 한가운데, 적극 플레이 6/6 우세.
+    kind: 'cannon', name: '대포', hp: 500, dmg: 192, atkInterval: 3.8, range: 24, speed: 1.0,
     radius: 0.9, aoe: 2.8, emplaced: true, aimRadius: 9, crew: 'guard',
     projectileSpeed: 22, // 포탄 — 느리다. 최대 사거리에서 1초 넘게 난다
   },
@@ -1018,20 +1020,28 @@ function inGateTunnel(x: number, z: number): boolean {
   return Math.abs(z) <= C.gateHalf && x >= C.east - halfT && x <= C.east + halfT
 }
 
-function acquireTarget(u: FriendlyUnit, enemies: ActiveEnemy[], def: UnitKindDef): ActiveEnemy | null {
-  const pick = (near: Vec2, limit: number): ActiveEnemy | null => {
+function acquireTarget(
+  u: FriendlyUnit,
+  enemies: ActiveEnemy[],
+  def: UnitKindDef,
+  enemyKinds: Record<string, EnemyKindDef>,
+): ActiveEnemy | null {
+  /**
+   * near 주변 limit 안에서 고른다. **사거리는 적의 반경까지 포함해 잰다** — 공격은 중심이
+   * 아니라 몸통에 닿는다. 이게 없으면 근접이 일방적으로 맞는다: 괴수의 접전 거리는
+   * (자기 반경 + 아군 반경 + 0.9)라 야귀 1.9·갑주귀 2.3에서 때리는데 수비병 사거리는
+   * 1.6이라 반격이 불가능했다 ("병사가 검으로 공격을 안 한다" 실측 반려 2026-08-09).
+   * addRadius=false인 조준(aimRadius) 경로는 "조준점에서 얼마나 퍼졌나"라 의미가 달라 제외.
+   */
+  const pick = (near: Vec2, limit: number, addRadius: boolean): ActiveEnemy | null => {
     let best: ActiveEnemy | null = null
     let bestD = Infinity
     for (const e of enemies) {
       if (u.h >= 1 && inGateTunnel(e.pos.x, e.pos.z)) continue // 발 밑 터널은 못 쏜다
-      // 사거리는 절대 조건. **적의 반경까지 포함**해서 잰다 — 공격은 중심이 아니라 몸통에 닿는다.
-      // 이게 없으면 근접이 일방적으로 맞는다: 괴수의 접전 거리는 (자기 반경 + 아군 반경 + 0.9)라
-      // 야귀는 1.9, 갑주귀는 2.3에서 때리는데 수비병 사거리는 1.6이었다 — 반격 불가
-      // ("병사들이 검으로 공격을 안 한다" 사용자 실측 반려 2026-08-09).
-      const reach = def.range + (ENEMY_KINDS[e.kind]?.radius ?? 0)
-      if (Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z) > reach) continue
+      const er = enemyKinds[e.kind]?.radius ?? 0
+      if (Math.hypot(e.pos.x - u.pos.x, e.pos.z - u.pos.z) > def.range + er) continue // 사거리 절대 조건
       const d = Math.hypot(e.pos.x - near.x, e.pos.z - near.z)
-      if (d <= limit && (d < bestD || (d === bestD && best !== null && e.id < best.id))) {
+      if (d <= limit + (addRadius ? er : 0) && (d < bestD || (d === bestD && best !== null && e.id < best.id))) {
         best = e
         bestD = d
       }
@@ -1039,10 +1049,10 @@ function acquireTarget(u: FriendlyUnit, enemies: ActiveEnemy[], def: UnitKindDef
     return best
   }
   if (u.aim && def.aimRadius) {
-    const aimed = pick(u.aim, def.aimRadius)
+    const aimed = pick(u.aim, def.aimRadius, false)
     if (aimed) return aimed
   }
-  return pick(u.pos, def.range)
+  return pick(u.pos, def.range, true)
 }
 
 /**
@@ -1451,7 +1461,7 @@ export function stepSiege(state: SiegeState, spawns: EnemySpawn[], input: SiegeI
     if (u.cooldown > 0) u.cooldown = Math.max(0, u.cooldown - (reloadBoosted(u) ? 2 : 1))
     if (u.path.length > 0 || u.cooldown > 0 || !isCrewManned(state, u)) continue // 조작 병사가 곁에 없는 병기는 침묵한다
     const def = state.kinds.units[u.kind]!
-    const tgt = acquireTarget(u, state.enemies, def)
+    const tgt = acquireTarget(u, state.enemies, def, state.kinds.enemies)
     if (!tgt) continue
     u.facing = Math.atan2(tgt.pos.x - u.pos.x, tgt.pos.z - u.pos.z)
     u.cooldown = Math.round(def.atkInterval * TICKS_PER_SECOND)
