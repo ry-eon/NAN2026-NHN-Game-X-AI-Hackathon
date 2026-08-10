@@ -7,6 +7,8 @@
 
 > https://ry-eon.github.io/NAN2026-NHN-Game-X-AI-Hackathon/
 > 설치·로그인 없이 링크 클릭만으로 실행됩니다. 데스크톱 Chrome / Edge 권장 (WebGL2).
+>
+> **플레이 영상 (60초)**: https://www.youtube.com/watch?v=L5H82o8hasM
 
 NHN NAN 2026 게임×AI 해커톤 사전과제 · 개인 참가 (ry-eon)
 

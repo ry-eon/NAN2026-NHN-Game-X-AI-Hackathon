@@ -127,7 +127,7 @@ pnpm dev      # http://localhost:5173
 |---|---|
 | 플레이 (GitHub Pages) | https://ry-eon.github.io/NAN2026-NHN-Game-X-AI-Hackathon/ |
 | 소스 · 커밋 기록 | https://github.com/ry-eon/NAN2026-NHN-Game-X-AI-Hackathon |
-| 플레이 영상 (30~60초) | *(촬영 후 기재)* |
+| 플레이 영상 (30~60초) | https://www.youtube.com/watch?v=L5H82o8hasM |
 
 ---
 
@@ -155,6 +155,6 @@ pnpm dev      # http://localhost:5173
       지금은 병기 12기 · 수비병 12 · 영웅 2 · 보스(1.75배)에 스킬 이펙트까지 늘어 다시 재야 한다.
       측정법: 페이지를 **포그라운드 탭**에서 열고 66초 부근에서 콘솔에 `__siege.perf()`
       (자동화로 띄운 백그라운드 탭은 rAF가 멈춰 측정값이 전부 0으로 나온다)
-- [ ] 플레이 영상 촬영 후 링크 기재
-- [ ] 리포 public 전환 후 Pages 링크 실제 동작 확인
-- [ ] PDF 변환
+- [x] 플레이 영상 촬영 후 링크 기재
+- [x] 리포 public 전환 후 Pages 링크 실제 동작 확인
+- [x] PDF 변환

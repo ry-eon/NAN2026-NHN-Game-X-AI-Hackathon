@@ -24,6 +24,7 @@ CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 
 PLAY = "https://ry-eon.github.io/NAN2026-NHN-Game-X-AI-Hackathon/"
 REPO = "https://github.com/ry-eon/NAN2026-NHN-Game-X-AI-Hackathon"
+VIDEO = "https://www.youtube.com/watch?v=L5H82o8hasM"
 
 # (원고, 출력 파일명, 표지 제목, 표지 부제)
 DOCS = [
@@ -122,6 +123,7 @@ def build_html(md_path: Path, title: str, subtitle: str) -> str:
       <div class="meta">
         개인 참가 · ry-eon<br>
         플레이 <a href="{PLAY}">{PLAY}</a><br>
+        플레이 영상 (60초) <a href="{VIDEO}">{VIDEO}</a><br>
         소스 · 커밋 기록 <a href="{REPO}">{REPO}</a><br>
         2026-08-10
       </div>
