@@ -1148,29 +1148,38 @@ hud.innerHTML = `
   <div id="army" style="position:absolute;top:78px;left:16px;font-size:12px;color:#9fc4a8"></div>
   <div id="fps" style="position:absolute;top:14px;right:16px;font-size:12px;color:#88a088"></div>
   <!-- SC식 하단 컨트롤 바 — 전폭 통합 패널: 미니맵 ‖ 영웅 ‖ 선택/상세 ‖ 커맨드 카드 -->
-  <div id="bottombar" style="position:absolute;left:0;right:0;bottom:0;height:178px;
+  <!-- 원칙: HUD는 절대 잘리지 않는다. 안 들어가면 바가 자란다(세로) / 줄을 바꾼다(가로).
+       height 고정 + 좌측 열 209px이라 아래 15px이 화면 밖으로 잘렸다 (2026-08-10 촬영 중 발견).
+       가로도 같은 문제가 있다 — 영웅 카드 3장(600px)은 min-content라 줄지 못해
+       좁은 창에서 커맨드 카드를 화면 밖으로 밀어냈다. wrap이면 밀려나는 대신 아랫줄로 간다. -->
+  <div id="bottombar" style="position:absolute;left:0;right:0;bottom:0;min-height:178px;
        background:linear-gradient(180deg,#131a24e8 0%,#0c1119f6 28%,#090d13fc 100%);
        border-top:1px solid #33445c;box-shadow:0 -10px 28px #000a;pointer-events:auto;
-       display:flex;align-items:stretch;padding:12px 16px;box-sizing:border-box">
+       display:flex;flex-wrap:wrap;align-items:stretch;padding:12px 16px;box-sizing:border-box">
     <div style="align-self:center">
       <div style="font-size:10px;color:#5a708c;letter-spacing:2px;margin:0 0 4px 1px">전황</div>
-      <canvas id="minimap" width="190" height="132" style="display:block;background:#0a0e14;
-           border:1px solid #3a4a5e;border-radius:3px"></canvas>
-      <div style="margin-top:5px;display:flex;gap:5px">
-        <div id="btn-army" style="flex:1;cursor:pointer;text-align:center;font-size:11px;
-             background:#131b26d8;border:1px solid #3a4a5e;border-radius:4px;padding:4px 0;color:#cfe0f0;
-             user-select:none">전군 <b>F2</b></div>
-        <div id="btn-hero" style="flex:1;cursor:pointer;text-align:center;font-size:11px;
-             background:#131b26d8;border:1px solid #3a4a5e;border-radius:4px;padding:4px 0;color:#cfe0f0;
-             user-select:none">영웅 <b>F1</b></div>
-      </div>
-      <div style="margin-top:5px;display:flex;gap:5px">
-        <div id="btn-deploy" style="flex:1;cursor:pointer;text-align:center;font-size:11px;
-             background:#13261bd8;border:1px solid #3a5e4a;border-radius:4px;padding:4px 0;color:#cff0e0;
-             user-select:none">자동 장착 <b>B</b></div>
-        <div id="btn-melee" style="flex:1;cursor:pointer;text-align:center;font-size:11px;
-             background:#261613d8;border:1px solid #5e3f3a;border-radius:4px;padding:4px 0;color:#f0d5cf;
-             user-select:none">총 백병전 <b>V</b></div>
+      <!-- 버튼 4개는 미니맵 '옆'이다. 아래로 쌓으면 열이 209px가 되어 바(154px 내부)를 넘는다 -->
+      <div style="display:flex;gap:6px;align-items:stretch">
+        <canvas id="minimap" width="190" height="132" style="display:block;background:#0a0e14;
+             border:1px solid #3a4a5e;border-radius:3px"></canvas>
+        <div style="display:flex;flex-direction:column;gap:5px;width:94px">
+          <div id="btn-army" style="flex:1;cursor:pointer;font-size:11px;display:flex;
+               align-items:center;justify-content:center;
+               background:#131b26d8;border:1px solid #3a4a5e;border-radius:4px;color:#cfe0f0;
+               user-select:none">전군 <b style="margin-left:4px">F2</b></div>
+          <div id="btn-hero" style="flex:1;cursor:pointer;font-size:11px;display:flex;
+               align-items:center;justify-content:center;
+               background:#131b26d8;border:1px solid #3a4a5e;border-radius:4px;color:#cfe0f0;
+               user-select:none">영웅 <b style="margin-left:4px">F1</b></div>
+          <div id="btn-deploy" style="flex:1;cursor:pointer;font-size:11px;display:flex;
+               align-items:center;justify-content:center;
+               background:#13261bd8;border:1px solid #3a5e4a;border-radius:4px;color:#cff0e0;
+               user-select:none">자동 장착 <b style="margin-left:4px">B</b></div>
+          <div id="btn-melee" style="flex:1;cursor:pointer;font-size:11px;display:flex;
+               align-items:center;justify-content:center;
+               background:#261613d8;border:1px solid #5e3f3a;border-radius:4px;color:#f0d5cf;
+               user-select:none">백병전 <b style="margin-left:4px">V</b></div>
+        </div>
       </div>
     </div>
     <div style="width:1px;background:#232f40;margin:4px 16px"></div>
